@@ -60,10 +60,10 @@ class ImportParagraphTypeCommands extends DrushCommands {
    */
   public static function create(ContainerInterface $container) {
     return new static(
-      $container->get('http_client_factory'),
-      $container->get('config.factory'),
-      $container->get('drupalx_ai.paragraph_importer')
-    );
+          $container->get('http_client_factory'),
+          $container->get('config.factory'),
+          $container->get('drupalx_ai.paragraph_importer')
+      );
   }
 
   /**
@@ -79,13 +79,15 @@ class ImportParagraphTypeCommands extends DrushCommands {
       $this->logger()->warning('Anthropic API key is not set. Please configure it in the DrupalX AI Settings.');
     }
 
-    $this->httpClient = $http_client_factory->fromOptions([
-      'headers' => [
-        'Content-Type' => 'application/json',
-        'x-api-key' => $api_key,
-        'anthropic-version' => '2023-06-01',
-      ],
-    ]);
+    $this->httpClient = $http_client_factory->fromOptions(
+          [
+            'headers' => [
+              'Content-Type' => 'application/json',
+              'x-api-key' => $api_key,
+              'anthropic-version' => '2023-06-01',
+            ],
+          ]
+      );
   }
 
   /**
@@ -141,9 +143,11 @@ class ImportParagraphTypeCommands extends DrushCommands {
   protected function askComponent() {
     $componentDir = '../nextjs/components/';
     $components = scandir($componentDir);
-    $components = array_filter($components, function ($file) {
-      return is_dir("../nextjs/components/$file") && $file != '.' && $file != '..';
-    });
+    $components = array_filter(
+          $components, function ($file) {
+              return is_dir("../nextjs/components/$file") && $file != '.' && $file != '..';
+          }
+      );
 
     $selectedIndex = $this->io()->choice('Select a component to import', $components);
     return $components[$selectedIndex];
@@ -158,9 +162,11 @@ class ImportParagraphTypeCommands extends DrushCommands {
       return FALSE;
     }
 
-    $componentFiles = array_filter(scandir($componentPath), function ($file) {
-      return pathinfo($file, PATHINFO_EXTENSION) === 'tsx' && !preg_match('/\.stories\.tsx$/', $file);
-    });
+    $componentFiles = array_filter(
+          scandir($componentPath), function ($file) {
+              return pathinfo($file, PATHINFO_EXTENSION) === 'tsx' && !preg_match('/\.stories\.tsx$/', $file);
+          }
+      );
 
     if (empty($componentFiles)) {
       $this->logger()->warning("No suitable .tsx files found in the {$componentName} component directory.");
@@ -168,9 +174,9 @@ class ImportParagraphTypeCommands extends DrushCommands {
     }
 
     $selectedFile = $this->io()->choice(
-      "Select a file from the {$componentName} component",
-      array_combine($componentFiles, $componentFiles)
-    );
+          "Select a file from the {$componentName} component",
+          array_combine($componentFiles, $componentFiles)
+      );
 
     $filePath = "{$componentPath}/{$selectedFile}";
     if (!file_exists($filePath) || !is_readable($filePath)) {
@@ -279,10 +285,10 @@ class ImportParagraphTypeCommands extends DrushCommands {
       'model' => 'claude-3-haiku-20240307',
       'max_tokens' => 2048,
       'messages' => [
-        [
-          'role' => 'user',
-          'content' => $prompt,
-        ],
+      [
+        'role' => 'user',
+        'content' => $prompt,
+      ],
       ],
       'tools' => $tools,
     ];

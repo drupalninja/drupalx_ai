@@ -9,9 +9,7 @@ use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\file\Entity\File;
-use Drupal\file\FileInterface;
 use Drupal\graphql_compose_fragments\FragmentManager;
-use Drupal\media\Entity\Media;
 use Drupal\node\Entity\Node;
 use Drupal\paragraphs\Entity\Paragraph;
 use Drupal\paragraphs\Entity\ParagraphsType;
@@ -79,12 +77,12 @@ class ParagraphImporterService {
    *   The fragment manager.
    */
   public function __construct(
-    ConfigFactoryInterface $config_factory,
-    EntityTypeManagerInterface $entity_type_manager,
-    LoggerChannelFactoryInterface $logger_factory,
-    FileSystemInterface $file_system,
-    FragmentManager $fragment_manager,
-  ) {
+        ConfigFactoryInterface $config_factory,
+        EntityTypeManagerInterface $entity_type_manager,
+        LoggerChannelFactoryInterface $logger_factory,
+        FileSystemInterface $file_system,
+        FragmentManager $fragment_manager,
+    ) {
     $this->configFactory = $config_factory;
     $this->entityTypeManager = $entity_type_manager;
     $this->loggerFactory = $logger_factory;
@@ -112,11 +110,13 @@ class ParagraphImporterService {
       }
 
       // Create the paragraph type.
-      $paragraph_type = ParagraphsType::create([
-        'id' => $paragraph_data->id,
-        'label' => $paragraph_data->name,
-        'description' => $paragraph_data->description,
-      ]);
+      $paragraph_type = ParagraphsType::create(
+            [
+              'id' => $paragraph_data->id,
+              'label' => $paragraph_data->name,
+              'description' => $paragraph_data->description,
+            ]
+        );
       $paragraph_type->save();
 
       // Update GraphQL Compose configuration for this paragraph.
@@ -172,23 +172,27 @@ class ParagraphImporterService {
 
     // Check if field storage already exists.
     if (!FieldStorageConfig::loadByName('paragraph', $field_name)) {
-      FieldStorageConfig::create([
-        'field_name' => $field_name,
-        'entity_type' => 'paragraph',
-        'type' => $field_type,
-        'cardinality' => $field_data['cardinality'] ?? 1,
-      ])->save();
+      FieldStorageConfig::create(
+            [
+              'field_name' => $field_name,
+              'entity_type' => 'paragraph',
+              'type' => $field_type,
+              'cardinality' => $field_data['cardinality'] ?? 1,
+            ]
+        )->save();
     }
 
     // Create the field instance.
     if (!FieldConfig::loadByName('paragraph', $paragraph_type_id, $field_name)) {
-      FieldConfig::create([
-        'field_name' => $field_name,
-        'entity_type' => 'paragraph',
-        'bundle' => $paragraph_type_id,
-        'label' => $field_data['label'],
-        'required' => $field_data['required'] ?? FALSE,
-      ])->save();
+      FieldConfig::create(
+            [
+              'field_name' => $field_name,
+              'entity_type' => 'paragraph',
+              'bundle' => $paragraph_type_id,
+              'label' => $field_data['label'],
+              'required' => $field_data['required'] ?? FALSE,
+            ]
+        )->save();
     }
 
     // Update GraphQL Compose configuration for this paragraph field.
@@ -204,19 +208,25 @@ class ParagraphImporterService {
     if (!$form_display) {
       $form_display = $this->entityTypeManager
         ->getStorage('entity_form_display')
-        ->create([
-          'targetEntityType' => 'paragraph',
-          'bundle' => $paragraph_type_id,
-          'mode' => 'default',
-          'status' => TRUE,
-        ]);
+        ->create(
+                [
+                  'targetEntityType' => 'paragraph',
+                  'bundle' => $paragraph_type_id,
+                  'mode' => 'default',
+                  'status' => TRUE,
+                ]
+            );
     }
 
-    /** @var \Drupal\Core\Entity\EntityFormDisplayInterface $form_display */
-    $form_display->setComponent($field_name, [
-      'type' => 'string_textfield',
-      'weight' => 0,
-    ])->save();
+    /**
+* @var \Drupal\Core\Entity\EntityFormDisplayInterface $form_display
+*/
+    $form_display->setComponent(
+          $field_name, [
+            'type' => 'string_textfield',
+            'weight' => 0,
+          ]
+      )->save();
   }
 
   /**
@@ -230,9 +240,11 @@ class ParagraphImporterService {
    */
   protected function createParagraph($paragraph_data) {
     // Create a new paragraph entity.
-    $paragraph = Paragraph::create([
-      'type' => $paragraph_data->id,
-    ]);
+    $paragraph = Paragraph::create(
+          [
+            'type' => $paragraph_data->id,
+          ]
+      );
 
     $module_path = \Drupal::service('extension.list.module')->getPath('drupalx_ai');
 
@@ -248,17 +260,21 @@ class ParagraphImporterService {
           $file_contents = file_get_contents($file_path);
           $directory = 'public://paragraph_images';
           $this->fileSystem->prepareDirectory($directory, FileSystemInterface::CREATE_DIRECTORY);
-          $file = File::create([
-            'uri' => $this->fileSystem->saveData($file_contents, $directory . '/card.png', FileSystemInterface::EXISTS_REPLACE),
-          ]);
+          $file = File::create(
+                [
+                  'uri' => $this->fileSystem->saveData($file_contents, $directory . '/card.png', FileSystemInterface::EXISTS_REPLACE),
+                ]
+            );
           $file->setPermanent();
           $file->save();
 
-          $paragraph->set($field_name, [
-            'target_id' => $file->id(),
-            'alt' => $field['label'],
-            'title' => $field['label'],
-          ]);
+          $paragraph->set(
+                $field_name, [
+                  'target_id' => $file->id(),
+                  'alt' => $field['label'],
+                  'title' => $field['label'],
+                ]
+            );
         }
         elseif ($field_type === 'link') {
           $url = $field['sample_value'];
@@ -272,10 +288,12 @@ class ParagraphImporterService {
         }
       }
       else {
-        $this->loggerFactory->get('drupalx_ai')->warning("Field @field does not exist on the paragraph type @type.", [
-          '@field' => $field_name ?? 'undefined',
-          '@type' => $paragraph_data->id,
-        ]);
+        $this->loggerFactory->get('drupalx_ai')->warning(
+              "Field @field does not exist on the paragraph type @type.", [
+                '@field' => $field_name ?? 'undefined',
+                '@type' => $paragraph_data->id,
+              ]
+          );
       }
     }
 
@@ -283,10 +301,12 @@ class ParagraphImporterService {
     $paragraph->save();
 
     // Create the node with the provided title.
-    $node = Node::create([
-      'type' => 'layout',
-      'title' => "Paragraph: '{$paragraph_data->id}'",
-    ]);
+    $node = Node::create(
+          [
+            'type' => 'layout',
+            'title' => "Paragraph: '{$paragraph_data->id}'",
+          ]
+      );
 
     // Attach the paragraph to the node's field_content.
     if ($node->hasField('field_content')) {
@@ -325,18 +345,20 @@ class ParagraphImporterService {
 
     // 3. Update the fragment declaration.
     $updatedDeclaration = str_replace(
-      "fragment {$originalFragmentName} on {$typeName}",
-      "fragment {$newFragmentName} on {$typeName}",
-      $input
-    );
+          "fragment {$originalFragmentName} on {$typeName}",
+          "fragment {$newFragmentName} on {$typeName}",
+          $input
+      );
 
     // 4. Wrap the updated content with the new fragment name
     $wrapped = "export const {$newFragmentName} = graphql(`\n" . $updatedDeclaration . "\n`);";
 
     // 5. Replace `... FragmentName` with `...NameFragment`
-    $withReplacedFragments = preg_replace_callback('/\.\.\.\s+Fragment(\w+)/', function ($matches) {
-      return '... ' . $matches[1] . 'Fragment';
-    }, $wrapped);
+    $withReplacedFragments = preg_replace_callback(
+          '/\.\.\.\s+Fragment(\w+)/', function ($matches) {
+              return '... ' . $matches[1] . 'Fragment';
+          }, $wrapped
+      );
 
     // 6. Extract unique fragments from the wrapped content
     preg_match_all('/\.\.\.\s+(\w+)Fragment/', $withReplacedFragments, $fragmentMatches);
@@ -384,14 +406,14 @@ class ParagraphImporterService {
    */
   protected function createParagraphFragment($paragraph_type_id) {
     $fragments = array_map(
-      [$this->fragmentManager, 'getFragment'],
-      $this->fragmentManager->getTypes()
-    );
+          [$this->fragmentManager, 'getFragment'],
+          $this->fragmentManager->getTypes()
+      );
 
     $objects = array_filter(
-      $fragments,
-      fn($fragment) => $fragment['type'] instanceof ObjectType
-    );
+          $fragments,
+          fn($fragment) => $fragment['type'] instanceof ObjectType
+      );
 
     $fragment_content = '';
     $fragment_name = '';
@@ -428,25 +450,25 @@ class ParagraphImporterService {
       // Add import statement.
       $import_statement = "import { {$fragment_name} } from \"@/components/paragraphs/{$component_name}\";";
       $paragraphs_content = preg_replace(
-        '/import { graphql } from "@\/graphql\/gql.tada";/',
-        "import { graphql } from \"@/graphql/gql.tada\";\n" . $import_statement,
-        $paragraphs_content
-      );
+            '/import { graphql } from "@\/graphql\/gql.tada";/',
+            "import { graphql } from \"@/graphql/gql.tada\";\n" . $import_statement,
+            $paragraphs_content
+        );
 
-      // Update ParagraphUnionFragment
+      // Update ParagraphUnionFragment.
       $paragraphs_content = preg_replace(
-        '/\.\.\.ParagraphViewFragment/',
-        "...ParagraphViewFragment\n  ...{$fragment_name}",
-        $paragraphs_content
-      );
+            '/\.\.\.ParagraphViewFragment/',
+            "...ParagraphViewFragment\n  ...{$fragment_name}",
+            $paragraphs_content
+        );
 
       $paragraphs_content = preg_replace(
-        '/ParagraphViewFragment,/',
-        "ParagraphViewFragment,\n  {$fragment_name},",
-        $paragraphs_content
-      );
+            '/ParagraphViewFragment,/',
+            "ParagraphViewFragment,\n  {$fragment_name},",
+            $paragraphs_content
+        );
 
-      // Save the updated paragraph.ts file
+      // Save the updated paragraph.ts file.
       $this->fileSystem->saveData($paragraphs_content, $paragraphs_file, FileSystemInterface::EXISTS_REPLACE);
 
       return "Component {$component_name} created in {$new_fragment_file}.\nParagraph.ts updated with new import and fragment.";
@@ -541,8 +563,21 @@ EOT;
       }
     }
 
-    $misc_fragments = ['DateTimeFragment', 'LanguageFragment', 'LinkFragment', 'TextFragment', 'TextSummaryFragment'];
-    $media_fragments = ['ImageFragment', 'SvgImageFragment', 'SvgMediaFragment', 'MediaImageFragment', 'MediaVideoFragment', 'MediaUnionFragment'];
+    $misc_fragments = [
+      'DateTimeFragment',
+      'LanguageFragment',
+      'LinkFragment',
+      'TextFragment',
+      'TextSummaryFragment',
+    ];
+    $media_fragments = [
+      'ImageFragment',
+      'SvgImageFragment',
+      'SvgMediaFragment',
+      'MediaImageFragment',
+      'MediaVideoFragment',
+      'MediaUnionFragment',
+    ];
     $metatag_fragments = ['MetaTagUnionFragment'];
 
     $misc_imports = array_intersect($misc_fragments, $imports);
