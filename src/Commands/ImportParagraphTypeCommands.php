@@ -4,6 +4,7 @@ namespace Drupal\drupalx_ai\Commands;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Http\ClientFactory;
+use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\drupalx_ai\Service\ParagraphImporterService;
 use Drush\Commands\DrushCommands;
 use GuzzleHttp\Exception\RequestException;
@@ -39,6 +40,13 @@ class ImportParagraphTypeCommands extends DrushCommands {
   protected $paragraphImporter;
 
   /**
+   * The logger factory.
+   *
+   * @var \Drupal\Core\Logger\LoggerChannelFactoryInterface
+   */
+  protected $loggerFactory;
+
+  /**
    * Constructor for ImportParagraphTypeCommands.
    *
    * @param \Drupal\Core\Http\ClientFactory $http_client_factory
@@ -47,11 +55,14 @@ class ImportParagraphTypeCommands extends DrushCommands {
    *   The config factory.
    * @param \Drupal\drupalx_ai\Service\ParagraphImporterService $paragraph_importer
    *   The paragraph importer service.
+   * @param \Drupal\Core\Logger\LoggerChannelFactoryInterface $logger_factory
+   *   The logger factory.
    */
-  public function __construct(ClientFactory $http_client_factory, ConfigFactoryInterface $config_factory, ParagraphImporterService $paragraph_importer) {
+  public function __construct(ClientFactory $http_client_factory, ConfigFactoryInterface $config_factory, ParagraphImporterService $paragraph_importer, LoggerChannelFactoryInterface $logger_factory) {
     parent::__construct();
     $this->configFactory = $config_factory;
     $this->paragraphImporter = $paragraph_importer;
+    $this->loggerFactory = $logger_factory;
     $this->initializeHttpClient($http_client_factory);
   }
 
@@ -60,10 +71,11 @@ class ImportParagraphTypeCommands extends DrushCommands {
    */
   public static function create(ContainerInterface $container) {
     return new static(
-          $container->get('http_client_factory'),
-          $container->get('config.factory'),
-          $container->get('drupalx_ai.paragraph_importer')
-      );
+      $container->get('http_client_factory'),
+      $container->get('config.factory'),
+      $container->get('drupalx_ai.paragraph_importer'),
+      $container->get('logger.factory')
+    );
   }
 
   /**
@@ -76,18 +88,18 @@ class ImportParagraphTypeCommands extends DrushCommands {
     $api_key = $this->configFactory->get('drupalx_ai.settings')->get('api_key');
 
     if (empty($api_key)) {
-      $this->logger()->warning('Anthropic API key is not set. Please configure it in the DrupalX AI Settings.');
+      $this->loggerFactory->get('drupalx_ai')->warning('Anthropic API key is not set. Please configure it in the DrupalX AI Settings.');
     }
 
     $this->httpClient = $http_client_factory->fromOptions(
-          [
-            'headers' => [
-              'Content-Type' => 'application/json',
-              'x-api-key' => $api_key,
-              'anthropic-version' => '2023-06-01',
-            ],
-          ]
-      );
+      [
+        'headers' => [
+          'Content-Type' => 'application/json',
+          'x-api-key' => $api_key,
+          'anthropic-version' => '2023-06-01',
+        ],
+      ]
+    );
   }
 
   /**
@@ -144,10 +156,10 @@ class ImportParagraphTypeCommands extends DrushCommands {
     $componentDir = '../nextjs/components/';
     $components = scandir($componentDir);
     $components = array_filter(
-          $components, function ($file) {
-              return is_dir("../nextjs/components/$file") && $file != '.' && $file != '..';
-          }
-      );
+      $components, function ($file) {
+        return is_dir("../nextjs/components/$file") && $file != '.' && $file != '..';
+      }
+    );
 
     $selectedIndex = $this->io()->choice('Select a component to import', $components);
     return $components[$selectedIndex];
@@ -163,24 +175,24 @@ class ImportParagraphTypeCommands extends DrushCommands {
     }
 
     $componentFiles = array_filter(
-          scandir($componentPath), function ($file) {
-              return pathinfo($file, PATHINFO_EXTENSION) === 'tsx' && !preg_match('/\.stories\.tsx$/', $file);
-          }
-      );
+      scandir($componentPath), function ($file) {
+        return pathinfo($file, PATHINFO_EXTENSION) === 'tsx' && !preg_match('/\.stories\.tsx$/', $file);
+      }
+    );
 
     if (empty($componentFiles)) {
-      $this->logger()->warning("No suitable .tsx files found in the {$componentName} component directory.");
+      $this->loggerFactory->get('drupalx_ai')->warning("No suitable .tsx files found in the {$componentName} component directory.");
       return FALSE;
     }
 
     $selectedFile = $this->io()->choice(
-          "Select a file from the {$componentName} component",
-          array_combine($componentFiles, $componentFiles)
-      );
+      "Select a file from the {$componentName} component",
+      array_combine($componentFiles, $componentFiles)
+    );
 
     $filePath = "{$componentPath}/{$selectedFile}";
     if (!file_exists($filePath) || !is_readable($filePath)) {
-      $this->logger()->error("Unable to read the selected file: {$filePath}");
+      $this->loggerFactory->get('drupalx_ai')->error("Unable to read the selected file: {$filePath}");
       return FALSE;
     }
 
@@ -276,7 +288,7 @@ class ImportParagraphTypeCommands extends DrushCommands {
   protected function callAnthropic($prompt, array $tools, $expectedFunctionName) {
     $api_key = $this->configFactory->get('drupalx_ai.settings')->get('api_key');
     if (empty($api_key)) {
-      $this->logger()->error('Anthropic API key is not set. Please configure it in the DrupalX AI Settings.');
+      $this->loggerFactory->get('drupalx_ai')->error('Anthropic API key is not set. Please configure it in the DrupalX AI Settings.');
       return FALSE;
     }
 
@@ -294,23 +306,23 @@ class ImportParagraphTypeCommands extends DrushCommands {
     ];
 
     try {
-      $this->logger()->notice('Sending request to Claude API');
+      $this->loggerFactory->get('drupalx_ai')->notice('Sending request to Claude API');
       $response = $this->httpClient->request('POST', $url, ['json' => $data]);
-      $this->logger()->notice('Received response from Claude API');
+      $this->loggerFactory->get('drupalx_ai')->notice('Received response from Claude API');
 
       $responseData = json_decode($response->getBody(), TRUE);
-      $this->logger()->notice('Response data: @data', ['@data' => print_r($responseData, TRUE)]);
+      $this->loggerFactory->get('drupalx_ai')->notice('Response data: @data', ['@data' => print_r($responseData, TRUE)]);
 
       if (!isset($responseData['content']) || !is_array($responseData['content'])) {
         throw new \RuntimeException('Unexpected API response format: content array not found');
       }
 
       foreach ($responseData['content'] as $content) {
-        $this->logger()->notice('Processing content: @content', ['@content' => print_r($content, TRUE)]);
+        $this->loggerFactory->get('drupalx_ai')->notice('Processing content: @content', ['@content' => print_r($content, TRUE)]);
         if (isset($content['type']) && $content['type'] === 'tool_use' && isset($content['input'])) {
           $arguments = $content['input'];
           if (is_array($arguments)) {
-            $this->logger()->notice('Successfully parsed function call arguments');
+            $this->loggerFactory->get('drupalx_ai')->notice('Successfully parsed function call arguments');
             return $arguments;
           }
           else {
@@ -322,11 +334,11 @@ class ImportParagraphTypeCommands extends DrushCommands {
       throw new \RuntimeException("Function call '{$expectedFunctionName}' not found in API response");
     }
     catch (RequestException $e) {
-      $this->logger()->error('API request failed: ' . $e->getMessage());
-      $this->logger()->error('Request details: ' . print_r($data, TRUE));
+      $this->loggerFactory->get('drupalx_ai')->error('API request failed: ' . $e->getMessage());
+      $this->loggerFactory->get('drupalx_ai')->error('Request details: ' . print_r($data, TRUE));
     }
     catch (\Exception $e) {
-      $this->logger()->error('Error processing API response: ' . $e->getMessage());
+      $this->loggerFactory->get('drupalx_ai')->error('Error processing API response: ' . $e->getMessage());
     }
 
     return FALSE;
