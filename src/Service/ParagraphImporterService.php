@@ -144,7 +144,7 @@ class ParagraphImporterService {
         $field_count++;
       }
 
-      // Create a test paragraph on a test layout page.
+      // Create a test paragraph on a test landing page.
       $result = $this->createParagraph($paragraph_data);
 
       // Create a fragment for the paragraph type.
@@ -303,7 +303,7 @@ class ParagraphImporterService {
     // Create the node with the provided title.
     $node = Node::create(
       [
-        'type' => 'layout',
+        'type' => 'landing',
         'title' => "Paragraph: '{$paragraph_data->id}'",
       ]
     );
@@ -322,7 +322,7 @@ class ParagraphImporterService {
 
     // Return a message indicating the result.
     $edit_url = $node->toUrl('edit-form')->setAbsolute()->toString();
-    return "Created test layout node and added a paragraph of type '{$paragraph_data->id}'.\nEdit URL: {$edit_url}\n";
+    return "Created test landing page node and added a paragraph of type '{$paragraph_data->id}'.\nEdit URL: {$edit_url}\n";
   }
 
   /**
