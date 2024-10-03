@@ -12,7 +12,6 @@ use GuzzleHttp\Exception\RequestException;
  */
 class AnthropicApiService
 {
-
   /**
    * The HTTP client.
    *
@@ -100,7 +99,7 @@ class AnthropicApiService
     $url = 'https://api.anthropic.com/v1/messages';
     $data = [
       'model' => 'claude-3-haiku-20240307',
-      'max_tokens' => 2048,
+      'max_tokens' => 4096,
       'messages' => [
         [
           'role' => 'user',
@@ -118,24 +117,21 @@ class AnthropicApiService
       $responseData = json_decode($response->getBody(), TRUE);
       $this->loggerFactory->get('drupalx_ai')->notice('Response data: @data', ['@data' => print_r($responseData, TRUE)]);
 
-      if (!isset($responseData['content']) || !is_array($responseData['content'])) {
-        throw new \RuntimeException('Unexpected API response format: content array not found');
+      // Attempt to extract content using the expected function call
+      $extractedContent = $this->extractContentFromResponse($responseData, $expectedFunctionName);
+      if ($extractedContent !== false) {
+        return $extractedContent;
       }
 
-      foreach ($responseData['content'] as $content) {
-        $this->loggerFactory->get('drupalx_ai')->notice('Processing content: @content', ['@content' => print_r($content, TRUE)]);
-        if (isset($content['type']) && $content['type'] === 'tool_use' && isset($content['input'])) {
-          $arguments = $content['input'];
-          if (is_array($arguments)) {
-            $this->loggerFactory->get('drupalx_ai')->notice('Successfully parsed function call arguments');
-            return $arguments;
-          } else {
-            throw new \RuntimeException('Failed to parse function call arguments: invalid format');
-          }
-        }
+      // If we couldn't find the expected function call, try to extract useful content
+      $fallbackContent = $this->extractFallbackContent($responseData);
+      if ($fallbackContent !== false) {
+        $this->loggerFactory->get('drupalx_ai')->notice('Using fallback content extraction method');
+        return ['story_content' => $fallbackContent];
       }
 
-      throw new \RuntimeException("Function call '{$expectedFunctionName}' not found in API response");
+      $this->loggerFactory->get('drupalx_ai')->warning("Function call '{$expectedFunctionName}' not found in API response and fallback extraction failed");
+      return FALSE;
     } catch (RequestException $e) {
       $this->loggerFactory->get('drupalx_ai')->error('API request failed: ' . $e->getMessage());
       $this->loggerFactory->get('drupalx_ai')->error('Request details: ' . print_r($data, TRUE));
@@ -144,5 +140,61 @@ class AnthropicApiService
     }
 
     return FALSE;
+  }
+
+  /**
+   * Extract content from the API response using the expected function call.
+   *
+   * @param array $responseData
+   *   The API response data.
+   * @param string $expectedFunctionName
+   *   The name of the function we expect to be called.
+   *
+   * @return mixed
+   *   The extracted content, or FALSE if not found.
+   */
+  protected function extractContentFromResponse($responseData, $expectedFunctionName)
+  {
+    if (!isset($responseData['content']) || !is_array($responseData['content'])) {
+      $this->loggerFactory->get('drupalx_ai')->warning('Unexpected API response format: content array not found');
+      return false;
+    }
+
+    foreach ($responseData['content'] as $content) {
+      if (isset($content['type']) && $content['type'] === 'tool_use' && isset($content['input'])) {
+        $arguments = $content['input'];
+        if (is_array($arguments) && isset($arguments['story_content'])) {
+          $this->loggerFactory->get('drupalx_ai')->notice('Successfully parsed function call arguments');
+          return $arguments;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Extract fallback content from the API response.
+   *
+   * @param array $responseData
+   *   The API response data.
+   *
+   * @return string|false
+   *   The extracted fallback content, or FALSE if not found.
+   */
+  protected function extractFallbackContent($responseData)
+  {
+    if (isset($responseData['content']) && is_array($responseData['content'])) {
+      foreach ($responseData['content'] as $content) {
+        if (isset($content['type']) && $content['type'] === 'text' && isset($content['text'])) {
+          // Extract content that looks like a Storybook story
+          if (strpos($content['text'], 'import type { Meta, StoryObj }') !== false) {
+            return $content['text'];
+          }
+        }
+      }
+    }
+
+    return false;
   }
 }

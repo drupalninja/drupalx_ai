@@ -17,3 +17,9 @@ services:
     arguments: ['@config.factory', '@drupalx_ai.paragraph_importer', '@logger.factory', '@drupalx_ai.anthropic_api']
     tags:
       - { name: drush.command }
+
+  drupalx_ai.generate_storybook_commands:
+    class: \Drupal\drupalx_ai\Commands\GenerateStorybookCommands
+    arguments: ['@config.factory', '@logger.factory', '@drupalx_ai.anthropic_api']
+    tags:
+      - { name: drush.command }
