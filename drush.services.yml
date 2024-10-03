@@ -8,8 +8,12 @@ services:
       - '@file_system'
       - '@graphql_compose_fragments.manager'
 
+  drupalx_ai.anthropic_api:
+    class: \Drupal\drupalx_ai\Service\AnthropicApiService
+    arguments: ['@http_client_factory', '@config.factory', '@logger.factory']
+
   drupalx_ai.import_paragraph_type_commands:
     class: \Drupal\drupalx_ai\Commands\ImportParagraphTypeCommands
-    arguments: ['@http_client_factory', '@config.factory', '@drupalx_ai.paragraph_importer', '@logger.factory']
+    arguments: ['@config.factory', '@drupalx_ai.paragraph_importer', '@logger.factory', '@drupalx_ai.anthropic_api']
     tags:
       - { name: drush.command }
