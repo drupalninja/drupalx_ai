@@ -16,6 +16,10 @@ services:
     class: \Drupal\drupalx_ai\Service\ComponentReaderService
     arguments: ['@logger.factory']
 
+  drupalx_ai.storybook_generator:
+    class: \Drupal\drupalx_ai\Service\StorybookGeneratorService
+    arguments: ['@logger.factory', '@drupalx_ai.anthropic_api']
+
   drupalx_ai.import_paragraph_type_commands:
     class: \Drupal\drupalx_ai\Commands\ImportParagraphTypeCommands
     arguments:
@@ -24,5 +28,16 @@ services:
       - '@logger.factory'
       - '@drupalx_ai.anthropic_api'
       - '@drupalx_ai.component_reader'
+    tags:
+      - { name: drush.command }
+
+  drupalx_ai.generate_storybook_commands:
+    class: \Drupal\drupalx_ai\Commands\GenerateStorybookCommands
+    arguments:
+      - '@config.factory'
+      - '@logger.factory'
+      - '@drupalx_ai.anthropic_api'
+      - '@drupalx_ai.component_reader'
+      - '@drupalx_ai.storybook_generator'
     tags:
       - { name: drush.command }
