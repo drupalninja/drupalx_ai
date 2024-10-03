@@ -95,11 +95,11 @@ class ImportParagraphTypeCommands extends DrushCommands
       return;
     }
 
-    // Prompt for component name.
-    $componentName = $this->askComponent();
+    // Prompt for component folder name.
+    $componentFolderName = $this->askComponentFolder();
 
-    // Read component file.
-    $componentContent = $this->readComponentFile($componentName);
+    // Read component file and get component name and content.
+    [$componentName, $componentContent] = $this->readComponentFile($componentFolderName);
 
     if (!$componentContent) {
       $output->writeln("<error>Could not read component file. Please check the file exists and is readable.</error>");
@@ -107,7 +107,7 @@ class ImportParagraphTypeCommands extends DrushCommands
     }
 
     // Generate paragraph type details using Claude 3 Haiku.
-    $paragraphTypeDetails = $this->generateParagraphTypeDetails($componentContent);
+    $paragraphTypeDetails = $this->generateParagraphTypeDetails($componentName, $componentContent);
 
     if (!$paragraphTypeDetails) {
       $output->writeln("<error>Failed to generate paragraph type details from the component.</error>");
@@ -129,9 +129,9 @@ class ImportParagraphTypeCommands extends DrushCommands
   }
 
   /**
-   * Prompt the user for the component name.
+   * Prompt the user for the component folder name.
    */
-  protected function askComponent()
+  protected function askComponentFolder()
   {
     $componentDir = '../nextjs/components/';
     $components = scandir($componentDir);
@@ -142,18 +142,18 @@ class ImportParagraphTypeCommands extends DrushCommands
       }
     );
 
-    $selectedIndex = $this->io()->choice('Select a component to import', $components);
+    $selectedIndex = $this->io()->choice('Select a component folder to import', $components);
     return $components[$selectedIndex];
   }
 
   /**
-   * Read the component file.
+   * Read the component file and return the component name and content.
    */
-  protected function readComponentFile($componentName)
+  protected function readComponentFile($componentFolderName)
   {
-    $componentPath = "../nextjs/components/{$componentName}";
+    $componentPath = "../nextjs/components/{$componentFolderName}";
     if (!is_dir($componentPath)) {
-      return FALSE;
+      return [FALSE, FALSE];
     }
 
     $componentFiles = array_filter(
@@ -164,34 +164,37 @@ class ImportParagraphTypeCommands extends DrushCommands
     );
 
     if (empty($componentFiles)) {
-      $this->loggerFactory->get('drupalx_ai')->warning("No suitable .tsx files found in the {$componentName} component directory.");
-      return FALSE;
+      $this->loggerFactory->get('drupalx_ai')->warning("No suitable .tsx files found in the {$componentFolderName} component directory.");
+      return [FALSE, FALSE];
     }
 
     $selectedFile = $this->io()->choice(
-      "Select a file from the {$componentName} component",
+      "Select a file from the {$componentFolderName} component",
       array_combine($componentFiles, $componentFiles)
     );
 
+    $componentName = pathinfo($selectedFile, PATHINFO_FILENAME);
     $filePath = "{$componentPath}/{$selectedFile}";
+
     if (!file_exists($filePath) || !is_readable($filePath)) {
       $this->loggerFactory->get('drupalx_ai')->error("Unable to read the selected file: {$filePath}");
-      return FALSE;
+      return [FALSE, FALSE];
     }
 
-    return file_get_contents($filePath);
+    $componentContent = file_get_contents($filePath);
+    return [$componentName, $componentContent];
   }
 
   /**
    * Generate paragraph type details using Claude 3 Haiku.
    */
-  protected function generateParagraphTypeDetails($componentContent)
+  protected function generateParagraphTypeDetails($componentName, $componentContent)
   {
-    $prompt = "Based on this Next.js component, suggest a Drupal paragraph type
+    $prompt = "Based on this Next.js component named '{$componentName}', suggest a Drupal paragraph type
       structure using the suggest_paragraph_type function:\n\n{$componentContent}.
       The name of the paragraph should not include the word 'paragraph'.
       For fields, only lowercase alphanumeric characters and underscores are allowed,
-      and only lowercase letters and underscore are allowed as the first character
+      and only lowercase letters and underscore are allowed as the first character.
       Do not use the field type 'list_text' - the correct type is 'list_string'.
       Use only Drupal 10 valid field types. For images use the 'image' field type.";
 
@@ -255,4 +258,5 @@ class ImportParagraphTypeCommands extends DrushCommands
 
     return $this->anthropicApiService->callAnthropic($prompt, $tools, 'suggest_paragraph_type');
   }
+
 }
