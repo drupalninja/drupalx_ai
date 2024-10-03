@@ -121,8 +121,15 @@ class GenerateStorybookCommands extends DrushCommands
       return;
     }
 
+    // Prompt for component category
+    $category = $this->io()->choice(
+      'Select the category for the Storybook component:',
+      ['General', 'Editorial', 'Navigation', 'Messages'],
+      'General'
+    );
+
     // Generate Storybook story
-    $storyContent = $this->storybookGenerator->generateStorybookStory($componentName, $componentContent);
+    $storyContent = $this->storybookGenerator->generateStorybookStory($componentName, $componentContent, $category);
 
     if (!$storyContent) {
       $output->writeln("<error>Failed to generate Storybook story for the component.</error>");

@@ -45,13 +45,15 @@ class StorybookGeneratorService
    *   The name of the component.
    * @param string $componentContent
    *   The content of the component file.
+   * @param string $category
+   *   The category of the component.
    *
    * @return string|null
    *   The generated Storybook story content, or null if generation failed.
    */
-  public function generateStorybookStory($componentName, $componentContent)
+  public function generateStorybookStory($componentName, $componentContent, $category)
   {
-    $prompt = "Based on this Next.js component named '{$componentName}', use
+    $prompt = "Based on this Next.js component named '{$componentName}' in the '{$category}' category, use
     the generate_storybook_story function to generate a Storybook story in TypeScript:
 
 {$componentContent}
@@ -63,7 +65,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import {$componentName} from './{$componentName}';
 
 const meta: Meta<typeof {$componentName}> = {
-  title: 'Components/{$componentName}',
+  title: '{$category}/{$componentName}',
   component: {$componentName},
   argTypes: {
     // Define argTypes based on the component's props
@@ -79,7 +81,7 @@ export const Default: Story = {
   },
 };
 ```
-Import the default component object from the component file.";
+Import the default component object from the component file. Ensure that the story reflects the '{$category}' category in its structure and content where appropriate.";
 
     $tools = [
       [
@@ -104,7 +106,10 @@ Import the default component object from the component file.";
       return $result['story_content'];
     }
 
-    $this->loggerFactory->get('drupalx_ai')->error('Failed to generate Storybook story for component: @component', ['@component' => $componentName]);
+    $this->loggerFactory->get('drupalx_ai')->error('Failed to generate Storybook story for component: @component in category: @category', [
+      '@component' => $componentName,
+      '@category' => $category,
+    ]);
     return null;
   }
 }
