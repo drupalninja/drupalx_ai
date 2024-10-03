@@ -5,9 +5,9 @@ namespace Drupal\drupalx_ai\Commands;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Http\ClientFactory;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
+use Drupal\drupalx_ai\Service\AnthropicApiService;
 use Drupal\drupalx_ai\Service\ParagraphImporterService;
 use Drush\Commands\DrushCommands;
-use GuzzleHttp\Exception\RequestException;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
@@ -26,13 +26,6 @@ class ImportParagraphTypeCommands extends DrushCommands {
   protected $configFactory;
 
   /**
-   * The HTTP client.
-   *
-   * @var \GuzzleHttp\ClientInterface
-   */
-  protected $httpClient;
-
-  /**
    * The paragraph importer service.
    *
    * @var \Drupal\drupalx_ai\Service\ParagraphImporterService
@@ -47,23 +40,30 @@ class ImportParagraphTypeCommands extends DrushCommands {
   protected $loggerFactory;
 
   /**
+   * The Anthropic API service.
+   *
+   * @var \Drupal\drupalx_ai\Service\AnthropicApiService
+   */
+  protected $anthropicApiService;
+
+  /**
    * Constructor for ImportParagraphTypeCommands.
    *
-   * @param \Drupal\Core\Http\ClientFactory $http_client_factory
-   *   The HTTP client factory.
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
    *   The config factory.
    * @param \Drupal\drupalx_ai\Service\ParagraphImporterService $paragraph_importer
    *   The paragraph importer service.
    * @param \Drupal\Core\Logger\LoggerChannelFactoryInterface $logger_factory
    *   The logger factory.
+   * @param \Drupal\drupalx_ai\Service\AnthropicApiService $anthropic_api_service
+   *   The Anthropic API service.
    */
-  public function __construct(ClientFactory $http_client_factory, ConfigFactoryInterface $config_factory, ParagraphImporterService $paragraph_importer, LoggerChannelFactoryInterface $logger_factory) {
+  public function __construct(ConfigFactoryInterface $config_factory, ParagraphImporterService $paragraph_importer, LoggerChannelFactoryInterface $logger_factory, AnthropicApiService $anthropic_api_service) {
     parent::__construct();
     $this->configFactory = $config_factory;
     $this->paragraphImporter = $paragraph_importer;
     $this->loggerFactory = $logger_factory;
-    $this->initializeHttpClient($http_client_factory);
+    $this->anthropicApiService = $anthropic_api_service;
   }
 
   /**
@@ -71,10 +71,10 @@ class ImportParagraphTypeCommands extends DrushCommands {
    */
   public static function create(ContainerInterface $container) {
     return new static(
-      $container->get('http_client_factory'),
       $container->get('config.factory'),
       $container->get('drupalx_ai.paragraph_importer'),
-      $container->get('logger.factory')
+      $container->get('logger.factory'),
+      $container->get('drupalx_ai.anthropic_api')
     );
   }
 
@@ -269,79 +269,7 @@ class ImportParagraphTypeCommands extends DrushCommands {
       ],
     ];
 
-    return $this->callAnthropic($prompt, $tools, 'suggest_paragraph_type');
-  }
-
-  /**
-   * Helper method to make Anthropic API calls.
-   *
-   * @param string $prompt
-   *   The prompt to send to the API.
-   * @param array $tools
-   *   The tools configuration for the API call.
-   * @param string $expectedFunctionName
-   *   The name of the function we expect to be called.
-   *
-   * @return mixed
-   *   The result of the API call, or FALSE on failure.
-   */
-  protected function callAnthropic($prompt, array $tools, $expectedFunctionName) {
-    $api_key = $this->configFactory->get('drupalx_ai.settings')->get('api_key');
-    if (empty($api_key)) {
-      $this->loggerFactory->get('drupalx_ai')->error('Anthropic API key is not set. Please configure it in the DrupalX AI Settings.');
-      return FALSE;
-    }
-
-    $url = 'https://api.anthropic.com/v1/messages';
-    $data = [
-      'model' => 'claude-3-haiku-20240307',
-      'max_tokens' => 2048,
-      'messages' => [
-      [
-        'role' => 'user',
-        'content' => $prompt,
-      ],
-      ],
-      'tools' => $tools,
-    ];
-
-    try {
-      $this->loggerFactory->get('drupalx_ai')->notice('Sending request to Claude API');
-      $response = $this->httpClient->request('POST', $url, ['json' => $data]);
-      $this->loggerFactory->get('drupalx_ai')->notice('Received response from Claude API');
-
-      $responseData = json_decode($response->getBody(), TRUE);
-      $this->loggerFactory->get('drupalx_ai')->notice('Response data: @data', ['@data' => print_r($responseData, TRUE)]);
-
-      if (!isset($responseData['content']) || !is_array($responseData['content'])) {
-        throw new \RuntimeException('Unexpected API response format: content array not found');
-      }
-
-      foreach ($responseData['content'] as $content) {
-        $this->loggerFactory->get('drupalx_ai')->notice('Processing content: @content', ['@content' => print_r($content, TRUE)]);
-        if (isset($content['type']) && $content['type'] === 'tool_use' && isset($content['input'])) {
-          $arguments = $content['input'];
-          if (is_array($arguments)) {
-            $this->loggerFactory->get('drupalx_ai')->notice('Successfully parsed function call arguments');
-            return $arguments;
-          }
-          else {
-            throw new \RuntimeException('Failed to parse function call arguments: invalid format');
-          }
-        }
-      }
-
-      throw new \RuntimeException("Function call '{$expectedFunctionName}' not found in API response");
-    }
-    catch (RequestException $e) {
-      $this->loggerFactory->get('drupalx_ai')->error('API request failed: ' . $e->getMessage());
-      $this->loggerFactory->get('drupalx_ai')->error('Request details: ' . print_r($data, TRUE));
-    }
-    catch (\Exception $e) {
-      $this->loggerFactory->get('drupalx_ai')->error('Error processing API response: ' . $e->getMessage());
-    }
-
-    return FALSE;
+    return $this->anthropicApiService->callAnthropic($prompt, $tools, 'suggest_paragraph_type');
   }
 
 }
