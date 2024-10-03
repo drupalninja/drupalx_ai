@@ -6,6 +6,7 @@ use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\drupalx_ai\Service\ParagraphImporterService;
 use Drupal\drupalx_ai\Service\AnthropicApiService;
+use Drupal\drupalx_ai\Service\ComponentReaderService;
 use Drush\Commands\DrushCommands;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -47,6 +48,13 @@ class ImportParagraphTypeCommands extends DrushCommands
   protected $anthropicApiService;
 
   /**
+   * The component reader service.
+   *
+   * @var \Drupal\drupalx_ai\Service\ComponentReaderService
+   */
+  protected $componentReader;
+
+  /**
    * Constructor for ImportParagraphTypeCommands.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
@@ -57,14 +65,17 @@ class ImportParagraphTypeCommands extends DrushCommands
    *   The logger factory.
    * @param \Drupal\drupalx_ai\Service\AnthropicApiService $anthropic_api_service
    *   The Anthropic API service.
+   * @param \Drupal\drupalx_ai\Service\ComponentReaderService $component_reader
+   *   The component reader service.
    */
-  public function __construct(ConfigFactoryInterface $config_factory, ParagraphImporterService $paragraph_importer, LoggerChannelFactoryInterface $logger_factory, AnthropicApiService $anthropic_api_service)
+  public function __construct(ConfigFactoryInterface $config_factory, ParagraphImporterService $paragraph_importer, LoggerChannelFactoryInterface $logger_factory, AnthropicApiService $anthropic_api_service, ComponentReaderService $component_reader)
   {
     parent::__construct();
     $this->configFactory = $config_factory;
     $this->paragraphImporter = $paragraph_importer;
     $this->loggerFactory = $logger_factory;
     $this->anthropicApiService = $anthropic_api_service;
+    $this->componentReader = $component_reader;
   }
 
   /**
@@ -76,7 +87,8 @@ class ImportParagraphTypeCommands extends DrushCommands
       $container->get('config.factory'),
       $container->get('drupalx_ai.paragraph_importer'),
       $container->get('logger.factory'),
-      $container->get('drupalx_ai.anthropic_api')
+      $container->get('drupalx_ai.anthropic_api'),
+      $container->get('drupalx_ai.component_reader')
     );
   }
 
@@ -95,11 +107,9 @@ class ImportParagraphTypeCommands extends DrushCommands
       return;
     }
 
-    // Prompt for component folder name.
-    $componentFolderName = $this->askComponentFolder();
-
-    // Read component file and get component name and content.
-    [$componentName, $componentContent] = $this->readComponentFile($componentFolderName);
+    // Use the ComponentReaderService for these operations
+    $componentFolderName = $this->componentReader->askComponentFolder($this->io());
+    [$componentName, $componentContent] = $this->componentReader->readComponentFile($componentFolderName, $this->io());
 
     if (!$componentContent) {
       $output->writeln("<error>Could not read component file. Please check the file exists and is readable.</error>");
@@ -126,63 +136,6 @@ class ImportParagraphTypeCommands extends DrushCommands
     // Import the paragraph type using the ParagraphImporterService.
     $result = $this->paragraphImporter->importParagraphType((object) $paragraphTypeDetails);
     $output->writeln($result);
-  }
-
-  /**
-   * Prompt the user for the component folder name.
-   */
-  protected function askComponentFolder()
-  {
-    $componentDir = '../nextjs/components/';
-    $components = scandir($componentDir);
-    $components = array_filter(
-      $components,
-      function ($file) {
-        return is_dir("../nextjs/components/$file") && $file != '.' && $file != '..';
-      }
-    );
-
-    $selectedIndex = $this->io()->choice('Select a component folder to import', $components);
-    return $components[$selectedIndex];
-  }
-
-  /**
-   * Read the component file and return the component name and content.
-   */
-  protected function readComponentFile($componentFolderName)
-  {
-    $componentPath = "../nextjs/components/{$componentFolderName}";
-    if (!is_dir($componentPath)) {
-      return [FALSE, FALSE];
-    }
-
-    $componentFiles = array_filter(
-      scandir($componentPath),
-      function ($file) {
-        return pathinfo($file, PATHINFO_EXTENSION) === 'tsx' && !preg_match('/\.stories\.tsx$/', $file);
-      }
-    );
-
-    if (empty($componentFiles)) {
-      $this->loggerFactory->get('drupalx_ai')->warning("No suitable .tsx files found in the {$componentFolderName} component directory.");
-      return [FALSE, FALSE];
-    }
-
-    $selectedFile = $this->io()->choice(
-      "Select a file from the {$componentFolderName} component",
-      array_combine($componentFiles, $componentFiles)
-    );
-
-    $componentName = pathinfo($selectedFile, PATHINFO_FILENAME);
-    $filePath = "{$componentPath}/{$selectedFile}";
-
-    if (!file_exists($filePath) || !is_readable($filePath)) {
-      $this->loggerFactory->get('drupalx_ai')->error("Unable to read the selected file: {$filePath}");
-      return [FALSE, FALSE];
-    }
-
-    $componentContent = file_get_contents($filePath);
-    return [$componentName, $componentContent];
   }
 
   /**
@@ -258,5 +211,4 @@ class ImportParagraphTypeCommands extends DrushCommands
 
     return $this->anthropicApiService->callAnthropic($prompt, $tools, 'suggest_paragraph_type');
   }
-
 }

@@ -12,8 +12,17 @@ services:
     class: \Drupal\drupalx_ai\Service\AnthropicApiService
     arguments: ['@http_client_factory', '@config.factory', '@logger.factory']
 
+  drupalx_ai.component_reader:
+    class: \Drupal\drupalx_ai\Service\ComponentReaderService
+    arguments: ['@logger.factory']
+
   drupalx_ai.import_paragraph_type_commands:
     class: \Drupal\drupalx_ai\Commands\ImportParagraphTypeCommands
-    arguments: ['@config.factory', '@drupalx_ai.paragraph_importer', '@logger.factory', '@drupalx_ai.anthropic_api']
+    arguments:
+      - '@config.factory'
+      - '@drupalx_ai.paragraph_importer'
+      - '@logger.factory'
+      - '@drupalx_ai.anthropic_api'
+      - '@drupalx_ai.component_reader'
     tags:
       - { name: drush.command }
