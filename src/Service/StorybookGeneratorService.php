@@ -79,8 +79,7 @@ export const Default: Story = {
   },
 };
 ```
-Import the default component object from the component file.
-Import interf";
+Import the default component object from the component file.";
 
     $tools = [
       [
