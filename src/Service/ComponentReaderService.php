@@ -8,7 +8,8 @@ use Symfony\Component\Console\Style\StyleInterface;
 /**
  * Service for reading component files.
  */
-class ComponentReaderService {
+class ComponentReaderService
+{
 
   /**
    * The logger factory.
@@ -23,14 +24,16 @@ class ComponentReaderService {
    * @param \Drupal\Core\Logger\LoggerChannelFactoryInterface $logger_factory
    *   The logger factory.
    */
-  public function __construct(LoggerChannelFactoryInterface $logger_factory) {
+  public function __construct(LoggerChannelFactoryInterface $logger_factory)
+  {
     $this->loggerFactory = $logger_factory;
   }
 
   /**
    * Prompt the user for the component folder name.
    */
-  public function askComponentFolder(StyleInterface $io) {
+  public function askComponentFolder(StyleInterface $io)
+  {
     $componentDir = '../nextjs/components/';
     $components = scandir($componentDir);
     $components = array_filter(
@@ -45,12 +48,13 @@ class ComponentReaderService {
   }
 
   /**
-   * Read the component file and return the component name and content.
+   * Read the component file, story file, and return their contents.
    */
-  public function readComponentFile($componentFolderName, StyleInterface $io) {
+  public function readComponentFiles($componentFolderName, StyleInterface $io)
+  {
     $componentPath = "../nextjs/components/{$componentFolderName}";
     if (!is_dir($componentPath)) {
-      return [FALSE, FALSE];
+      return [FALSE, FALSE, FALSE];
     }
 
     $componentFiles = array_filter(
@@ -62,7 +66,7 @@ class ComponentReaderService {
 
     if (empty($componentFiles)) {
       $this->loggerFactory->get('drupalx_ai')->warning("No suitable .tsx files found in the {$componentFolderName} component directory.");
-      return [FALSE, FALSE];
+      return [FALSE, FALSE, FALSE];
     }
 
     $selectedFile = $io->choice(
@@ -71,15 +75,23 @@ class ComponentReaderService {
     );
 
     $componentName = pathinfo($selectedFile, PATHINFO_FILENAME);
-    $filePath = "{$componentPath}/{$selectedFile}";
+    $componentFilePath = "{$componentPath}/{$selectedFile}";
+    $storyFilePath = "{$componentPath}/{$componentName}.stories.tsx";
 
-    if (!file_exists($filePath) || !is_readable($filePath)) {
-      $this->loggerFactory->get('drupalx_ai')->error("Unable to read the selected file: {$filePath}");
-      return [FALSE, FALSE];
+    if (!file_exists($componentFilePath) || !is_readable($componentFilePath)) {
+      $this->loggerFactory->get('drupalx_ai')->error("Unable to read the selected component file: {$componentFilePath}");
+      return [FALSE, FALSE, FALSE];
     }
 
-    $componentContent = file_get_contents($filePath);
-    return [$componentName, $componentContent];
-  }
+    $componentContent = file_get_contents($componentFilePath);
 
+    $storyContent = FALSE;
+    if (file_exists($storyFilePath) && is_readable($storyFilePath)) {
+      $storyContent = file_get_contents($storyFilePath);
+    } else {
+      $this->loggerFactory->get('drupalx_ai')->warning("Story file not found or not readable: {$storyFilePath}");
+    }
+
+    return [$componentName, $componentContent, $storyContent];
+  }
 }
