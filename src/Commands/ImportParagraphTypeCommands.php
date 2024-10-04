@@ -4,9 +4,9 @@ namespace Drupal\drupalx_ai\Commands;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
-use Drupal\drupalx_ai\Service\ParagraphImporterService;
 use Drupal\drupalx_ai\Service\AnthropicApiService;
 use Drupal\drupalx_ai\Service\ComponentReaderService;
+use Drupal\drupalx_ai\Service\ParagraphImporterService;
 use Drush\Commands\DrushCommands;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -16,8 +16,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  *
  * @package Drupal\drupalx_ai\Commands
  */
-class ImportParagraphTypeCommands extends DrushCommands
-{
+class ImportParagraphTypeCommands extends DrushCommands {
 
   /**
    * The config factory.
@@ -68,8 +67,7 @@ class ImportParagraphTypeCommands extends DrushCommands
    * @param \Drupal\drupalx_ai\Service\ComponentReaderService $component_reader
    *   The component reader service.
    */
-  public function __construct(ConfigFactoryInterface $config_factory, ParagraphImporterService $paragraph_importer, LoggerChannelFactoryInterface $logger_factory, AnthropicApiService $anthropic_api_service, ComponentReaderService $component_reader)
-  {
+  public function __construct(ConfigFactoryInterface $config_factory, ParagraphImporterService $paragraph_importer, LoggerChannelFactoryInterface $logger_factory, AnthropicApiService $anthropic_api_service, ComponentReaderService $component_reader) {
     parent::__construct();
     $this->configFactory = $config_factory;
     $this->paragraphImporter = $paragraph_importer;
@@ -81,8 +79,7 @@ class ImportParagraphTypeCommands extends DrushCommands
   /**
    * {@inheritdoc}
    */
-  public static function create(ContainerInterface $container)
-  {
+  public static function create(ContainerInterface $container) {
     return new static(
       $container->get('config.factory'),
       $container->get('drupalx_ai.paragraph_importer'),
@@ -99,15 +96,14 @@ class ImportParagraphTypeCommands extends DrushCommands
    * @aliases dai-ifc
    * @usage drush drupalx-ai:import-from-component
    */
-  public function importParagraphTypeFromComponent(OutputInterface $output)
-  {
+  public function importParagraphTypeFromComponent(OutputInterface $output) {
     // Check if API key is set before proceeding.
     if (empty($this->configFactory->get('drupalx_ai.settings')->get('api_key'))) {
       $output->writeln("<error>Anthropic API key is not set. Please configure it in the DrupalX AI Settings before running this command.</error>");
       return;
     }
 
-    // Use the ComponentReaderService for these operations
+    // Use the ComponentReaderService for these operations.
     $componentFolderName = $this->componentReader->askComponentFolder($this->io());
     [$componentName, $componentContent] = $this->componentReader->readComponentFile($componentFolderName, $this->io());
 
@@ -141,8 +137,7 @@ class ImportParagraphTypeCommands extends DrushCommands
   /**
    * Generate paragraph type details using Claude 3 Haiku.
    */
-  protected function generateParagraphTypeDetails($componentName, $componentContent)
-  {
+  protected function generateParagraphTypeDetails($componentName, $componentContent) {
     $prompt = "Based on this Next.js component named '{$componentName}', suggest a Drupal paragraph type
       structure using the suggest_paragraph_type function:\n\n{$componentContent}.
       The name of the paragraph should not include the word 'paragraph'.
@@ -211,4 +206,5 @@ class ImportParagraphTypeCommands extends DrushCommands
 
     return $this->anthropicApiService->callAnthropic($prompt, $tools, 'suggest_paragraph_type');
   }
+
 }

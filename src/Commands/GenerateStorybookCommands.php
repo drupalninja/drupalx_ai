@@ -16,8 +16,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  *
  * @package Drupal\drupalx_ai\Commands
  */
-class GenerateStorybookCommands extends DrushCommands
-{
+class GenerateStorybookCommands extends DrushCommands {
 
   /**
    * The config factory.
@@ -73,7 +72,7 @@ class GenerateStorybookCommands extends DrushCommands
     LoggerChannelFactoryInterface $logger_factory,
     AnthropicApiService $anthropic_api_service,
     ComponentReaderService $component_reader,
-    StorybookGeneratorService $storybook_generator
+    StorybookGeneratorService $storybook_generator,
   ) {
     parent::__construct();
     $this->configFactory = $config_factory;
@@ -86,8 +85,7 @@ class GenerateStorybookCommands extends DrushCommands
   /**
    * {@inheritdoc}
    */
-  public static function create(ContainerInterface $container)
-  {
+  public static function create(ContainerInterface $container) {
     return new static(
       $container->get('config.factory'),
       $container->get('logger.factory'),
@@ -104,15 +102,14 @@ class GenerateStorybookCommands extends DrushCommands
    * @aliases dai-gs
    * @usage drush drupalx-ai:generate-storybook
    */
-  public function generateStorybookStory(OutputInterface $output)
-  {
+  public function generateStorybookStory(OutputInterface $output) {
     // Check if API key is set before proceeding.
     if (empty($this->configFactory->get('drupalx_ai.settings')->get('api_key'))) {
       $output->writeln("<error>Anthropic API key is not set. Please configure it in the DrupalX AI Settings before running this command.</error>");
       return;
     }
 
-    // Use the ComponentReaderService to get the component
+    // Use the ComponentReaderService to get the component.
     $componentFolderName = $this->componentReader->askComponentFolder($this->io());
     [$componentName, $componentContent] = $this->componentReader->readComponentFile($componentFolderName, $this->io());
 
@@ -121,14 +118,14 @@ class GenerateStorybookCommands extends DrushCommands
       return;
     }
 
-    // Prompt for component category
+    // Prompt for component category.
     $category = $this->io()->choice(
       'Select the category for the Storybook component:',
       ['General', 'Editorial', 'Navigation', 'Messages'],
       'General'
     );
 
-    // Generate Storybook story
+    // Generate Storybook story.
     $storyContent = $this->storybookGenerator->generateStorybookStory($componentName, $componentContent, $category);
 
     if (!$storyContent) {
@@ -136,7 +133,7 @@ class GenerateStorybookCommands extends DrushCommands
       return;
     }
 
-    // Write the story to a file
+    // Write the story to a file.
     $storyFileName = $componentName . '.stories.tsx';
     $storyFilePath = '../nextjs/components/' . $componentFolderName . '/' . $storyFileName;
 

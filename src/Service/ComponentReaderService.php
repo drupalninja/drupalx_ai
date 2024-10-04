@@ -8,8 +8,7 @@ use Symfony\Component\Console\Style\StyleInterface;
 /**
  * Service for reading component files.
  */
-class ComponentReaderService
-{
+class ComponentReaderService {
 
   /**
    * The logger factory.
@@ -24,16 +23,14 @@ class ComponentReaderService
    * @param \Drupal\Core\Logger\LoggerChannelFactoryInterface $logger_factory
    *   The logger factory.
    */
-  public function __construct(LoggerChannelFactoryInterface $logger_factory)
-  {
+  public function __construct(LoggerChannelFactoryInterface $logger_factory) {
     $this->loggerFactory = $logger_factory;
   }
 
   /**
    * Prompt the user for the component folder name.
    */
-  public function askComponentFolder(StyleInterface $io)
-  {
+  public function askComponentFolder(StyleInterface $io) {
     $componentDir = '../nextjs/components/';
     $components = scandir($componentDir);
     $components = array_filter(
@@ -50,8 +47,7 @@ class ComponentReaderService
   /**
    * Read the component file and return the component name and content.
    */
-  public function readComponentFile($componentFolderName, StyleInterface $io)
-  {
+  public function readComponentFile($componentFolderName, StyleInterface $io) {
     $componentPath = "../nextjs/components/{$componentFolderName}";
     if (!is_dir($componentPath)) {
       return [FALSE, FALSE];
@@ -85,4 +81,5 @@ class ComponentReaderService
     $componentContent = file_get_contents($filePath);
     return [$componentName, $componentContent];
   }
+
 }

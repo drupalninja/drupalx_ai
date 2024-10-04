@@ -3,13 +3,11 @@
 namespace Drupal\drupalx_ai\Service;
 
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
-use Drupal\drupalx_ai\Service\AnthropicApiService;
 
 /**
  * Service for generating Storybook stories.
  */
-class StorybookGeneratorService
-{
+class StorybookGeneratorService {
   /**
    * The logger factory.
    *
@@ -32,8 +30,7 @@ class StorybookGeneratorService
    * @param \Drupal\drupalx_ai\Service\AnthropicApiService $anthropic_api_service
    *   The Anthropic API service.
    */
-  public function __construct(LoggerChannelFactoryInterface $logger_factory, AnthropicApiService $anthropic_api_service)
-  {
+  public function __construct(LoggerChannelFactoryInterface $logger_factory, AnthropicApiService $anthropic_api_service) {
     $this->loggerFactory = $logger_factory;
     $this->anthropicApiService = $anthropic_api_service;
   }
@@ -51,8 +48,7 @@ class StorybookGeneratorService
    * @return string|null
    *   The generated Storybook story content, or null if generation failed.
    */
-  public function generateStorybookStory($componentName, $componentContent, $category)
-  {
+  public function generateStorybookStory($componentName, $componentContent, $category) {
     $prompt = "Based on this Next.js component named '{$componentName}' in the '{$category}' category, use
     the generate_storybook_story function to generate a Storybook story in TypeScript:
 
@@ -110,6 +106,7 @@ Import the default component object from the component file. Ensure that the sto
       '@component' => $componentName,
       '@category' => $category,
     ]);
-    return null;
+    return NULL;
   }
+
 }
