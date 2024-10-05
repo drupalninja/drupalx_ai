@@ -6,7 +6,7 @@ use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\drupalx_ai\Service\AnthropicApiService;
 use Drupal\drupalx_ai\Service\ComponentReaderService;
-use Drupal\drupalx_ai\Service\StorybookGeneratorService;
+use Drupal\drupalx_ai\Service\CypressGeneratorService;
 use Drush\Commands\DrushCommands;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -16,7 +16,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  *
  * @package Drupal\drupalx_ai\Commands
  */
-class GenerateStorybookCommands extends DrushCommands {
+class GenerateCypressCommands extends DrushCommands {
 
   /**
    * The config factory.
@@ -47,14 +47,14 @@ class GenerateStorybookCommands extends DrushCommands {
   protected $componentReader;
 
   /**
-   * The Storybook generator service.
+   * The Cypress generator service.
    *
-   * @var \Drupal\drupalx_ai\Service\StorybookGeneratorService
+   * @var \Drupal\drupalx_ai\Service\CypressGeneratorService
    */
-  protected $storybookGenerator;
+  protected $cypressGenerator;
 
   /**
-   * Constructor for GenerateStorybookCommands.
+   * Constructor for GenerateCypressCommands.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
    *   The config factory.
@@ -64,22 +64,22 @@ class GenerateStorybookCommands extends DrushCommands {
    *   The Anthropic API service.
    * @param \Drupal\drupalx_ai\Service\ComponentReaderService $component_reader
    *   The component reader service.
-   * @param \Drupal\drupalx_ai\Service\StorybookGeneratorService $storybook_generator
-   *   The Storybook generator service.
+   * @param \Drupal\drupalx_ai\Service\CypressGeneratorService $cypress_generator
+   *   The Cypress generator service.
    */
   public function __construct(
     ConfigFactoryInterface $config_factory,
     LoggerChannelFactoryInterface $logger_factory,
     AnthropicApiService $anthropic_api_service,
     ComponentReaderService $component_reader,
-    StorybookGeneratorService $storybook_generator,
+    CypressGeneratorService $cypress_generator,
   ) {
     parent::__construct();
     $this->configFactory = $config_factory;
     $this->loggerFactory = $logger_factory;
     $this->anthropicApiService = $anthropic_api_service;
     $this->componentReader = $component_reader;
-    $this->storybookGenerator = $storybook_generator;
+    $this->cypressGenerator = $cypress_generator;
   }
 
   /**
@@ -91,58 +91,51 @@ class GenerateStorybookCommands extends DrushCommands {
       $container->get('logger.factory'),
       $container->get('drupalx_ai.anthropic_api'),
       $container->get('drupalx_ai.component_reader'),
-      $container->get('drupalx_ai.storybook_generator')
+      $container->get('drupalx_ai.cypress_generator')
     );
   }
 
   /**
-   * Generate a Storybook story for a Next.js component.
+   * Generate a Cypress test for a Next.js component.
    *
-   * @command drupalx-ai:generate-storybook
-   * @aliases dai-gs
-   * @usage drush drupalx-ai:generate-storybook
+   * @command drupalx-ai:generate-cypress
+   * @aliases dai-gc
+   * @usage drush drupalx-ai:generate-cypress
    */
-  public function generateStorybookStory(OutputInterface $output) {
+  public function generateCypressTest(OutputInterface $output) {
     // Check if API key is set before proceeding.
     if (empty($this->configFactory->get('drupalx_ai.settings')->get('api_key'))) {
       $output->writeln("<error>Anthropic API key is not set. Please configure it in the DrupalX AI Settings before running this command.</error>");
       return;
     }
 
-    // Use the ComponentReaderService to get the component.
+    // Use the ComponentReaderService to get the component and story files.
     $componentFolderName = $this->componentReader->askComponentFolder($this->io());
-    [$componentName, $componentContent] = $this->componentReader->readComponentFiles($componentFolderName, $this->io());
+    [$componentName, $componentContent, $storyContent] = $this->componentReader->readComponentFiles($componentFolderName, $this->io());
 
     if (!$componentContent) {
       $output->writeln("<error>Could not read component file. Please check the file exists and is readable.</error>");
       return;
     }
 
-    // Prompt for component category.
-    $category = $this->io()->choice(
-      'Select the category for the Storybook component:',
-      ['General', 'Editorial', 'Navigation', 'Messages'],
-      'General'
-    );
+    // Generate Cypress test.
+    $cypressContent = $this->cypressGenerator->generateCypressTest($componentFolderName, $componentName, $componentContent, $storyContent);
 
-    // Generate Storybook story.
-    $storyContent = $this->storybookGenerator->generateStorybookStory($componentName, $componentContent, $category);
-
-    if (!$storyContent) {
-      $output->writeln("<error>Failed to generate Storybook story for the component.</error>");
+    if (!$cypressContent) {
+      $output->writeln("<error>Failed to generate Cypress test for the component.</error>");
       return;
     }
 
-    // Write the story to a file.
-    $storyFileName = $componentName . '.stories.tsx';
-    $storyFilePath = '../nextjs/components/' . $componentFolderName . '/' . $storyFileName;
+    // Write the Cypress test to a file in the same folder as the component.
+    $cypressFileName = $componentName . '.cy.js';
+    $cypressFilePath = "../nextjs/components/{$componentFolderName}/{$cypressFileName}";
 
-    if (file_put_contents($storyFilePath, $storyContent) === FALSE) {
-      $output->writeln("<error>Failed to write Storybook story to file: {$storyFilePath}</error>");
+    if (file_put_contents($cypressFilePath, $cypressContent) === FALSE) {
+      $output->writeln("<error>Failed to write Cypress test to file: {$cypressFilePath}</error>");
       return;
     }
 
-    $output->writeln("<info>Successfully generated Storybook story: {$storyFilePath}</info>");
+    $output->writeln("<info>Successfully generated Cypress test: {$cypressFilePath}</info>");
   }
 
 }

@@ -74,7 +74,7 @@ class AnthropicApiService {
   }
 
   /**
-   * Make a call to the Anthropic API.
+   * Make a call to the Anthropic API with retry functionality.
    *
    * @param string $prompt
    *   The prompt to send to the API.
@@ -82,11 +82,13 @@ class AnthropicApiService {
    *   The tools configuration for the API call.
    * @param string $expectedFunctionName
    *   The name of the function we expect to be called.
+   * @param int $maxRetries
+   *   Maximum number of retries (default: 1).
    *
    * @return mixed
    *   The result of the API call, or FALSE on failure.
    */
-  public function callAnthropic($prompt, array $tools, $expectedFunctionName) {
+  public function callAnthropic($prompt, array $tools, $expectedFunctionName, $maxRetries = 1) {
     $api_key = $this->configFactory->get('drupalx_ai.settings')->get('api_key');
     if (empty($api_key)) {
       $this->loggerFactory->get('drupalx_ai')->error('Anthropic API key is not set. Please configure it in the DrupalX AI Settings.');
@@ -106,39 +108,59 @@ class AnthropicApiService {
       'tools' => $tools,
     ];
 
-    try {
-      $this->loggerFactory->get('drupalx_ai')->notice('Sending request to Claude API');
-      $response = $this->httpClient->request('POST', $url, ['json' => $data]);
-      $this->loggerFactory->get('drupalx_ai')->notice('Received response from Claude API');
+    $retryCount = 0;
+    while ($retryCount <= $maxRetries) {
+      try {
+        $this->loggerFactory->get('drupalx_ai')->notice('Sending request to Claude API (Attempt: @attempt)', ['@attempt' => $retryCount + 1]);
+        $response = $this->httpClient->request('POST', $url, ['json' => $data]);
+        $this->loggerFactory->get('drupalx_ai')->notice('Received response from Claude API');
 
-      $responseData = json_decode($response->getBody(), TRUE);
-      $this->loggerFactory->get('drupalx_ai')->notice('Response data: @data', ['@data' => print_r($responseData, TRUE)]);
+        $responseData = json_decode($response->getBody(), TRUE);
+        $this->loggerFactory->get('drupalx_ai')->notice('Response data: @data', ['@data' => print_r($responseData, TRUE)]);
 
-      if (!isset($responseData['content']) || !is_array($responseData['content'])) {
-        throw new \RuntimeException('Unexpected API response format: content array not found');
-      }
+        if (!isset($responseData['content']) || !is_array($responseData['content'])) {
+          throw new \RuntimeException('Unexpected API response format: content array not found');
+        }
 
-      foreach ($responseData['content'] as $content) {
-        $this->loggerFactory->get('drupalx_ai')->notice('Processing content: @content', ['@content' => print_r($content, TRUE)]);
-        if (isset($content['type']) && $content['type'] === 'tool_use' && isset($content['input'])) {
-          $arguments = $content['input'];
-          if (is_array($arguments)) {
-            $this->loggerFactory->get('drupalx_ai')->notice('Successfully parsed function call arguments');
-            return $arguments;
-          } else {
-            throw new \RuntimeException('Failed to parse function call arguments: invalid format');
+        foreach ($responseData['content'] as $content) {
+          $this->loggerFactory->get('drupalx_ai')->notice('Processing content: @content', ['@content' => print_r($content, TRUE)]);
+          if (isset($content['type']) && $content['type'] === 'tool_use' && isset($content['input'])) {
+            $arguments = $content['input'];
+            if (is_array($arguments)) {
+              $this->loggerFactory->get('drupalx_ai')->notice('Successfully parsed function call arguments');
+              return $arguments;
+            }
+            else {
+              throw new \RuntimeException('Failed to parse function call arguments: invalid format');
+            }
           }
         }
-      }
 
-      throw new \RuntimeException("Function call '{$expectedFunctionName}' not found in API response");
-    }
-    catch (RequestException $e) {
-      $this->loggerFactory->get('drupalx_ai')->error('API request failed: ' . $e->getMessage());
-      $this->loggerFactory->get('drupalx_ai')->error('Request details: ' . print_r($data, TRUE));
-    }
-    catch (\Exception $e) {
-      $this->loggerFactory->get('drupalx_ai')->error('Error processing API response: ' . $e->getMessage());
+        if ($retryCount < $maxRetries) {
+          $this->loggerFactory->get('drupalx_ai')->notice("Function call '{$expectedFunctionName}' not found. Retrying...");
+          $data['messages'][] = [
+            'role' => 'assistant',
+            'content' => $responseData['content'][0]['text'],
+          ];
+          $data['messages'][] = [
+            'role' => 'user',
+            'content' => "Please continue with the function call for {$expectedFunctionName}.",
+          ];
+          $retryCount++;
+        }
+        else {
+          throw new \RuntimeException("Function call '{$expectedFunctionName}' not found in API response after {$maxRetries} attempts");
+        }
+      }
+      catch (RequestException $e) {
+        $this->loggerFactory->get('drupalx_ai')->error('API request failed: ' . $e->getMessage());
+        $this->loggerFactory->get('drupalx_ai')->error('Request details: ' . print_r($data, TRUE));
+        return FALSE;
+      }
+      catch (\Exception $e) {
+        $this->loggerFactory->get('drupalx_ai')->error('Error processing API response: ' . $e->getMessage());
+        return FALSE;
+      }
     }
 
     return FALSE;
