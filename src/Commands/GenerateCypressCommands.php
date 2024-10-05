@@ -16,8 +16,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  *
  * @package Drupal\drupalx_ai\Commands
  */
-class GenerateCypressCommands extends DrushCommands
-{
+class GenerateCypressCommands extends DrushCommands {
 
   /**
    * The config factory.
@@ -73,7 +72,7 @@ class GenerateCypressCommands extends DrushCommands
     LoggerChannelFactoryInterface $logger_factory,
     AnthropicApiService $anthropic_api_service,
     ComponentReaderService $component_reader,
-    CypressGeneratorService $cypress_generator
+    CypressGeneratorService $cypress_generator,
   ) {
     parent::__construct();
     $this->configFactory = $config_factory;
@@ -86,8 +85,7 @@ class GenerateCypressCommands extends DrushCommands
   /**
    * {@inheritdoc}
    */
-  public static function create(ContainerInterface $container)
-  {
+  public static function create(ContainerInterface $container) {
     return new static(
       $container->get('config.factory'),
       $container->get('logger.factory'),
@@ -104,8 +102,7 @@ class GenerateCypressCommands extends DrushCommands
    * @aliases dai-gc
    * @usage drush drupalx-ai:generate-cypress
    */
-  public function generateCypressTest(OutputInterface $output)
-  {
+  public function generateCypressTest(OutputInterface $output) {
     // Check if API key is set before proceeding.
     if (empty($this->configFactory->get('drupalx_ai.settings')->get('api_key'))) {
       $output->writeln("<error>Anthropic API key is not set. Please configure it in the DrupalX AI Settings before running this command.</error>");
@@ -122,7 +119,7 @@ class GenerateCypressCommands extends DrushCommands
     }
 
     // Generate Cypress test.
-    $cypressContent = $this->cypressGenerator->generateCypressTest($componentName, $componentContent, $storyContent);
+    $cypressContent = $this->cypressGenerator->generateCypressTest($componentFolderName, $componentName, $componentContent, $storyContent);
 
     if (!$cypressContent) {
       $output->writeln("<error>Failed to generate Cypress test for the component.</error>");

@@ -8,8 +8,7 @@ use Symfony\Component\Console\Style\StyleInterface;
 /**
  * Service for reading component files.
  */
-class ComponentReaderService
-{
+class ComponentReaderService {
 
   /**
    * The logger factory.
@@ -24,16 +23,14 @@ class ComponentReaderService
    * @param \Drupal\Core\Logger\LoggerChannelFactoryInterface $logger_factory
    *   The logger factory.
    */
-  public function __construct(LoggerChannelFactoryInterface $logger_factory)
-  {
+  public function __construct(LoggerChannelFactoryInterface $logger_factory) {
     $this->loggerFactory = $logger_factory;
   }
 
   /**
    * Prompt the user for the component folder name.
    */
-  public function askComponentFolder(StyleInterface $io)
-  {
+  public function askComponentFolder(StyleInterface $io) {
     $componentDir = '../nextjs/components/';
     $components = scandir($componentDir);
     $components = array_filter(
@@ -50,8 +47,7 @@ class ComponentReaderService
   /**
    * Read the component file, story file, and return their contents.
    */
-  public function readComponentFiles($componentFolderName, StyleInterface $io)
-  {
+  public function readComponentFiles($componentFolderName, StyleInterface $io) {
     $componentPath = "../nextjs/components/{$componentFolderName}";
     if (!is_dir($componentPath)) {
       return [FALSE, FALSE, FALSE];
@@ -88,10 +84,12 @@ class ComponentReaderService
     $storyContent = FALSE;
     if (file_exists($storyFilePath) && is_readable($storyFilePath)) {
       $storyContent = file_get_contents($storyFilePath);
-    } else {
+    }
+    else {
       $this->loggerFactory->get('drupalx_ai')->warning("Story file not found or not readable: {$storyFilePath}");
     }
 
     return [$componentName, $componentContent, $storyContent];
   }
+
 }

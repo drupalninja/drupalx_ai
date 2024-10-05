@@ -111,7 +111,7 @@ class GenerateStorybookCommands extends DrushCommands {
 
     // Use the ComponentReaderService to get the component.
     $componentFolderName = $this->componentReader->askComponentFolder($this->io());
-    [$componentName, $componentContent] = $this->componentReader->readComponentFile($componentFolderName, $this->io());
+    [$componentName, $componentContent] = $this->componentReader->readComponentFiles($componentFolderName, $this->io());
 
     if (!$componentContent) {
       $output->writeln("<error>Could not read component file. Please check the file exists and is readable.</error>");

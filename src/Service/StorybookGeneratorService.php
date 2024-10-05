@@ -52,32 +52,32 @@ class StorybookGeneratorService {
     $prompt = "Based on this Next.js component named '{$componentName}' in the '{$category}' category, use
     the generate_storybook_story function to generate a Storybook story in TypeScript:
 
-{$componentContent}
+    {$componentContent}
 
-Please create a Storybook story that demonstrates the component's usage, including different prop variations if applicable. Use the following example as a template for the structure and format of the story:
+    Please create a Storybook story that demonstrates the component's usage, including different prop variations if applicable. Use the following example as a template for the structure and format of the story:
 
-```typescript
-import type { Meta, StoryObj } from '@storybook/react';
-import {$componentName} from './{$componentName}';
+    ```typescript
+    import type { Meta, StoryObj } from '@storybook/react';
+    import {$componentName} from './{$componentName}';
 
-const meta: Meta<typeof {$componentName}> = {
-  title: '{$category}/{$componentName}',
-  component: {$componentName},
-  argTypes: {
-    // Define argTypes based on the component's props
-  },
-};
+    const meta: Meta<typeof {$componentName}> = {
+      title: '{$category}/{$componentName}',
+      component: {$componentName},
+      argTypes: {
+        // Define argTypes based on the component's props
+      },
+    };
 
-export default meta;
-type Story = StoryObj<typeof {$componentName}>;
+    export default meta;
+    type Story = StoryObj<typeof {$componentName}>;
 
-export const Default: Story = {
-  args: {
-    // Define default args
-  },
-};
-```
-Import the default component object from the component file. Ensure that the story reflects the '{$category}' category in its structure and content where appropriate.";
+    export const Default: Story = {
+      args: {
+        // Define default args
+      },
+    };
+    ```
+    Import the default component object from the component file. Ensure that the story reflects the '{$category}' category in its structure and content where appropriate.";
 
     $tools = [
       [
