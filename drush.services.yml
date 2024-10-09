@@ -56,3 +56,18 @@ services:
       - '@drupalx_ai.cypress_generator'
     tags:
       - { name: drush.command }
+
+  drupalx_ai.paragraph_structure:
+    class: \Drupal\drupalx_ai\Service\ParagraphStructureService
+    arguments: ['@entity_type.manager', '@entity_field.manager']
+
+  drupalx_ai.mock_landing_page:
+    class: \Drupal\drupalx_ai\Service\MockLandingPageService
+    arguments:
+      - '@entity_type.manager'
+      - '@file_system'
+      - '@http_client'
+      - '@logger.factory'
+      - '@drupalx_ai.paragraph_structure'
+      - '@config.factory'
+

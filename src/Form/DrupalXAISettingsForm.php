@@ -8,7 +8,7 @@ use Drupal\Core\Form\FormStateInterface;
 /**
  * Configure DrupalX AI settings for this site.
  */
-class DrupalXAISettingsForm extends ConfigFormBase {
+class DrupalXAISettingsForm extends ConfigFormBas {
 
   /**
    * {@inheritdoc}
@@ -38,6 +38,14 @@ class DrupalXAISettingsForm extends ConfigFormBase {
       '#required' => TRUE,
     ];
 
+    $form['pexels_api_key'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Pexels API Key'),
+      '#default_value' => $config->get('pexels_api_key'),
+      '#description' => $this->t('Enter your Pexels API key for fetching images.'),
+      '#required' => TRUE,
+    ];
+
     return parent::buildForm($form, $form_state);
   }
 
@@ -47,6 +55,7 @@ class DrupalXAISettingsForm extends ConfigFormBase {
   public function submitForm(array &$form, FormStateInterface $form_state) {
     $this->config('drupalx_ai.settings')
       ->set('api_key', $form_state->getValue('api_key'))
+      ->set('pexels_api_key', $form_state->getValue('pexels_api_key'))
       ->save();
 
     parent::submitForm($form, $form_state);
