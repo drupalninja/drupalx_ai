@@ -1,0 +1,5 @@
+drupalx_ai.create_mock_landing:
+  route_name: drupalx_ai.create_mock_landing
+  title: 'Create mock landing'
+  appears_on:
+    - system.admin_content
