@@ -8,7 +8,7 @@ use Drupal\Core\Form\FormStateInterface;
 /**
  * Configure DrupalX AI settings for this site.
  */
-class DrupalXAISettingsForm extends ConfigFormBas {
+class DrupalXAISettingsForm extends ConfigFormBase {
 
   /**
    * {@inheritdoc}

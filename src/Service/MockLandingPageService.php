@@ -11,7 +11,7 @@ use Drupal\file\FileInterface;
 use Drupal\media\Entity\Media;
 use Drupal\Core\Url;
 use GuzzleHttp\ClientInterface;
-use Psr\Log\LoggerInterface;
+use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\Config\ConfigFactoryInterface;
 
 /**
@@ -71,8 +71,8 @@ class MockLandingPageService
    *   The file system service.
    * @param \GuzzleHttp\ClientInterface $http_client
    *   The HTTP client.
-   * @param \Psr\Log\LoggerInterface $logger
-   *   The logger service.
+   * @param \Drupal\Core\Logger\LoggerChannelFactoryInterface $logger_factory
+   *   The logger factory.
    * @param \Drupal\drupalx_ai\Service\ParagraphStructureService $paragraph_structure_service
    *   The paragraph structure service.
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
@@ -82,14 +82,14 @@ class MockLandingPageService
     EntityTypeManagerInterface $entity_type_manager,
     FileSystemInterface $file_system,
     ClientInterface $http_client,
-    LoggerInterface $logger,
+    LoggerChannelFactoryInterface $logger_factory,
     ParagraphStructureService $paragraph_structure_service,
     ConfigFactoryInterface $config_factory
   ) {
     $this->entityTypeManager = $entity_type_manager;
     $this->fileSystem = $file_system;
     $this->httpClient = $http_client;
-    $this->logger = $logger;
+    $this->logger = $logger_factory->get('drupalx_ai');
     $this->paragraphStructureService = $paragraph_structure_service;
     $this->configFactory = $config_factory;
   }
