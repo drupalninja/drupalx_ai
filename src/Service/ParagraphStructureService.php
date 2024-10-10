@@ -120,6 +120,13 @@ class ParagraphStructureService
   protected function getExampleValue($field_definition)
   {
     $field_type = $field_definition->getType();
+    $field_name = $field_definition->getName();
+
+    // Special handling for field_features_text
+    if ($field_name === 'field_features_text') {
+      return "Feature number 1\nFeature number 2\nFeature number 3";
+    }
+
     switch ($field_type) {
       case 'string':
       case 'string_long':
