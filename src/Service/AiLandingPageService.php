@@ -142,7 +142,7 @@ final class AiLandingPageService
     $allowedParagraphTypes = $this->mockLandingPageService->getAllowedParagraphTypes('node', 'landing', 'field_content');
     $prompt .= "IMPORTANT: Only use the following paragraph types as top-level paragraphs:\n";
     $prompt .= implode(", ", $allowedParagraphTypes) . "\n\n";
-
+    $prompt .= "CRITICAL: For fields named 'field_icon', you MUST choose a value ONLY from the provided Material Icon names listed above. Do not use any icon names that are not in this list.\n\n";
     $prompt .= "CRITICAL: When generating the landing page structure, ensure that ONLY the allowed paragraph types listed above are used as top-level paragraphs. Other paragraph types can be used as nested paragraphs within these allowed types if the structure permits.\n\n";
 
     $prompt .= "Please generate a landing page structure using these paragraph types. Fill in realistic content for each field. Use a variety of paragraph types to create an engaging and diverse landing page, while adhering to the allowed top-level paragraph types. When you're done, call the generate_ai_landing_page function with the generated structure.\n\n";
@@ -151,7 +151,7 @@ final class AiLandingPageService
     $prompt .= "CRITICAL: Ensure that EVERY paragraph, including sub-paragraphs (such as accordion items or pricing cards), has a 'type' property. Do not omit the 'type' for any paragraph at any level.\n\n";
     $prompt .= "For entity reference fields, use appropriate existing entity names or IDs. For viewsreference fields, use existing view names and display IDs.\n\n";
     $prompt .= "For list_string fields, make sure to choose a value from the provided options in the 'o' array.\n\n";
-    $prompt .= "CRITICAL: For fields named 'field_icon', you MUST choose a value ONLY from the provided Material Icon names listed above. Do not use any icon names that are not in this list.\n\n";
+    $prompt .= "In field field_features_text do not include any characters for bullets, only plain text separated by new lines.";
 
     $prompt .= "Example structure:\n";
     $prompt .= "{\n";

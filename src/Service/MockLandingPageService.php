@@ -265,7 +265,7 @@ class MockLandingPageService
   }
 
   /**
-   * Creates a media entity from Unsplash API.
+   * Creates a media entity from Unsplash API with improved randomization.
    *
    * @param string $alt_text
    *   The alt text to use for the image search and media entity.
@@ -273,29 +273,32 @@ class MockLandingPageService
    * @return int|null
    *   The media entity ID if successful, null otherwise.
    */
-  public function createMediaEntityFromUnsplash($alt_text)
-  {
-    $this->logger->notice( "Searching for term: $alt_text");
+  public function createMediaEntityFromUnsplash($alt_text) {
+    $this->logger->notice("Searching for term: $alt_text");
 
     $config = $this->configFactory->get('drupalx_ai.settings');
     $api_key = $config->get('unsplash_api_key');
 
-    $unsplash_api_url = 'https://api.unsplash.com/photos/random?query=' . urlencode($alt_text) . '&client_id=' . $api_key;
+    $search_query = urlencode($alt_text);
+
+    $unsplash_api_url = "https://api.unsplash.com/photos/random?query={$search_query}&count=30&client_id={$api_key}";
 
     try {
       $response = $this->httpClient->get($unsplash_api_url);
       $data = json_decode($response->getBody(), TRUE);
     } catch (\Exception $e) {
-      $this->logger->error('Failed to fetch image from Unsplash: @message', ['@message' => $e->getMessage()]);
+      $this->logger->error('Failed to fetch images from Unsplash: @message', ['@message' => $e->getMessage()]);
       return NULL;
     }
 
-    if (!isset($data['urls']['regular'])) {
-      $this->logger->error('Failed to fetch image from Unsplash for alt text: @alt', ['@alt' => $alt_text]);
+    if (empty($data)) {
+      $this->logger->error('Failed to fetch images from Unsplash for alt text: @alt', ['@alt' => $alt_text]);
       return NULL;
     }
 
-    $image_url = $data['urls']['regular'];
+    // Randomly select one image from the results
+    $selected_image = $data[array_rand($data)];
+    $image_url = $selected_image['urls']['regular'];
 
     // Download the image
     try {
@@ -311,8 +314,8 @@ class MockLandingPageService
     $this->fileSystem->prepareDirectory($directory, FileSystemInterface::CREATE_DIRECTORY);
 
     $file = File::create([
-      'filename' => 'unsplash_' . time() . '.jpg',
-      'uri' => $directory . '/unsplash_' . time() . '.jpg',
+      'filename' => 'unsplash_' . time() . '_' . uniqid() . '.jpg',
+      'uri' => $directory . '/unsplash_' . time() . '_' . uniqid() . '.jpg',
       'status' => FileInterface::STATUS_PERMANENT,
     ]);
 
@@ -341,7 +344,7 @@ class MockLandingPageService
   }
 
   /**
-   * Creates a media entity from Pexels API.
+   * Creates a media entity from Pexels API with improved randomization.
    *
    * @param string $alt_text
    *   The alt text to use for the image search and media entity.
@@ -354,7 +357,13 @@ class MockLandingPageService
     $config = $this->configFactory->get('drupalx_ai.settings');
     $api_key = $config->get('pexels_api_key');
 
-    $pexels_api_url = 'https://api.pexels.com/v1/search?query=' . urlencode($alt_text) . '&per_page=1';
+    $search_query = urlencode($alt_text);
+
+    // Randomize page number to get different results each time
+    $page = rand(1, 10);
+    $per_page = 30;
+
+    $pexels_api_url = "https://api.pexels.com/v1/search?query={$search_query}&per_page={$per_page}&page={$page}";
 
     try {
       $response = $this->httpClient->get($pexels_api_url, [
@@ -364,16 +373,18 @@ class MockLandingPageService
       ]);
       $data = json_decode($response->getBody(), TRUE);
     } catch (\Exception $e) {
-      $this->logger->error('Failed to fetch image from Pexels: @message', ['@message' => $e->getMessage()]);
+      $this->logger->error('Failed to fetch images from Pexels: @message', ['@message' => $e->getMessage()]);
       return NULL;
     }
 
-    if (!isset($data['photos'][0]['src']['large'])) {
-      $this->logger->error('Failed to fetch image from Pexels for alt text: @alt', ['@alt' => $alt_text]);
+    if (empty($data['photos'])) {
+      $this->logger->error('Failed to fetch images from Pexels for alt text: @alt', ['@alt' => $alt_text]);
       return NULL;
     }
 
-    $image_url = $data['photos'][0]['src']['large'];
+    // Randomly select one image from the results
+    $selected_image = $data['photos'][array_rand($data['photos'])];
+    $image_url = $selected_image['src']['large'];
 
     // Download the image
     try {
@@ -389,8 +400,8 @@ class MockLandingPageService
     $this->fileSystem->prepareDirectory($directory, FileSystemInterface::CREATE_DIRECTORY);
 
     $file = File::create([
-      'filename' => 'pexels_' . time() . '.jpg',
-      'uri' => $directory . '/pexels_' . time() . '.jpg',
+      'filename' => 'pexels_' . time() . '_' . uniqid() . '.jpg',
+      'uri' => $directory . '/pexels_' . time() . '_' . uniqid() . '.jpg',
       'status' => FileInterface::STATUS_PERMANENT,
     ]);
 
