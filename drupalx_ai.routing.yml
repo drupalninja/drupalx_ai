@@ -12,3 +12,10 @@ drupalx_ai.create_mock_landing:
     _title: 'Create Mock Landing'
   requirements:
     _permission: 'administer content'
+drupalx_ai.create_ai_landing:
+  path: '/admin/content/create-ai-landing'
+  defaults:
+    _form: '\Drupal\drupalx_ai\Form\CreateAiLandingForm'
+    _title: 'Create AI Landing Page'
+  requirements:
+    _permission: 'administer content'

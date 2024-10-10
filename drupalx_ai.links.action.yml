@@ -3,3 +3,8 @@ drupalx_ai.create_mock_landing:
   title: 'Create mock landing'
   appears_on:
     - system.admin_content
+drupalx_ai.create_ai_landing:
+  route_name: drupalx_ai.create_ai_landing
+  title: 'Create AI landing'
+  appears_on:
+    - system.admin_content
