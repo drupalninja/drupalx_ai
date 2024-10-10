@@ -97,7 +97,12 @@ final class AiLandingPageService
 
     $result = $this->anthropicApiService->callAnthropic($prompt, $tools, 'generate_ai_landing_page');
 
-    return $result ? $result['paragraphs'] : NULL;
+    if (is_array($result) && isset($result['paragraphs'])) {
+      return $result['paragraphs'];
+    } else {
+      $this->loggerFactory->get('drupalx_ai')->error('AI content generation failed or returned unexpected result');
+      return NULL;
+    }
   }
 
   /**
@@ -231,8 +236,12 @@ final class AiLandingPageService
         'type' => $paragraphData['type'],
       ]);
 
+      $fieldDefinitions = $paragraph->getFieldDefinitions();
+
       foreach ($paragraphData['fields'] as $fieldName => $fieldValue) {
-        if ($fieldName === 'field_media' && is_string($fieldValue)) {
+        $fieldDefinition = $fieldDefinitions[$fieldName] ?? null;
+
+        if ($fieldDefinition && $fieldDefinition->getType() === 'entity_reference' && $fieldDefinition->getSetting('target_type') === 'media' && is_string($fieldValue)) {
           $media = $this->createOrFetchMedia($this->preprocessImageSearchTerm($fieldValue));
           if ($media) {
             $paragraph->set($fieldName, $media);
