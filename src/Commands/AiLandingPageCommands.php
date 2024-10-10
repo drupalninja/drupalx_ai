@@ -66,8 +66,9 @@ class AiLandingPageCommands extends DrushCommands
     $description = $this->io()->ask('Please provide a description of the landing page content you want to generate:');
 
     $paragraphStructures = $this->paragraphStructureService->getParagraphStructures();
+    $materialIcons = $this->paragraphStructureService->getMaterialIconNames();
 
-    $prompt = $this->buildPrompt($description, $paragraphStructures);
+    $prompt = $this->buildPrompt($description, $paragraphStructures, $materialIcons);
 
     $tools = [
       [
@@ -117,11 +118,13 @@ class AiLandingPageCommands extends DrushCommands
    *   The user-provided description of the desired landing page.
    * @param array $paragraphStructures
    *   The available paragraph structures.
+   * @param array $materialIcons
+   *   The list of Material Icon names.
    *
    * @return string
    *   The constructed prompt.
    */
-  protected function buildPrompt($description, $paragraphStructures)
+  protected function buildPrompt($description, $paragraphStructures, $materialIcons)
   {
     $prompt = "Generate an AI-driven landing page structure with content based on the following description:\n\n";
     $prompt .= "$description\n\n";
@@ -139,11 +142,22 @@ class AiLandingPageCommands extends DrushCommands
     $prompt .= "  - 'e': an example value for the field\n";
     $prompt .= "  - 'o': (for list_string fields only) an array of allowed options\n\n";
 
+    $prompt .= "Available Material Icon names:\n";
+    $prompt .= implode(", ", $materialIcons) . "\n\n";
+
     $prompt .= "IMPORTANT: Please generate a landing page structure using these paragraph types. Fill in realistic content for each field. Use a variety of paragraph types to create an engaging and diverse landing page. When you're done, call the generate_ai_landing_page function with the generated structure.\n\n";
     $prompt .= "The structure should be an array of paragraphs, where each paragraph is an object with 'type' and 'fields' properties. The 'fields' property should be an object where keys are field names and values are the content for those fields.\n\n";
     $prompt .= "CRITICAL: Ensure that EVERY paragraph, including sub-paragraphs (such as accordion items or pricing cards), has a 'type' property. Do not omit the 'type' for any paragraph at any level.\n\n";
     $prompt .= "For entity reference fields, use appropriate existing entity names or IDs. For viewsreference fields, use existing view names and display IDs.\n\n";
     $prompt .= "For list_string fields, make sure to choose a value from the provided options in the 'o' array.\n\n";
+    $prompt .= "CRITICAL: For fields named 'field_icon', you MUST choose a value ONLY from the provided Material Icon names listed above. Do not use any icon names that are not in this list.\n\n";
+
+    $prompt .= "IMPORTANT: Please generate a landing page structure using these paragraph types. Fill in realistic content for each field. Use a variety of paragraph types to create an engaging and diverse landing page. When you're done, call the generate_ai_landing_page function with the generated structure.\n\n";
+    $prompt .= "The structure should be an array of paragraphs, where each paragraph is an object with 'type' and 'fields' properties. The 'fields' property should be an object where keys are field names and values are the content for those fields.\n\n";
+    $prompt .= "CRITICAL: Ensure that EVERY paragraph, including sub-paragraphs (such as accordion items or pricing cards), has a 'type' property. Do not omit the 'type' for any paragraph at any level.\n\n";
+    $prompt .= "For entity reference fields, use appropriate existing entity names or IDs. For viewsreference fields, use existing view names and display IDs.\n\n";
+    $prompt .= "For list_string fields, make sure to choose a value from the provided options in the 'o' array.\n\n";
+    $prompt .= "For fields named 'field_icon', choose a value from the provided Material Icon names.\n\n";
     $prompt .= "Example structure:\n";
     $prompt .= "{\n";
     $prompt .= "  \"paragraphs\": [\n";
