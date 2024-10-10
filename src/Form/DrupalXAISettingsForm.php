@@ -42,6 +42,18 @@ class DrupalXAISettingsForm extends ConfigFormBase
       '#required' => TRUE,
     ];
 
+    $form['image_generator'] = [
+      '#type' => 'radios',
+      '#title' => $this->t('Image Generator'),
+      '#options' => [
+        'unsplash' => $this->t('Unsplash'),
+        'pexels' => $this->t('Pexels'),
+      ],
+      '#default_value' => $config->get('image_generator') ?: 'unsplash',
+      '#description' => $this->t('Choose the image generator service to use.'),
+      '#required' => TRUE,
+    ];
+
     $form['pexels_api_key'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Pexels API Key'),
@@ -68,6 +80,7 @@ class DrupalXAISettingsForm extends ConfigFormBase
   {
     $this->config('drupalx_ai.settings')
       ->set('api_key', $form_state->getValue('api_key'))
+      ->set('image_generator', $form_state->getValue('image_generator'))
       ->set('pexels_api_key', $form_state->getValue('pexels_api_key'))
       ->set('unsplash_api_key', $form_state->getValue('unsplash_api_key'))
       ->save();

@@ -2,10 +2,10 @@
 
 namespace Drupal\drupalx_ai\Service;
 
+use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\Url;
-use Drupal\media\Entity\Media;
 use Drupal\node\Entity\Node;
 use Drupal\paragraphs\Entity\Paragraph;
 
@@ -14,6 +14,13 @@ use Drupal\paragraphs\Entity\Paragraph;
  */
 final class AiLandingPageService
 {
+
+  /**
+   * The config factory.
+   *
+   * @var \Drupal\Core\Config\ConfigFactoryInterface
+   */
+  private $configFactory;
 
   /**
    * Constructs a new AiLandingPageService object.
@@ -28,6 +35,8 @@ final class AiLandingPageService
    *   The Anthropic API service.
    * @param \Drupal\drupalx_ai\Service\ParagraphStructureService $paragraphStructureService
    *   The paragraph structure service.
+   * @param \Drupal\Core\Config\ConfigFactoryInterface $configFactory
+   *   The config factory.
    */
   public function __construct(
     private readonly EntityTypeManagerInterface $entityTypeManager,
@@ -35,7 +44,10 @@ final class AiLandingPageService
     private readonly MockLandingPageService $mockLandingPageService,
     private readonly AnthropicApiService $anthropicApiService,
     private readonly ParagraphStructureService $paragraphStructureService,
-  ) {}
+    ConfigFactoryInterface $configFactory
+  ) {
+    $this->configFactory = $configFactory;
+  }
 
   /**
    * Generates AI content for a landing page based on a description.
@@ -289,14 +301,28 @@ final class AiLandingPageService
    */
   private function createOrFetchMedia(string $searchTerm)
   {
-    // First, try to create a new media entity using MockLandingPageService.
+    $config = $this->configFactory->get('drupalx_ai.settings');
+    $imageGenerator = $config->get('image_generator') ?: 'unsplash';
+
     try {
-      $newMedia = (int) $this->mockLandingPageService->createMediaEntityFromUnsplash($searchTerm);
+      $newMedia = null;
+      if ($imageGenerator === 'unsplash') {
+        $newMedia = (int) $this->mockLandingPageService->createMediaEntityFromUnsplash($searchTerm);
+      } elseif ($imageGenerator === 'pexels') {
+        $newMedia = (int) $this->mockLandingPageService->createMediaEntityFromPexels($searchTerm);
+      }
+
       if ($newMedia) {
-        $this->loggerFactory->get('drupalx_ai')->info('Successfully created new media entity for search term: @term', ['@term' => $searchTerm]);
+        $this->loggerFactory->get('drupalx_ai')->info('Successfully created new media entity for search term: @term using @generator', [
+          '@term' => $searchTerm,
+          '@generator' => $imageGenerator,
+        ]);
         return $newMedia;
       }
-      $this->loggerFactory->get('drupalx_ai')->warning('Failed to create new media entity for search term: @term', ['@term' => $searchTerm]);
+      $this->loggerFactory->get('drupalx_ai')->warning('Failed to create new media entity for search term: @term using @generator', [
+        '@term' => $searchTerm,
+        '@generator' => $imageGenerator,
+      ]);
     } catch (\Exception $e) {
       $this->loggerFactory->get('drupalx_ai')->error('Exception while creating media entity: @message', ['@message' => $e->getMessage()]);
     }
