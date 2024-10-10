@@ -275,6 +275,8 @@ class MockLandingPageService
    */
   public function createMediaEntityFromUnsplash($alt_text)
   {
+    $this->logger->notice( "Searching for term: $alt_text");
+
     $config = $this->configFactory->get('drupalx_ai.settings');
     $api_key = $config->get('unsplash_api_key');
 

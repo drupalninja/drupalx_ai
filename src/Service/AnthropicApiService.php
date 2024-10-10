@@ -83,12 +83,15 @@ class AnthropicApiService {
    * @param string $expectedFunctionName
    *   The name of the function we expect to be called.
    * @param int $maxRetries
-   *   Maximum number of retries (default: 1).
+   *   Maximum number of retries (default: 3).
+   * @param int $initialRetryDelay
+   *   Initial delay between retries in seconds (default: 1).
    *
    * @return mixed
    *   The result of the API call, or FALSE on failure.
    */
-  public function callAnthropic($prompt, array $tools, $expectedFunctionName, $maxRetries = 1) {
+  public function callAnthropic($prompt, array $tools, $expectedFunctionName, $maxRetries = 3, $initialRetryDelay = 1)
+  {
     $api_key = $this->configFactory->get('drupalx_ai.settings')->get('api_key');
     if (empty($api_key)) {
       $this->loggerFactory->get('drupalx_ai')->error('Anthropic API key is not set. Please configure it in the DrupalX AI Settings.');
@@ -109,6 +112,8 @@ class AnthropicApiService {
     ];
 
     $retryCount = 0;
+    $retryDelay = $initialRetryDelay;
+
     while ($retryCount <= $maxRetries) {
       try {
         $this->loggerFactory->get('drupalx_ai')->notice('Sending request to Claude API (Attempt: @attempt)', ['@attempt' => $retryCount + 1]);
@@ -129,8 +134,7 @@ class AnthropicApiService {
             if (is_array($arguments)) {
               $this->loggerFactory->get('drupalx_ai')->notice('Successfully parsed function call arguments');
               return $arguments;
-            }
-            else {
+            } else {
               throw new \RuntimeException('Failed to parse function call arguments: invalid format');
             }
           }
@@ -147,22 +151,37 @@ class AnthropicApiService {
             'content' => "Please continue with the function call for {$expectedFunctionName}.",
           ];
           $retryCount++;
-        }
-        else {
+        } else {
           throw new \RuntimeException("Function call '{$expectedFunctionName}' not found in API response after {$maxRetries} attempts");
         }
-      }
-      catch (RequestException $e) {
-        $this->loggerFactory->get('drupalx_ai')->error('API request failed: ' . $e->getMessage());
-        $this->loggerFactory->get('drupalx_ai')->error('Request details: ' . print_r($data, TRUE));
+      } catch (RequestException $e) {
+        $responseBody = $e->hasResponse() ? $e->getResponse()->getBody()->getContents() : '';
+        $errorData = json_decode($responseBody, TRUE);
+
+        if (
+          isset($errorData['type']) && $errorData['type'] === 'error' &&
+          isset($errorData['error']['type']) && $errorData['error']['type'] === 'overloaded_error'
+        ) {
+          $this->loggerFactory->get('drupalx_ai')->warning('Anthropic API overloaded. Retrying in @seconds seconds...', ['@seconds' => $retryDelay]);
+
+          if ($retryCount < $maxRetries) {
+            sleep($retryDelay);
+            $retryCount++;
+            $retryDelay *= 2; // Exponential backoff
+            continue;
+          }
+        }
+
+        $this->loggerFactory->get('drupalx_ai')->error('API request failed: @message', ['@message' => $e->getMessage()]);
+        $this->loggerFactory->get('drupalx_ai')->error('Request details: @details', ['@details' => print_r($data, TRUE)]);
         return FALSE;
-      }
-      catch (\Exception $e) {
-        $this->loggerFactory->get('drupalx_ai')->error('Error processing API response: ' . $e->getMessage());
+      } catch (\Exception $e) {
+        $this->loggerFactory->get('drupalx_ai')->error('Error processing API response: @message', ['@message' => $e->getMessage()]);
         return FALSE;
       }
     }
 
+    $this->loggerFactory->get('drupalx_ai')->error('Max retries reached. Unable to get a successful response from the Anthropic API.');
     return FALSE;
   }
 

@@ -54,3 +54,5 @@ services:
       - '@entity_type.manager'
       - '@logger.factory'
       - '@drupalx_ai.mock_landing_page'
+      - '@drupalx_ai.anthropic_api'
+      - '@drupalx_ai.paragraph_structure'
