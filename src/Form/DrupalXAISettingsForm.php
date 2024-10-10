@@ -42,6 +42,18 @@ class DrupalXAISettingsForm extends ConfigFormBase
       '#required' => TRUE,
     ];
 
+    $form['claude_model'] = [
+      '#type' => 'select',
+      '#title' => $this->t('Claude Model'),
+      '#options' => [
+        'claude-3-haiku-20240307' => $this->t('Claude 3 Haiku (Faster, cheaper)'),
+        'claude-3-sonnet-20240229' => $this->t('Claude 3 Sonnet (More capable)'),
+      ],
+      '#default_value' => $config->get('claude_model') ?: 'claude-3-haiku-20240307',
+      '#description' => $this->t('Choose the Claude model to use. Haiku is faster and cheaper, while Sonnet is more capable.'),
+      '#required' => TRUE,
+    ];
+
     $form['image_generator'] = [
       '#type' => 'radios',
       '#title' => $this->t('Image Generator'),
@@ -80,6 +92,7 @@ class DrupalXAISettingsForm extends ConfigFormBase
   {
     $this->config('drupalx_ai.settings')
       ->set('api_key', $form_state->getValue('api_key'))
+      ->set('claude_model', $form_state->getValue('claude_model'))
       ->set('image_generator', $form_state->getValue('image_generator'))
       ->set('pexels_api_key', $form_state->getValue('pexels_api_key'))
       ->set('unsplash_api_key', $form_state->getValue('unsplash_api_key'))

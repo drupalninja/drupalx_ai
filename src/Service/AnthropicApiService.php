@@ -10,7 +10,8 @@ use GuzzleHttp\Exception\RequestException;
 /**
  * Service for making calls to the Anthropic API.
  */
-class AnthropicApiService {
+class AnthropicApiService
+{
 
   /**
    * The HTTP client.
@@ -43,7 +44,8 @@ class AnthropicApiService {
    * @param \Drupal\Core\Logger\LoggerChannelFactoryInterface $logger_factory
    *   The logger factory.
    */
-  public function __construct(ClientFactory $http_client_factory, ConfigFactoryInterface $config_factory, LoggerChannelFactoryInterface $logger_factory) {
+  public function __construct(ClientFactory $http_client_factory, ConfigFactoryInterface $config_factory, LoggerChannelFactoryInterface $logger_factory)
+  {
     $this->configFactory = $config_factory;
     $this->loggerFactory = $logger_factory;
     $this->initializeHttpClient($http_client_factory);
@@ -55,7 +57,8 @@ class AnthropicApiService {
    * @param \Drupal\Core\Http\ClientFactory $http_client_factory
    *   The HTTP client factory.
    */
-  protected function initializeHttpClient(ClientFactory $http_client_factory) {
+  protected function initializeHttpClient(ClientFactory $http_client_factory)
+  {
     $api_key = $this->configFactory->get('drupalx_ai.settings')->get('api_key');
 
     if (empty($api_key)) {
@@ -92,7 +95,10 @@ class AnthropicApiService {
    */
   public function callAnthropic($prompt, array $tools, $expectedFunctionName, $maxRetries = 3, $initialRetryDelay = 1)
   {
-    $api_key = $this->configFactory->get('drupalx_ai.settings')->get('api_key');
+    $config = $this->configFactory->get('drupalx_ai.settings');
+    $api_key = $config->get('api_key');
+    $claude_model = $config->get('claude_model') ?: 'claude-3-haiku-20240307';
+
     if (empty($api_key)) {
       $this->loggerFactory->get('drupalx_ai')->error('Anthropic API key is not set. Please configure it in the DrupalX AI Settings.');
       return FALSE;
@@ -100,7 +106,7 @@ class AnthropicApiService {
 
     $url = 'https://api.anthropic.com/v1/messages';
     $data = [
-      'model' => 'claude-3-haiku-20240307',
+      'model' => $claude_model,
       'max_tokens' => 2048,
       'messages' => [
         [
@@ -116,7 +122,7 @@ class AnthropicApiService {
 
     while ($retryCount <= $maxRetries) {
       try {
-        $this->loggerFactory->get('drupalx_ai')->notice('Sending request to Claude API (Attempt: @attempt)', ['@attempt' => $retryCount + 1]);
+        $this->loggerFactory->get('drupalx_ai')->notice('Sending request to Claude API (Model: @model, Attempt: @attempt)', ['@model' => $claude_model, '@attempt' => $retryCount + 1]);
         $response = $this->httpClient->request('POST', $url, ['json' => $data]);
         $this->loggerFactory->get('drupalx_ai')->notice('Received response from Claude API');
 
@@ -184,5 +190,4 @@ class AnthropicApiService {
     $this->loggerFactory->get('drupalx_ai')->error('Max retries reached. Unable to get a successful response from the Anthropic API.');
     return FALSE;
   }
-
 }
