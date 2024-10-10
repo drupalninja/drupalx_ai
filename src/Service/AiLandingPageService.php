@@ -186,7 +186,7 @@ class AiLandingPageService
 
     // If no existing media, create a new one using MockLandingPageService
     try {
-      return $this->mockLandingPageService->createMediaEntityFromPexels($search_term);
+      return $this->mockLandingPageService->createMediaEntityFromUnsplash($search_term);
     } catch (\Exception $e) {
       $this->loggerFactory->get('drupalx_ai')->error('Failed to create media entity: @message', ['@message' => $e->getMessage()]);
       return null;

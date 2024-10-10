@@ -143,7 +143,7 @@ class MockLandingPageService
    * @return array
    *   An array of allowed paragraph type machine names.
    */
-  protected function getAllowedParagraphTypes($entity_type, $bundle, $field_name)
+  public function getAllowedParagraphTypes($entity_type, $bundle, $field_name)
   {
     $field_config = $this->entityTypeManager
       ->getStorage('field_config')
@@ -207,7 +207,7 @@ class MockLandingPageService
           break;
         case 'entity_reference':
           if (isset($field->target_type) && $field->target_type === 'media') {
-            $media_entity = $this->createMediaEntityFromPexels($example_value);
+            $media_entity = $this->createMediaEntityFromUnsplash($example_value);
             if ($media_entity) {
               $paragraph->set($field_name, $media_entity);
             }
@@ -265,6 +265,80 @@ class MockLandingPageService
   }
 
   /**
+   * Creates a media entity from Unsplash API.
+   *
+   * @param string $alt_text
+   *   The alt text to use for the image search and media entity.
+   *
+   * @return int|null
+   *   The media entity ID if successful, null otherwise.
+   */
+  public function createMediaEntityFromUnsplash($alt_text)
+  {
+    $config = $this->configFactory->get('drupalx_ai.settings');
+    $api_key = $config->get('unsplash_api_key');
+
+    $unsplash_api_url = 'https://api.unsplash.com/photos/random?query=' . urlencode($alt_text) . '&client_id=' . $api_key;
+
+    try {
+      $response = $this->httpClient->get($unsplash_api_url);
+      $data = json_decode($response->getBody(), TRUE);
+    } catch (\Exception $e) {
+      $this->logger->error('Failed to fetch image from Unsplash: @message', ['@message' => $e->getMessage()]);
+      return NULL;
+    }
+
+    if (!isset($data['urls']['regular'])) {
+      $this->logger->error('Failed to fetch image from Unsplash for alt text: @alt', ['@alt' => $alt_text]);
+      return NULL;
+    }
+
+    $image_url = $data['urls']['regular'];
+
+    // Download the image
+    try {
+      $image_response = $this->httpClient->get($image_url);
+      $image_data = $image_response->getBody()->getContents();
+    } catch (\Exception $e) {
+      $this->logger->error('Failed to download image from Unsplash: @message', ['@message' => $e->getMessage()]);
+      return NULL;
+    }
+
+    // Save the image as a file entity
+    $directory = 'public://unsplash';
+    $this->fileSystem->prepareDirectory($directory, FileSystemInterface::CREATE_DIRECTORY);
+
+    $file = File::create([
+      'filename' => 'unsplash_' . time() . '.jpg',
+      'uri' => $directory . '/unsplash_' . time() . '.jpg',
+      'status' => FileInterface::STATUS_PERMANENT,
+    ]);
+
+    try {
+      $this->fileSystem->saveData($image_data, $file->getFileUri(), FileSystemInterface::EXISTS_REPLACE);
+      $file->save();
+    } catch (\Exception $e) {
+      $this->logger->error('Failed to save Unsplash image as file: @message', ['@message' => $e->getMessage()]);
+      return NULL;
+    }
+
+    // Create a media entity
+    $media = Media::create([
+      'bundle' => 'image',
+      'uid' => 1,
+      'field_image' => [
+        'target_id' => $file->id(),
+        'alt' => $alt_text,
+      ],
+      'name' => $alt_text,
+    ]);
+
+    $media->save();
+
+    return $media->id();
+  }
+
+  /**
    * Creates a media entity from Pexels API.
    *
    * @param string $alt_text
@@ -292,12 +366,12 @@ class MockLandingPageService
       return NULL;
     }
 
-    if (!isset($data['photos'][0]['src']['medium'])) {
+    if (!isset($data['photos'][0]['src']['large'])) {
       $this->logger->error('Failed to fetch image from Pexels for alt text: @alt', ['@alt' => $alt_text]);
       return NULL;
     }
 
-    $image_url = $data['photos'][0]['src']['medium'];
+    $image_url = $data['photos'][0]['src']['large'];
 
     // Download the image
     try {

@@ -6,6 +6,7 @@ use Drush\Commands\DrushCommands;
 use Drupal\drupalx_ai\Service\AiLandingPageService;
 use Drupal\drupalx_ai\Service\AnthropicApiService;
 use Drupal\drupalx_ai\Service\ParagraphStructureService;
+use Drupal\drupalx_ai\Service\MockLandingPageService;
 
 /**
  * Drush commands for creating AI-generated landing pages using Anthropic API.
@@ -35,6 +36,13 @@ class AiLandingPageCommands extends DrushCommands
   protected $paragraphStructureService;
 
   /**
+   * The mock landing page service.
+   *
+   * @var \Drupal\drupalx_ai\Service\MockLandingPageService
+   */
+  protected $mockLandingPageService;
+
+  /**
    * Constructs a new AiLandingPageCommands object.
    *
    * @param \Drupal\drupalx_ai\Service\AiLandingPageService $ai_landing_page_service
@@ -43,16 +51,20 @@ class AiLandingPageCommands extends DrushCommands
    *   The Anthropic API service.
    * @param \Drupal\drupalx_ai\Service\ParagraphStructureService $paragraph_structure_service
    *   The paragraph structure service.
+   * @param \Drupal\drupalx_ai\Service\MockLandingPageService $mock_landing_page_service
+   *   The mock landing page service.
    */
   public function __construct(
     AiLandingPageService $ai_landing_page_service,
     AnthropicApiService $anthropic_api_service,
-    ParagraphStructureService $paragraph_structure_service
+    ParagraphStructureService $paragraph_structure_service,
+    MockLandingPageService $mock_landing_page_service
   ) {
     parent::__construct();
     $this->aiLandingPageService = $ai_landing_page_service;
     $this->anthropicApiService = $anthropic_api_service;
     $this->paragraphStructureService = $paragraph_structure_service;
+    $this->mockLandingPageService = $mock_landing_page_service;
   }
 
   /**
@@ -145,19 +157,21 @@ class AiLandingPageCommands extends DrushCommands
     $prompt .= "Available Material Icon names:\n";
     $prompt .= implode(", ", $materialIcons) . "\n\n";
 
-    $prompt .= "IMPORTANT: Please generate a landing page structure using these paragraph types. Fill in realistic content for each field. Use a variety of paragraph types to create an engaging and diverse landing page. When you're done, call the generate_ai_landing_page function with the generated structure.\n\n";
+    // Add information about allowed top-level paragraph types
+    $allowed_paragraph_types = $this->mockLandingPageService->getAllowedParagraphTypes('node', 'landing', 'field_content');
+    $prompt .= "IMPORTANT: Only use the following paragraph types as top-level paragraphs:\n";
+    $prompt .= implode(", ", $allowed_paragraph_types) . "\n\n";
+
+    $prompt .= "CRITICAL: When generating the landing page structure, ensure that ONLY the allowed paragraph types listed above are used as top-level paragraphs. Other paragraph types can be used as nested paragraphs within these allowed types if the structure permits.\n\n";
+
+    $prompt .= "Please generate a landing page structure using these paragraph types. Fill in realistic content for each field. Use a variety of paragraph types to create an engaging and diverse landing page, while adhering to the allowed top-level paragraph types. When you're done, call the generate_ai_landing_page function with the generated structure.\n\n";
+
     $prompt .= "The structure should be an array of paragraphs, where each paragraph is an object with 'type' and 'fields' properties. The 'fields' property should be an object where keys are field names and values are the content for those fields.\n\n";
     $prompt .= "CRITICAL: Ensure that EVERY paragraph, including sub-paragraphs (such as accordion items or pricing cards), has a 'type' property. Do not omit the 'type' for any paragraph at any level.\n\n";
     $prompt .= "For entity reference fields, use appropriate existing entity names or IDs. For viewsreference fields, use existing view names and display IDs.\n\n";
     $prompt .= "For list_string fields, make sure to choose a value from the provided options in the 'o' array.\n\n";
     $prompt .= "CRITICAL: For fields named 'field_icon', you MUST choose a value ONLY from the provided Material Icon names listed above. Do not use any icon names that are not in this list.\n\n";
 
-    $prompt .= "IMPORTANT: Please generate a landing page structure using these paragraph types. Fill in realistic content for each field. Use a variety of paragraph types to create an engaging and diverse landing page. When you're done, call the generate_ai_landing_page function with the generated structure.\n\n";
-    $prompt .= "The structure should be an array of paragraphs, where each paragraph is an object with 'type' and 'fields' properties. The 'fields' property should be an object where keys are field names and values are the content for those fields.\n\n";
-    $prompt .= "CRITICAL: Ensure that EVERY paragraph, including sub-paragraphs (such as accordion items or pricing cards), has a 'type' property. Do not omit the 'type' for any paragraph at any level.\n\n";
-    $prompt .= "For entity reference fields, use appropriate existing entity names or IDs. For viewsreference fields, use existing view names and display IDs.\n\n";
-    $prompt .= "For list_string fields, make sure to choose a value from the provided options in the 'o' array.\n\n";
-    $prompt .= "For fields named 'field_icon', choose a value from the provided Material Icon names.\n\n";
     $prompt .= "Example structure:\n";
     $prompt .= "{\n";
     $prompt .= "  \"paragraphs\": [\n";

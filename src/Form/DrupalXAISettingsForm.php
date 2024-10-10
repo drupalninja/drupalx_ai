@@ -8,26 +8,30 @@ use Drupal\Core\Form\FormStateInterface;
 /**
  * Configure DrupalX AI settings for this site.
  */
-class DrupalXAISettingsForm extends ConfigFormBase {
+class DrupalXAISettingsForm extends ConfigFormBase
+{
 
   /**
    * {@inheritdoc}
    */
-  public function getFormId() {
+  public function getFormId()
+  {
     return 'drupalx_ai_settings';
   }
 
   /**
    * {@inheritdoc}
    */
-  protected function getEditableConfigNames() {
+  protected function getEditableConfigNames()
+  {
     return ['drupalx_ai.settings'];
   }
 
   /**
    * {@inheritdoc}
    */
-  public function buildForm(array $form, FormStateInterface $form_state) {
+  public function buildForm(array $form, FormStateInterface $form_state)
+  {
     $config = $this->config('drupalx_ai.settings');
 
     $form['api_key'] = [
@@ -46,19 +50,28 @@ class DrupalXAISettingsForm extends ConfigFormBase {
       '#required' => TRUE,
     ];
 
+    $form['unsplash_api_key'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Unsplash API Key'),
+      '#default_value' => $config->get('unsplash_api_key'),
+      '#description' => $this->t('Enter your Unsplash API key for fetching images.'),
+      '#required' => TRUE,
+    ];
+
     return parent::buildForm($form, $form_state);
   }
 
   /**
    * {@inheritdoc}
    */
-  public function submitForm(array &$form, FormStateInterface $form_state) {
+  public function submitForm(array &$form, FormStateInterface $form_state)
+  {
     $this->config('drupalx_ai.settings')
       ->set('api_key', $form_state->getValue('api_key'))
       ->set('pexels_api_key', $form_state->getValue('pexels_api_key'))
+      ->set('unsplash_api_key', $form_state->getValue('unsplash_api_key'))
       ->save();
 
     parent::submitForm($form, $form_state);
   }
-
 }
