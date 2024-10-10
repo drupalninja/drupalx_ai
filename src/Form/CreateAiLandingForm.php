@@ -53,6 +53,7 @@ class CreateAiLandingForm extends FormBase
   {
     $form['description'] = [
       '#type' => 'textarea',
+      '#rows' => 10,
       '#title' => $this->t('Landing Page Description'),
       '#description' => $this->t('Provide a description of the landing page content you want to generate.'),
       '#required' => TRUE,
@@ -61,6 +62,14 @@ class CreateAiLandingForm extends FormBase
     $form['submit'] = [
       '#type' => 'submit',
       '#value' => $this->t('Create AI Landing Page'),
+      '#attributes' => [
+        'onclick' => 'this.disabled=true; this.style.opacity=0.6; this.style.cursor="not-allowed"; document.getElementById("waiting-message").classList.remove("hidden"); this.form.submit();',
+      ],
+    ];
+
+    $form['waiting_message'] = [
+      '#type' => 'markup',
+      '#markup' => '<div id="waiting-message" class="hidden"><img src="/core/misc/throbber-active.gif" alt="Loading..."> ' . $this->t('Please wait while we create your AI landing page...') . '</div>',
     ];
 
     return $form;
