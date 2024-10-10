@@ -173,7 +173,17 @@ class AiLandingPageService
    */
   protected function createOrFetchMedia($search_term)
   {
-    // First, try to find an existing media item
+    // First, try to create a new media entity using MockLandingPageService
+    try {
+      $new_media = $this->mockLandingPageService->createMediaEntityFromUnsplash($search_term);
+      if ($new_media) {
+        return $new_media;
+      }
+    } catch (\Exception $e) {
+      $this->loggerFactory->get('drupalx_ai')->error('Failed to create media entity: @message', ['@message' => $e->getMessage()]);
+    }
+
+    // If creation fails or returns null, fall back to finding an existing media item
     $media_storage = $this->entityTypeManager->getStorage('media');
     $existing_media = $media_storage->loadByProperties([
       'name' => $search_term,
@@ -184,12 +194,7 @@ class AiLandingPageService
       return reset($existing_media);
     }
 
-    // If no existing media, create a new one using MockLandingPageService
-    try {
-      return $this->mockLandingPageService->createMediaEntityFromUnsplash($search_term);
-    } catch (\Exception $e) {
-      $this->loggerFactory->get('drupalx_ai')->error('Failed to create media entity: @message', ['@message' => $e->getMessage()]);
-      return null;
-    }
+    // If no existing media found either, return null
+    return null;
   }
 }
