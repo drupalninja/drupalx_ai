@@ -39,7 +39,7 @@ services:
       - '@config.factory'
 
   drupalx_ai.mock_landing_page_service:
-    class: Drupal\drupalx_ai\Service\MockLandingPageService
+    class: \Drupal\drupalx_ai\Service\MockLandingPageService
     arguments:
       - '@entity_type.manager'
       - '@file_system'
@@ -47,3 +47,10 @@ services:
       - '@logger.factory'
       - '@drupalx_ai.paragraph_structure'
       - '@config.factory'
+
+  drupalx_ai.ai_landing_page_service:
+    class: \Drupal\drupalx_ai\Service\AiLandingPageService
+    arguments:
+      - '@entity_type.manager'
+      - '@logger.factory'
+      - '@drupalx_ai.mock_landing_page'

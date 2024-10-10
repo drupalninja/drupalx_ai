@@ -111,7 +111,7 @@ class MockLandingPageService
     $node = Node::create([
       'type' => 'landing',
       'title' => 'Mock Landing Page ' . time(),
-      'uid' => 1, // Set author to user 1
+      'uid' => 1,
     ]);
 
     // Create paragraphs and add them to the node
@@ -273,7 +273,7 @@ class MockLandingPageService
    * @return int|null
    *   The media entity ID if successful, null otherwise.
    */
-  protected function createMediaEntityFromPexels($alt_text)
+  public function createMediaEntityFromPexels($alt_text)
   {
     $config = $this->configFactory->get('drupalx_ai.settings');
     $api_key = $config->get('pexels_api_key');

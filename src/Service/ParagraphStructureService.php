@@ -55,8 +55,8 @@ class ParagraphStructureService
       $field_definitions = $this->entityFieldManager->getFieldDefinitions('paragraph', $bundle_id);
 
       $paragraph_info = (object) [
-        'bundle' => $bundle_id,
-        'fields' => [],
+        'b' => $bundle_id,
+        'f' => [],
       ];
 
       foreach ($field_definitions as $field_name => $field_definition) {
@@ -67,10 +67,10 @@ class ParagraphStructureService
         $field_type = $field_definition->getType();
 
         $field_info = (object) [
-          'type' => $field_type,
-          'name' => $field_name,
-          'required' => $field_definition->isRequired(),
-          'cardinality' => $field_definition->getFieldStorageDefinition()->getCardinality(),
+          't' => $field_type,
+          'n' => $field_name,
+          'r' => $field_definition->isRequired(),
+          'c' => $field_definition->getFieldStorageDefinition()->getCardinality(),
         ];
 
         if ($field_type === 'entity_reference') {
@@ -78,15 +78,34 @@ class ParagraphStructureService
           $field_info->target_type = $settings['target_type'];
         }
 
-        $field_info->example = $this->getExampleValue($field_definition);
+        if ($field_type === 'list_string') {
+          $field_info->o = $this->getListStringOptions($field_definition);
+        }
 
-        $paragraph_info->fields[] = $field_info;
+        $field_info->e = $this->getExampleValue($field_definition);
+
+        $paragraph_info->f[] = $field_info;
       }
 
       $output[] = $paragraph_info;
     }
 
     return $output;
+  }
+
+  /**
+   * Get the options for a list_string field.
+   *
+   * @param \Drupal\Core\Field\FieldDefinitionInterface $field_definition
+   *   The field definition.
+   *
+   * @return array
+   *   An array of options for the list_string field.
+   */
+  protected function getListStringOptions($field_definition)
+  {
+    $settings = $field_definition->getSettings();
+    return $settings['allowed_values'] ?? [];
   }
 
   /**
@@ -147,6 +166,9 @@ class ParagraphStructureService
           ];
         }
         return null;
+      case 'list_string':
+        $options = $this->getListStringOptions($field_definition);
+        return !empty($options) ? reset($options) : "Example list_string value";
       default:
         return "Example value for {$field_type}";
     }
