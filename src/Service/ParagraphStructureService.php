@@ -189,107 +189,66 @@ class ParagraphStructureService
    */
   public function getMaterialIconNames()
   {
-    return [
-      'home',
-      'search',
-      'menu',
-      'close',
-      'arrow_back',
-      'arrow_forward',
-      'settings',
-      'account_circle',
-      'add',
-      'delete',
-      'edit',
-      'favorite',
-      'star',
-      'check',
-      'mail',
-      'notification_important',
-      'person',
-      'lock',
-      'calendar_today',
-      'file_download',
-      'file_upload',
-      'cloud_upload',
-      'cloud_download',
-      'share',
-      'thumb_up',
-      'thumb_down',
-      'visibility',
-      'visibility_off',
-      'refresh',
-      'error',
-      'warning',
-      'info',
-      'help',
-      'phone',
-      'email',
-      'message',
-      'chat',
-      'location_on',
-      'map',
-      'directions',
-      'access_time',
-      'date_range',
-      'shopping_cart',
-      'credit_card',
-      'attach_file',
-      'link',
-      'play_arrow',
-      'pause',
-      'stop',
-      'skip_next',
-      'skip_previous',
-      'volume_up',
-      'volume_down',
-      'volume_mute',
-      'mic',
-      'camera',
-      'photo',
-      'video_camera',
-      'bluetooth',
-      'wifi',
-      'battery_full',
-      'power',
-      'more_vert',
-      'more_horiz',
-      'add_circle',
-      'remove_circle',
-      'check_circle',
-      'cancel',
-      'clear',
-      'done',
-      'undo',
-      'redo',
-      'print',
-      'save',
-      'bookmark',
-      'flag',
-      'language',
-      'translate',
-      'build',
-      'code',
-      'dashboard',
-      'report',
-      'trending_up',
-      'trending_down',
-      'pie_chart',
-      'bar_chart',
-      'timeline',
-      'list',
-      'grid_view',
-      'table_view',
-      'filter_list',
-      'sort',
-      'zoom_in',
-      'zoom_out',
-      'fullscreen',
-      'exit_to_app',
-      'apps',
-      'category',
-      'tag',
-      'label'
-    ];
+    $module_path = \Drupal::service('extension.list.module')->getPath('drupalx_ai');
+    $file_path = DRUPAL_ROOT . '/' . $module_path . '/files/material-icon-names.txt';
+    if (file_exists($file_path)) {
+      $icon_names = file($file_path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+      return $icon_names;
+    }
+    return [];
+  }
+
+  /**
+   * Finds the best matching Material icon name for a given search term.
+   *
+   * This function searches for an icon name in the material-icon-names.txt file.
+   * It first looks for an exact match, then for a partial match if no exact match
+   * is found. If no suitable match is found, it defaults to 'star'.
+   *
+   * @param string $search_term
+   *   The search term to find a matching icon name for.
+   *
+   * @return string
+   *   The best matching icon name, or 'star' if no suitable match is found.
+   */
+  public function getBestIconMatch($search_term) {
+    // Check if the file exists.
+    $module_path = \Drupal::service('extension.list.module')->getPath('drupalx_ai');
+    $filename = DRUPAL_ROOT . '/' . $module_path . '/files/material-icon-names.txt';
+
+    if (!file_exists($filename)) {
+      return 'star';
+    }
+
+    // Read the file contents.
+    $icon_names = file($filename, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+
+    // Search for an exact match (case-insensitive).
+    $search_term_lower = mb_strtolower($search_term);
+    foreach ($icon_names as $icon_name) {
+      if (mb_strtolower($icon_name) === $search_term_lower) {
+        return $icon_name;
+      }
+    }
+
+    // If no exact match, find the best partial match.
+    $best_match = '';
+    $highest_similarity = 0;
+
+    foreach ($icon_names as $icon_name) {
+      similar_text($search_term_lower, mb_strtolower($icon_name), $percent);
+      if ($percent > $highest_similarity) {
+        $highest_similarity = $percent;
+        $best_match = $icon_name;
+      }
+    }
+
+    // If a partial match is found and it's reasonably similar, return it.
+    if ($best_match !== '' && $highest_similarity > 50) {
+      return $best_match;
+    }
+
+    // If no good match found, default to 'star'.
+    return 'star';
   }
 }

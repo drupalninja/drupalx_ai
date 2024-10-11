@@ -139,11 +139,13 @@ class MockLandingPageService
    *   The bundle (e.g., 'landing').
    * @param string $field_name
    *   The name of the field (e.g., 'field_content').
+   * @param bool $human_readable
+   *   Whether to return human-readable names (TRUE) or machine names (FALSE).
    *
    * @return array
-   *   An array of allowed paragraph type machine names.
+   *   An array of allowed paragraph type names (human-readable or machine names).
    */
-  public function getAllowedParagraphTypes($entity_type, $bundle, $field_name)
+  public function getAllowedParagraphTypes($entity_type, $bundle, $field_name, $human_readable = false)
   {
     $field_config = $this->entityTypeManager
       ->getStorage('field_config')
@@ -161,11 +163,21 @@ class MockLandingPageService
     $all_types = array_keys($target_bundles_drag_drop);
     $specified_types = array_keys($target_bundles);
 
-    if ($negate) {
-      return array_diff($all_types, $specified_types);
-    } else {
-      return $specified_types;
+    $allowed_types = $negate ? array_diff($all_types, $specified_types) : $specified_types;
+
+    if ($human_readable) {
+      $paragraph_type_storage = $this->entityTypeManager->getStorage('paragraphs_type');
+      $human_readable_types = [];
+      foreach ($allowed_types as $machine_name) {
+        $paragraph_type = $paragraph_type_storage->load($machine_name);
+        if ($paragraph_type) {
+          $human_readable_types[$machine_name] = $paragraph_type->label();
+        }
+      }
+      return $human_readable_types;
     }
+
+    return $allowed_types;
   }
 
   /**
@@ -281,7 +293,7 @@ class MockLandingPageService
 
     $search_query = urlencode($alt_text);
 
-    $unsplash_api_url = "https://api.unsplash.com/photos/random?query={$search_query}&count=30&client_id={$api_key}";
+    $unsplash_api_url = "https://api.unsplash.com/photos/random?query={$search_query}&count=30&orientation=landscape&client_id={$api_key}";
 
     try {
       $response = $this->httpClient->get($unsplash_api_url);

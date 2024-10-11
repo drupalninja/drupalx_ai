@@ -136,13 +136,10 @@ final class AiLandingPageService
     $prompt .= "  - 'e': an example value for the field\n";
     $prompt .= "  - 'o': (for list_string fields only) an array of allowed options\n\n";
 
-    $prompt .= "Available Material Icon names:\n";
-    $prompt .= implode(", ", $materialIcons) . "\n\n";
-
     $allowedParagraphTypes = $this->mockLandingPageService->getAllowedParagraphTypes('node', 'landing', 'field_content');
     $prompt .= "IMPORTANT: Only use the following paragraph types as top-level paragraphs:\n";
     $prompt .= implode(", ", $allowedParagraphTypes) . "\n\n";
-    $prompt .= "CRITICAL: For fields named 'field_icon', you MUST choose a value ONLY from the provided Material Icon names listed above. Do not use any icon names that are not in this list.\n\n";
+    $prompt .= "CRITICAL: For fields named 'field_icon', you MUST only use validate Google Material icon names.\n\n";
     $prompt .= "CRITICAL: When generating the landing page structure, ensure that ONLY the allowed paragraph types listed above are used as top-level paragraphs. Other paragraph types can be used as nested paragraphs within these allowed types if the structure permits.\n\n";
 
     $prompt .= "Please generate a landing page structure using these paragraph types. Fill in realistic content for each field. Use a variety of paragraph types to create an engaging and diverse landing page, while adhering to the allowed top-level paragraph types. When you're done, call the generate_ai_landing_page function with the generated structure.\n\n";
@@ -241,10 +238,23 @@ final class AiLandingPageService
       foreach ($paragraphData['fields'] as $fieldName => $fieldValue) {
         $fieldDefinition = $fieldDefinitions[$fieldName] ?? null;
 
-        if ($fieldDefinition && $fieldDefinition->getType() === 'entity_reference' && $fieldDefinition->getSetting('target_type') === 'media' && is_string($fieldValue)) {
-          $media = $this->createOrFetchMedia($this->preprocessImageSearchTerm($fieldValue));
-          if ($media) {
-            $paragraph->set($fieldName, $media);
+        if ($fieldDefinition && $fieldDefinition->getType() === 'entity_reference' && $fieldDefinition->getSetting('target_type') === 'media') {
+          if (is_string($fieldValue)) {
+            $media = $this->createOrFetchMedia($this->preprocessImageSearchTerm($fieldValue));
+            if ($media) {
+              $paragraph->set($fieldName, $media);
+            }
+          } elseif (is_array($fieldValue)) {
+            $mediaItems = [];
+            foreach ($fieldValue as $value) {
+              $media = $this->createOrFetchMedia($this->preprocessImageSearchTerm($value));
+              if ($media) {
+                $mediaItems[] = $media;
+              }
+            }
+            if (!empty($mediaItems)) {
+              $paragraph->set($fieldName, $mediaItems);
+            }
           }
         } elseif (is_array($fieldValue) && isset($fieldValue[0]['type'])) {
           // This is likely a nested paragraph field.
@@ -256,14 +266,12 @@ final class AiLandingPageService
             }
           }
           $paragraph->set($fieldName, $nestedParagraphs);
-        } elseif ($fieldName === 'field_icon') {
-          // Special handling for field_icon.
-          $materialIcons = $this->paragraphStructureService->getMaterialIconNames();
-          if (!in_array($fieldValue, $materialIcons, TRUE)) {
-            // If the icon is not valid, use 'star' as a fallback.
-            $fieldValue = 'star';
-          }
-          $paragraph->set($fieldName, $fieldValue);
+        }
+        // Special handling for field_icon.
+        elseif ($fieldName === 'field_icon') {
+          // Look for closest match by comparing to Material Icon names.
+          $iconName = $this->paragraphStructureService->getBestIconMatch($fieldValue);
+          $paragraph->set($fieldName, $iconName);
         } else {
           $paragraph->set($fieldName, $fieldValue);
         }
