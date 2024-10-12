@@ -58,10 +58,11 @@ class DrupalXAISettingsForm extends ConfigFormBase
       '#type' => 'radios',
       '#title' => $this->t('Image Generator'),
       '#options' => [
+        'placeholder' => $this->t('Placeholder (no key required)'),
         'unsplash' => $this->t('Unsplash'),
         'pexels' => $this->t('Pexels'),
       ],
-      '#default_value' => $config->get('image_generator') ?: 'unsplash',
+      '#default_value' => $config->get('image_generator') ?: 'placeholder',
       '#description' => $this->t('Choose the image generator service to use.'),
       '#required' => TRUE,
     ];
@@ -71,7 +72,14 @@ class DrupalXAISettingsForm extends ConfigFormBase
       '#title' => $this->t('Pexels API Key'),
       '#default_value' => $config->get('pexels_api_key'),
       '#description' => $this->t('Enter your Pexels API key for fetching images.'),
-      '#required' => TRUE,
+      '#states' => [
+        'required' => [
+          ':input[name="image_generator"]' => ['value' => 'pexels'],
+        ],
+        'visible' => [
+          ':input[name="image_generator"]' => ['value' => 'pexels'],
+        ],
+      ],
     ];
 
     $form['unsplash_api_key'] = [
@@ -79,10 +87,35 @@ class DrupalXAISettingsForm extends ConfigFormBase
       '#title' => $this->t('Unsplash API Key'),
       '#default_value' => $config->get('unsplash_api_key'),
       '#description' => $this->t('Enter your Unsplash API key for fetching images.'),
-      '#required' => TRUE,
+      '#states' => [
+        'required' => [
+          ':input[name="image_generator"]' => ['value' => 'unsplash'],
+        ],
+        'visible' => [
+          ':input[name="image_generator"]' => ['value' => 'unsplash'],
+        ],
+      ],
     ];
 
     return parent::buildForm($form, $form_state);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function validateForm(array &$form, FormStateInterface $form_state)
+  {
+    parent::validateForm($form, $form_state);
+
+    $image_generator = $form_state->getValue('image_generator');
+
+    if ($image_generator === 'pexels' && empty($form_state->getValue('pexels_api_key'))) {
+      $form_state->setErrorByName('pexels_api_key', $this->t('Pexels API Key is required when Pexels is selected as the image generator.'));
+    }
+
+    if ($image_generator === 'unsplash' && empty($form_state->getValue('unsplash_api_key'))) {
+      $form_state->setErrorByName('unsplash_api_key', $this->t('Unsplash API Key is required when Unsplash is selected as the image generator.'));
+    }
   }
 
   /**

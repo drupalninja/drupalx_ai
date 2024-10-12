@@ -13,6 +13,7 @@ use Drupal\Core\Url;
 use GuzzleHttp\ClientInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\Extension\ModuleHandlerInterface;
 
 /**
  * Service for creating mock landing pages with paragraphs.
@@ -63,6 +64,13 @@ class MockLandingPageService
   protected $configFactory;
 
   /**
+   * The module handler.
+   *
+   * @var \Drupal\Core\Extension\ModuleHandlerInterface
+   */
+  protected $moduleHandler;
+
+  /**
    * Constructs a new MockLandingPageService object.
    *
    * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
@@ -77,6 +85,8 @@ class MockLandingPageService
    *   The paragraph structure service.
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
    *   The config factory.
+   * @param \Drupal\Core\Module\ModuleHandlerInterface $module_handler
+   *   The module handler.
    */
   public function __construct(
     EntityTypeManagerInterface $entity_type_manager,
@@ -84,7 +94,8 @@ class MockLandingPageService
     ClientInterface $http_client,
     LoggerChannelFactoryInterface $logger_factory,
     ParagraphStructureService $paragraph_structure_service,
-    ConfigFactoryInterface $config_factory
+    ConfigFactoryInterface $config_factory,
+    ModuleHandlerInterface $module_handler
   ) {
     $this->entityTypeManager = $entity_type_manager;
     $this->fileSystem = $file_system;
@@ -92,6 +103,7 @@ class MockLandingPageService
     $this->logger = $logger_factory->get('drupalx_ai');
     $this->paragraphStructureService = $paragraph_structure_service;
     $this->configFactory = $config_factory;
+    $this->moduleHandler = $module_handler;
   }
 
   /**
@@ -426,6 +438,59 @@ class MockLandingPageService
     }
 
     // Create a media entity
+    $media = Media::create([
+      'bundle' => 'image',
+      'uid' => 1,
+      'field_image' => [
+        'target_id' => $file->id(),
+        'alt' => $alt_text,
+      ],
+      'name' => $alt_text,
+    ]);
+
+    $media->save();
+
+    return $media->id();
+  }
+
+  /**
+   * Gets or creates a media entity using a placeholder image.
+   *
+   * @param string $alt_text
+   *   The alt text to use for the image.
+   *
+   * @return int|null
+   *   The media entity ID if successful, null otherwise.
+   */
+  public function getMediaEntityPlaceholder($alt_text)
+  {
+    $module_path = $this->moduleHandler->getModule('drupalx_ai')->getPath();
+    $source_uri = $module_path . '/files/card.png';
+
+    if (!file_exists($source_uri)) {
+      $this->logger->error('Placeholder image not found: @uri', ['@uri' => $source_uri]);
+      return NULL;
+    }
+
+    $directory = 'public://drupalx_ai_placeholders';
+    $this->fileSystem->prepareDirectory($directory, FileSystemInterface::CREATE_DIRECTORY);
+
+    $destination_uri = $directory . '/card_' . time() . '_' . uniqid() . '.png';
+
+    try {
+      $this->fileSystem->copy($source_uri, $destination_uri, FileSystemInterface::EXISTS_REPLACE);
+    } catch (\Exception $e) {
+      $this->logger->error('Failed to copy placeholder image: @message', ['@message' => $e->getMessage()]);
+      return NULL;
+    }
+
+    $file = File::create([
+      'uri' => $destination_uri,
+      'filename' => basename($destination_uri),
+      'status' => FileInterface::STATUS_PERMANENT,
+    ]);
+    $file->save();
+
     $media = Media::create([
       'bundle' => 'image',
       'uid' => 1,

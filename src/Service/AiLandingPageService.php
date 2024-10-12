@@ -324,7 +324,7 @@ final class AiLandingPageService
   private function createOrFetchMedia(string $searchTerm)
   {
     $config = $this->configFactory->get('drupalx_ai.settings');
-    $imageGenerator = $config->get('image_generator') ?: 'unsplash';
+    $imageGenerator = $config->get('image_generator') ?: 'placeholder';
 
     try {
       $newMedia = null;
@@ -332,6 +332,10 @@ final class AiLandingPageService
         $newMedia = (int) $this->mockLandingPageService->createMediaEntityFromUnsplash($searchTerm);
       } elseif ($imageGenerator === 'pexels') {
         $newMedia = (int) $this->mockLandingPageService->createMediaEntityFromPexels($searchTerm);
+      }
+      // Default to placeholder image.
+      else {
+        $newMedia = (int) $this->mockLandingPageService->getMediaEntityPlaceholder($searchTerm);
       }
 
       if ($newMedia) {
