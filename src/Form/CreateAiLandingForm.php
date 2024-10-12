@@ -75,7 +75,7 @@ class CreateAiLandingForm extends FormBase {
 
     $form['title'] = [
       '#type' => 'markup',
-      '#markup' => Markup::create('<h2>' . $this->t('How to Create AI Landing Page') . $ai_icon . '</h2>'),
+      '#markup' => Markup::create('<h2>' . $this->t('Instructions for AI Landing Page') . $ai_icon . '</h2>'),
     ];
 
     $form['instructions'] = [

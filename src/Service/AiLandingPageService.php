@@ -240,7 +240,11 @@ final class AiLandingPageService {
       foreach ($paragraphData['fields'] as $fieldName => $fieldValue) {
         $fieldDefinition = $fieldDefinitions[$fieldName] ?? NULL;
 
-        if ($fieldDefinition && $fieldDefinition->getType() === 'entity_reference' && $fieldDefinition->getSetting('target_type') === 'media') {
+        // Skip this svg field.
+        if ($fieldName === 'field_logo') {
+          continue;
+        }
+        elseif ($fieldDefinition && $fieldDefinition->getType() === 'entity_reference' && $fieldDefinition->getSetting('target_type') === 'media') {
           if (is_string($fieldValue)) {
             $media = $this->createOrFetchMedia($this->preprocessImageSearchTerm($fieldValue));
             if ($media) {
@@ -280,6 +284,15 @@ final class AiLandingPageService {
         elseif ($fieldName === 'field_features_text') {
           $cleanedFieldValue = preg_replace('/^[\W_]+/m', '', $fieldValue);
           $paragraph->set($fieldName, $cleanedFieldValue);
+        }
+        elseif ($fieldName === 'field_hero_layout') {
+          $paragraph->set($fieldName, !empty($fieldValue) ? $fieldValue : 'image_top');
+        }
+        elseif ($fieldName === 'field_text_layout') {
+          $paragraph->set($fieldName, !empty($fieldValue) ? $fieldValue : 'left');
+        }
+        elseif ($fieldName === 'field_sidebyside_layout') {
+          $paragraph->set($fieldName, !empty($fieldValue) ? $fieldValue : 'left');
         }
         else {
           $paragraph->set($fieldName, $fieldValue);
