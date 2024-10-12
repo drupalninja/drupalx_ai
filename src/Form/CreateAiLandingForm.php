@@ -40,12 +40,12 @@ class CreateAiLandingForm extends FormBase {
    *
    * @param \Drupal\drupalx_ai\Service\AiLandingPageService $ai_landing_page_service
    *   The AI landing page service.
-   * @param \Drupal\drupalx_ai\Service\MockLandingPageService $mock_landing_page_service
+   * @param \Drupal\drupalx_ai\Service\MockLandingPageService $mock_landing_page
    *   The mock landing page service.
    */
-  public function __construct(AiLandingPageService $ai_landing_page_service, MockLandingPageService $mock_landing_page_service) {
+  public function __construct(AiLandingPageService $ai_landing_page_service, MockLandingPageService $mock_landing_page) {
     $this->aiLandingPageService = $ai_landing_page_service;
-    $this->mockLandingPageService = $mock_landing_page_service;
+    $this->mockLandingPageService = $mock_landing_page;
   }
 
   /**
@@ -54,7 +54,7 @@ class CreateAiLandingForm extends FormBase {
   public static function create(ContainerInterface $container) {
     return new static(
       $container->get('drupalx_ai.ai_landing_page_service'),
-      $container->get('drupalx_ai.mock_landing_page_service')
+      $container->get('drupalx_ai.mock_landing_page')
     );
   }
 
@@ -100,7 +100,10 @@ class CreateAiLandingForm extends FormBase {
     ];
 
     $allowed_paragraph_types = $this->mockLandingPageService->getAllowedParagraphTypes('node', 'landing', 'field_content', TRUE);
-    $paragraph_type_list = implode(', ', $allowed_paragraph_types);
+    $filtered_paragraph_types = array_filter($allowed_paragraph_types, function($type) {
+      return $type !== 'Views';
+    });
+    $paragraph_type_list = implode(', ', $filtered_paragraph_types);
 
     $form['paragraph_types_info'] = [
       '#type' => 'markup',
@@ -128,10 +131,10 @@ class CreateAiLandingForm extends FormBase {
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
     $description = $form_state->getValue('description');
-    $paragraphs = $this->aiLandingPageService->generateAiContent($description);
+    $data = $this->aiLandingPageService->generateAiContent($description);
 
-    if ($paragraphs) {
-      $edit_url = $this->aiLandingPageService->createLandingNodeWithAiContent($paragraphs);
+    if ($data) {
+      $edit_url = $this->aiLandingPageService->createLandingNodeWithAiContent($data['page_title'], $data['paragraphs']);
       $this->messenger()->addStatus($this->t('AI landing page created successfully.'));
       $form_state->setRedirectUrl(Url::fromUri($edit_url));
     }

@@ -20,12 +20,12 @@ class CreateMockLandingCommands extends DrushCommands {
   /**
    * Constructs a new CreateMockLandingCommands object.
    *
-   * @param \Drupal\drupalx_ai\Service\MockLandingPageService $mock_landing_page_service
+   * @param \Drupal\drupalx_ai\Service\MockLandingPageService $mock_landing_page
    *   The mock landing page service.
    */
-  public function __construct(MockLandingPageService $mock_landing_page_service) {
+  public function __construct(MockLandingPageService $mock_landing_page) {
     parent::__construct();
-    $this->mockLandingPageService = $mock_landing_page_service;
+    $this->mockLandingPageService = $mock_landing_page;
   }
 
   /**

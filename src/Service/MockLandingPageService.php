@@ -391,7 +391,7 @@ class MockLandingPageService {
     $page = rand(1, 10);
     $per_page = 30;
 
-    $pexels_api_url = "https://api.pexels.com/v1/search?query={$search_query}&per_page={$per_page}&page={$page}";
+    $pexels_api_url = "https://api.pexels.com/v1/search?query={$search_query}&per_page={$per_page}&page={$page}&orientation=landscape";
 
     try {
       $response = $this->httpClient->get($pexels_api_url, [

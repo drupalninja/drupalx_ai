@@ -36,10 +36,10 @@ class AiLandingPageCommands extends DrushCommands {
   public function createAiLandingPage() {
     $description = $this->io()->ask('Please provide a description of the landing page content you want to generate:');
 
-    $paragraphs = $this->aiLandingPageService->generateAiContent($description);
+    $data = $this->aiLandingPageService->generateAiContent($description);
 
-    if ($paragraphs) {
-      $nodeUrl = $this->aiLandingPageService->createLandingNodeWithAiContent($paragraphs);
+    if ($data) {
+      $nodeUrl = $this->aiLandingPageService->createLandingNodeWithAiContent($data['page_title'], $data['paragraphs']);
       $this->io()->success("AI-generated landing page created successfully. Edit URL: $nodeUrl");
     }
     else {

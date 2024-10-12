@@ -29,11 +29,11 @@ class CreateMockLandingForm extends FormBase {
   /**
    * Constructs a new CreateMockLandingForm.
    *
-   * @param \Drupal\drupalx_ai\Service\MockLandingPageService $mock_landing_page_service
+   * @param \Drupal\drupalx_ai\Service\MockLandingPageService $mock_landing_page
    *   The mock landing page service.
    */
-  public function __construct(MockLandingPageService $mock_landing_page_service) {
-    $this->mockLandingPageService = $mock_landing_page_service;
+  public function __construct(MockLandingPageService $mock_landing_page) {
+    $this->mockLandingPageService = $mock_landing_page;
   }
 
   /**
@@ -41,7 +41,7 @@ class CreateMockLandingForm extends FormBase {
    */
   public static function create(ContainerInterface $container) {
     return new static(
-      $container->get('drupalx_ai.mock_landing_page_service')
+      $container->get('drupalx_ai.mock_landing_page')
     );
   }
 
