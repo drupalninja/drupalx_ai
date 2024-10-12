@@ -18,8 +18,7 @@ use Drupal\Core\Extension\ModuleHandlerInterface;
 /**
  * Service for creating mock landing pages with paragraphs.
  */
-class MockLandingPageService
-{
+class MockLandingPageService {
 
   /**
    * The entity type manager.
@@ -112,21 +111,20 @@ class MockLandingPageService
    * @return string
    *   The full edit URL of the created node.
    */
-  public function createLandingNodeWithMockContent()
-  {
+  public function createLandingNodeWithMockContent() {
     $paragraphs_structure = $this->paragraphStructureService->getParagraphStructures();
 
-    // Get allowed paragraph types for field_content
+    // Get allowed paragraph types for field_content.
     $allowed_paragraph_types = $this->getAllowedParagraphTypes('node', 'landing', 'field_content');
 
-    // Create the node
+    // Create the node.
     $node = Node::create([
       'type' => 'landing',
       'title' => 'Mock Landing Page ' . time(),
       'uid' => 1,
     ]);
 
-    // Create paragraphs and add them to the node
+    // Create paragraphs and add them to the node.
     $paragraphs = [];
     foreach ($paragraphs_structure as $paragraph_type) {
       if (in_array($paragraph_type->bundle, $allowed_paragraph_types)) {
@@ -138,7 +136,7 @@ class MockLandingPageService
     $node->set('field_content', $paragraphs);
     $node->save();
 
-    // Generate the full edit URL
+    // Generate the full edit URL.
     return Url::fromRoute('entity.node.edit_form', ['node' => $node->id()], ['absolute' => TRUE])->toString();
   }
 
@@ -157,8 +155,7 @@ class MockLandingPageService
    * @return array
    *   An array of allowed paragraph type names (human-readable or machine names).
    */
-  public function getAllowedParagraphTypes($entity_type, $bundle, $field_name, $human_readable = false)
-  {
+  public function getAllowedParagraphTypes($entity_type, $bundle, $field_name, $human_readable = FALSE) {
     $field_config = $this->entityTypeManager
       ->getStorage('field_config')
       ->load($entity_type . '.' . $bundle . '.' . $field_name);
@@ -167,9 +164,10 @@ class MockLandingPageService
       return [];
     }
 
+    /** @var \Drupal\field\Entity\FieldConfig $field_config */
     $handler_settings = $field_config->getSetting('handler_settings');
     $target_bundles = $handler_settings['target_bundles'] ?? [];
-    $negate = $handler_settings['negate'] ?? false;
+    $negate = $handler_settings['negate'] ?? FALSE;
     $target_bundles_drag_drop = $handler_settings['target_bundles_drag_drop'] ?? [];
 
     $all_types = array_keys($target_bundles_drag_drop);
@@ -203,8 +201,7 @@ class MockLandingPageService
    * @return \Drupal\paragraphs\Entity\Paragraph
    *   The created paragraph entity.
    */
-  protected function createMockParagraph($paragraph_type, $all_paragraph_types)
-  {
+  protected function createMockParagraph($paragraph_type, array $all_paragraph_types) {
     $paragraph = Paragraph::create([
       'type' => $paragraph_type->bundle,
     ]);
@@ -214,7 +211,7 @@ class MockLandingPageService
       $field_type = $field->type;
       $example_value = $field->example;
 
-      // Skip setting a value for field_custom_icon
+      // Skip setting a value for field_custom_icon.
       if ($field_name === 'field_custom_icon') {
         continue;
       }
@@ -229,17 +226,20 @@ class MockLandingPageService
             }
           }
           break;
+
         case 'entity_reference':
           if (isset($field->target_type) && $field->target_type === 'media') {
             $media_entity = $this->createMediaEntityFromUnsplash($example_value);
             if ($media_entity) {
               $paragraph->set($field_name, $media_entity);
             }
-          } else {
+          }
+          else {
             // For other entity references, we're not creating actual entities
             $paragraph->set($field_name, NULL);
           }
           break;
+
         case 'link':
           if (is_object($example_value) && isset($example_value->url) && isset($example_value->text)) {
             $paragraph->set($field_name, [
@@ -248,17 +248,20 @@ class MockLandingPageService
             ]);
           }
           break;
+
         case 'list_string':
-          // For list_string, we'll just use the example value as is
+          // For list_string, we'll just use the example value as is.
           $paragraph->set($field_name, $example_value);
           break;
+
         case 'viewfield':
-          // For viewfield, we'll set a placeholder value
+          // For viewfield, we'll set a placeholder value.
           $paragraph->set($field_name, [
             'target_id' => 'recent_cards',
             'display_id' => 'article_cards',
           ]);
           break;
+
         default:
           $paragraph->set($field_name, $example_value);
       }
@@ -278,14 +281,13 @@ class MockLandingPageService
    * @return object|null
    *   The full paragraph type structure or null if not found.
    */
-  protected function findParagraphType($bundle, $all_paragraph_types)
-  {
+  protected function findParagraphType($bundle, array $all_paragraph_types) {
     foreach ($all_paragraph_types as $paragraph_type) {
       if ($paragraph_type->bundle === $bundle) {
         return $paragraph_type;
       }
     }
-    return null;
+    return NULL;
   }
 
   /**
@@ -310,7 +312,8 @@ class MockLandingPageService
     try {
       $response = $this->httpClient->get($unsplash_api_url);
       $data = json_decode($response->getBody(), TRUE);
-    } catch (\Exception $e) {
+    }
+    catch (\Exception $e) {
       $this->logger->error('Failed to fetch images from Unsplash: @message', ['@message' => $e->getMessage()]);
       return NULL;
     }
@@ -320,20 +323,21 @@ class MockLandingPageService
       return NULL;
     }
 
-    // Randomly select one image from the results
+    // Randomly select one image from the results.
     $selected_image = $data[array_rand($data)];
     $image_url = $selected_image['urls']['regular'];
 
-    // Download the image
+    // Download the image.
     try {
       $image_response = $this->httpClient->get($image_url);
       $image_data = $image_response->getBody()->getContents();
-    } catch (\Exception $e) {
+    }
+    catch (\Exception $e) {
       $this->logger->error('Failed to download image from Unsplash: @message', ['@message' => $e->getMessage()]);
       return NULL;
     }
 
-    // Save the image as a file entity
+    // Save the image as a file entity.
     $directory = 'public://unsplash';
     $this->fileSystem->prepareDirectory($directory, FileSystemInterface::CREATE_DIRECTORY);
 
@@ -346,12 +350,13 @@ class MockLandingPageService
     try {
       $this->fileSystem->saveData($image_data, $file->getFileUri(), FileSystemInterface::EXISTS_REPLACE);
       $file->save();
-    } catch (\Exception $e) {
+    }
+    catch (\Exception $e) {
       $this->logger->error('Failed to save Unsplash image as file: @message', ['@message' => $e->getMessage()]);
       return NULL;
     }
 
-    // Create a media entity
+    // Create a media entity.
     $media = Media::create([
       'bundle' => 'image',
       'uid' => 1,
@@ -376,14 +381,13 @@ class MockLandingPageService
    * @return int|null
    *   The media entity ID if successful, null otherwise.
    */
-  public function createMediaEntityFromPexels($alt_text)
-  {
+  public function createMediaEntityFromPexels($alt_text) {
     $config = $this->configFactory->get('drupalx_ai.settings');
     $api_key = $config->get('pexels_api_key');
 
     $search_query = urlencode($alt_text);
 
-    // Randomize page number to get different results each time
+    // Randomize page number to get different results each time.
     $page = rand(1, 10);
     $per_page = 30;
 
@@ -396,7 +400,8 @@ class MockLandingPageService
         ],
       ]);
       $data = json_decode($response->getBody(), TRUE);
-    } catch (\Exception $e) {
+    }
+    catch (\Exception $e) {
       $this->logger->error('Failed to fetch images from Pexels: @message', ['@message' => $e->getMessage()]);
       return NULL;
     }
@@ -406,20 +411,21 @@ class MockLandingPageService
       return NULL;
     }
 
-    // Randomly select one image from the results
+    // Randomly select one image from the results.
     $selected_image = $data['photos'][array_rand($data['photos'])];
     $image_url = $selected_image['src']['large'];
 
-    // Download the image
+    // Download the image.
     try {
       $image_response = $this->httpClient->get($image_url);
       $image_data = $image_response->getBody()->getContents();
-    } catch (\Exception $e) {
+    }
+    catch (\Exception $e) {
       $this->logger->error('Failed to download image from Pexels: @message', ['@message' => $e->getMessage()]);
       return NULL;
     }
 
-    // Save the image as a file entity
+    // Save the image as a file entity.
     $directory = 'public://pexels';
     $this->fileSystem->prepareDirectory($directory, FileSystemInterface::CREATE_DIRECTORY);
 
@@ -432,12 +438,13 @@ class MockLandingPageService
     try {
       $this->fileSystem->saveData($image_data, $file->getFileUri(), FileSystemInterface::EXISTS_REPLACE);
       $file->save();
-    } catch (\Exception $e) {
+    }
+    catch (\Exception $e) {
       $this->logger->error('Failed to save Pexels image as file: @message', ['@message' => $e->getMessage()]);
       return NULL;
     }
 
-    // Create a media entity
+    // Create a media entity.
     $media = Media::create([
       'bundle' => 'image',
       'uid' => 1,
@@ -462,8 +469,7 @@ class MockLandingPageService
    * @return int|null
    *   The media entity ID if successful, null otherwise.
    */
-  public function getMediaEntityPlaceholder($alt_text)
-  {
+  public function getMediaEntityPlaceholder($alt_text) {
     $module_path = $this->moduleHandler->getModule('drupalx_ai')->getPath();
     $source_uri = $module_path . '/files/card.png';
 
@@ -479,7 +485,8 @@ class MockLandingPageService
 
     try {
       $this->fileSystem->copy($source_uri, $destination_uri, FileSystemInterface::EXISTS_REPLACE);
-    } catch (\Exception $e) {
+    }
+    catch (\Exception $e) {
       $this->logger->error('Failed to copy placeholder image: @message', ['@message' => $e->getMessage()]);
       return NULL;
     }
@@ -505,4 +512,5 @@ class MockLandingPageService
 
     return $media->id();
   }
+
 }

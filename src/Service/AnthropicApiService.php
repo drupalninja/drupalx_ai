@@ -10,8 +10,7 @@ use GuzzleHttp\Exception\RequestException;
 /**
  * Service for making calls to the Anthropic API.
  */
-class AnthropicApiService
-{
+class AnthropicApiService {
 
   /**
    * The HTTP client.
@@ -44,8 +43,7 @@ class AnthropicApiService
    * @param \Drupal\Core\Logger\LoggerChannelFactoryInterface $logger_factory
    *   The logger factory.
    */
-  public function __construct(ClientFactory $http_client_factory, ConfigFactoryInterface $config_factory, LoggerChannelFactoryInterface $logger_factory)
-  {
+  public function __construct(ClientFactory $http_client_factory, ConfigFactoryInterface $config_factory, LoggerChannelFactoryInterface $logger_factory) {
     $this->configFactory = $config_factory;
     $this->loggerFactory = $logger_factory;
     $this->initializeHttpClient($http_client_factory);
@@ -57,8 +55,7 @@ class AnthropicApiService
    * @param \Drupal\Core\Http\ClientFactory $http_client_factory
    *   The HTTP client factory.
    */
-  protected function initializeHttpClient(ClientFactory $http_client_factory)
-  {
+  protected function initializeHttpClient(ClientFactory $http_client_factory) {
     $api_key = $this->configFactory->get('drupalx_ai.settings')->get('api_key');
 
     if (empty($api_key)) {
@@ -93,8 +90,7 @@ class AnthropicApiService
    * @return mixed
    *   The result of the API call, or FALSE on failure.
    */
-  public function callAnthropic($prompt, array $tools, $expectedFunctionName, $maxRetries = 3, $initialRetryDelay = 1)
-  {
+  public function callAnthropic($prompt, array $tools, $expectedFunctionName, $maxRetries = 3, $initialRetryDelay = 1) {
     $config = $this->configFactory->get('drupalx_ai.settings');
     $api_key = $config->get('api_key');
     $claude_model = $config->get('claude_model') ?: 'claude-3-haiku-20240307';
@@ -140,7 +136,8 @@ class AnthropicApiService
             if (is_array($arguments)) {
               $this->loggerFactory->get('drupalx_ai')->notice('Successfully parsed function call arguments');
               return $arguments;
-            } else {
+            }
+            else {
               throw new \RuntimeException('Failed to parse function call arguments: invalid format');
             }
           }
@@ -157,10 +154,12 @@ class AnthropicApiService
             'content' => "Please continue with the function call for {$expectedFunctionName}.",
           ];
           $retryCount++;
-        } else {
+        }
+        else {
           throw new \RuntimeException("Function call '{$expectedFunctionName}' not found in API response after {$maxRetries} attempts");
         }
-      } catch (RequestException $e) {
+      }
+      catch (RequestException $e) {
         $responseBody = $e->hasResponse() ? $e->getResponse()->getBody()->getContents() : '';
         $errorData = json_decode($responseBody, TRUE);
 
@@ -173,7 +172,8 @@ class AnthropicApiService
           if ($retryCount < $maxRetries) {
             sleep($retryDelay);
             $retryCount++;
-            $retryDelay *= 2; // Exponential backoff
+            // Exponential backoff.
+            $retryDelay *= 2;
             continue;
           }
         }
@@ -181,7 +181,8 @@ class AnthropicApiService
         $this->loggerFactory->get('drupalx_ai')->error('API request failed: @message', ['@message' => $e->getMessage()]);
         $this->loggerFactory->get('drupalx_ai')->error('Request details: @details', ['@details' => print_r($data, TRUE)]);
         return FALSE;
-      } catch (\Exception $e) {
+      }
+      catch (\Exception $e) {
         $this->loggerFactory->get('drupalx_ai')->error('Error processing API response: @message', ['@message' => $e->getMessage()]);
         return FALSE;
       }
@@ -190,4 +191,5 @@ class AnthropicApiService
     $this->loggerFactory->get('drupalx_ai')->error('Max retries reached. Unable to get a successful response from the Anthropic API.');
     return FALSE;
   }
+
 }

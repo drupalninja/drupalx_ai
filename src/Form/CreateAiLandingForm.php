@@ -4,14 +4,23 @@ namespace Drupal\drupalx_ai\Form;
 
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Render\Markup;
+use Drupal\Core\Url;
 use Drupal\drupalx_ai\Service\AiLandingPageService;
 use Drupal\drupalx_ai\Service\MockLandingPageService;
 use Symfony\Component\DependencyInjection\ContainerInterface;
-use Drupal\Core\Url;
-use Drupal\Core\Render\Markup;
 
-class CreateAiLandingForm extends FormBase
-{
+/**
+ * Provides a form for creating AI-generated landing pages.
+ *
+ * @Form(
+ *   id = "drupalx_ai_create_ai_landing_form",
+ *   title = @Translation("Create AI Landing Page"),
+ *   description = @Translation("Form to create AI-generated landing pages.")
+ * )
+ */
+class CreateAiLandingForm extends FormBase {
+
   /**
    * The AI landing page service.
    *
@@ -34,8 +43,7 @@ class CreateAiLandingForm extends FormBase
    * @param \Drupal\drupalx_ai\Service\MockLandingPageService $mock_landing_page_service
    *   The mock landing page service.
    */
-  public function __construct(AiLandingPageService $ai_landing_page_service, MockLandingPageService $mock_landing_page_service)
-  {
+  public function __construct(AiLandingPageService $ai_landing_page_service, MockLandingPageService $mock_landing_page_service) {
     $this->aiLandingPageService = $ai_landing_page_service;
     $this->mockLandingPageService = $mock_landing_page_service;
   }
@@ -43,8 +51,7 @@ class CreateAiLandingForm extends FormBase
   /**
    * {@inheritdoc}
    */
-  public static function create(ContainerInterface $container)
-  {
+  public static function create(ContainerInterface $container) {
     return new static(
       $container->get('drupalx_ai.ai_landing_page_service'),
       $container->get('drupalx_ai.mock_landing_page_service')
@@ -54,16 +61,14 @@ class CreateAiLandingForm extends FormBase
   /**
    * {@inheritdoc}
    */
-  public function getFormId()
-  {
+  public function getFormId() {
     return 'drupalx_ai_create_ai_landing_form';
   }
 
   /**
    * {@inheritdoc}
    */
-  public function buildForm(array $form, FormStateInterface $form_state)
-  {
+  public function buildForm(array $form, FormStateInterface $form_state) {
     $ai_icon = '
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512" style="width:25px;"><!--!Font Awesome Free 6.6.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2024 Fonticons, Inc.--><path d="M234.7 42.7L197 56.8c-3 1.1-5 4-5 7.2s2 6.1 5 7.2l37.7 14.1L248.8 123c1.1 3 4 5 7.2 5s6.1-2 7.2-5l14.1-37.7L315 71.2c3-1.1 5-4 5-7.2s-2-6.1-5-7.2L277.3 42.7 263.2 5c-1.1-3-4-5-7.2-5s-6.1 2-7.2 5L234.7 42.7zM46.1 395.4c-18.7 18.7-18.7 49.1 0 67.9l34.6 34.6c18.7 18.7 49.1 18.7 67.9 0L529.9 116.5c18.7-18.7 18.7-49.1 0-67.9L495.3 14.1c-18.7-18.7-49.1-18.7-67.9 0L46.1 395.4zM484.6 82.6l-105 105-23.3-23.3 105-105 23.3 23.3zM7.5 117.2C3 118.9 0 123.2 0 128s3 9.1 7.5 10.8L64 160l21.2 56.5c1.7 4.5 6 7.5 10.8 7.5s9.1-3 10.8-7.5L128 160l56.5-21.2c4.5-1.7 7.5-6 7.5-10.8s-3-9.1-7.5-10.8L128 96 106.8 39.5C105.1 35 100.8 32 96 32s-9.1 3-10.8 7.5L64 96 7.5 117.2zm352 256c-4.5 1.7-7.5 6-7.5 10.8s3 9.1 7.5 10.8L416 416l21.2 56.5c1.7 4.5 6 7.5 10.8 7.5s9.1-3 10.8-7.5L480 416l56.5-21.2c4.5-1.7 7.5-6 7.5-10.8s-3-9.1-7.5-10.8L480 352l-21.2-56.5c-1.7-4.5-6-7.5-10.8-7.5s-9.1 3-10.8 7.5L416 352l-56.5 21.2z"/></svg>
     ';
@@ -121,8 +126,7 @@ class CreateAiLandingForm extends FormBase
   /**
    * {@inheritdoc}
    */
-  public function submitForm(array &$form, FormStateInterface $form_state)
-  {
+  public function submitForm(array &$form, FormStateInterface $form_state) {
     $description = $form_state->getValue('description');
     $paragraphs = $this->aiLandingPageService->generateAiContent($description);
 
@@ -130,8 +134,10 @@ class CreateAiLandingForm extends FormBase
       $edit_url = $this->aiLandingPageService->createLandingNodeWithAiContent($paragraphs);
       $this->messenger()->addStatus($this->t('AI landing page created successfully.'));
       $form_state->setRedirectUrl(Url::fromUri($edit_url));
-    } else {
+    }
+    else {
       $this->messenger()->addError($this->t('Failed to generate AI landing page content.'));
     }
   }
+
 }

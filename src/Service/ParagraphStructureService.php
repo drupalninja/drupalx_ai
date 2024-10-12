@@ -2,14 +2,14 @@
 
 namespace Drupal\drupalx_ai\Service;
 
-use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Field\FieldDefinitionInterface;
 
 /**
  * Service for retrieving paragraph structure information.
  */
-class ParagraphStructureService
-{
+class ParagraphStructureService {
 
   /**
    * The entity type manager.
@@ -33,8 +33,7 @@ class ParagraphStructureService
    * @param \Drupal\Core\Entity\EntityFieldManagerInterface $entity_field_manager
    *   The entity field manager.
    */
-  public function __construct(EntityTypeManagerInterface $entity_type_manager, EntityFieldManagerInterface $entity_field_manager)
-  {
+  public function __construct(EntityTypeManagerInterface $entity_type_manager, EntityFieldManagerInterface $entity_field_manager) {
     $this->entityTypeManager = $entity_type_manager;
     $this->entityFieldManager = $entity_field_manager;
   }
@@ -45,8 +44,7 @@ class ParagraphStructureService
    * @return array
    *   An array of paragraph bundle structures.
    */
-  public function getParagraphStructures()
-  {
+  public function getParagraphStructures() {
     $paragraph_types = $this->entityTypeManager->getStorage('paragraphs_type')->loadMultiple();
     $output = [];
 
@@ -102,8 +100,7 @@ class ParagraphStructureService
    * @return array
    *   An array of options for the list_string field.
    */
-  protected function getListStringOptions($field_definition)
-  {
+  protected function getListStringOptions(FieldDefinitionInterface $field_definition) {
     $settings = $field_definition->getSettings();
     return $settings['allowed_values'] ?? [];
   }
@@ -117,12 +114,11 @@ class ParagraphStructureService
    * @return mixed
    *   An example value for the field.
    */
-  protected function getExampleValue($field_definition)
-  {
+  protected function getExampleValue(FieldDefinitionInterface $field_definition) {
     $field_type = $field_definition->getType();
     $field_name = $field_definition->getName();
 
-    // Special handling for field_features_text
+    // Special handling for field_features_text.
     if ($field_name === 'field_features_text') {
       return "Feature number 1\nFeature number 2\nFeature number 3";
     }
@@ -133,26 +129,34 @@ class ParagraphStructureService
       case 'text':
       case 'text_long':
         return "Example text for {$field_type}";
+
       case 'integer':
       case 'decimal':
       case 'float':
         return 42;
+
       case 'boolean':
         return true;
+
       case 'email':
         return 'example@example.com';
+
       case 'telephone':
         return '+1234567890';
+
       case 'datetime':
         return '2023-05-17T12:00:00';
+
       case 'link':
         return (object) ['url' => 'http://example.com', 'text' => 'Example Link'];
+
       case 'entity_reference':
         $settings = $field_definition->getSettings();
         if (in_array($settings['target_type'], ['media', 'file'])) {
           return "Technology";
         }
         return "Reference to {$settings['target_type']}";
+
       case 'entity_reference_revisions':
         $target_bundles = $field_definition->getSetting('handler_settings')['target_bundles'] ?? [];
         if (!empty($target_bundles)) {
@@ -163,19 +167,21 @@ class ParagraphStructureService
             if (!$target_field_definition->getFieldStorageDefinition()->isBaseField()) {
               $example_fields[] = (object) [
                 'name' => $target_field_name,
-                'value' => $this->getExampleValue($target_field_definition)
+                'value' => $this->getExampleValue($target_field_definition),
               ];
             }
           }
           return (object) [
             'bundle' => $target_bundle,
-            'fields' => $example_fields
+            'fields' => $example_fields,
           ];
         }
-        return null;
+        return NULL;
+
       case 'list_string':
         $options = $this->getListStringOptions($field_definition);
         return !empty($options) ? reset($options) : "Example list_string value";
+
       default:
         return "Example value for {$field_type}";
     }
@@ -187,8 +193,7 @@ class ParagraphStructureService
    * @return array
    *   An array of 100 popular Material Icon names.
    */
-  public function getMaterialIconNames()
-  {
+  public function getMaterialIconNames() {
     $module_path = \Drupal::service('extension.list.module')->getPath('drupalx_ai');
     $file_path = DRUPAL_ROOT . '/' . $module_path . '/files/material-icon-names.txt';
     if (file_exists($file_path)) {
@@ -251,4 +256,5 @@ class ParagraphStructureService
     // If no good match found, default to 'star'.
     return 'star';
   }
+
 }

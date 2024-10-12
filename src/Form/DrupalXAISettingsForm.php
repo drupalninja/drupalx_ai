@@ -8,30 +8,26 @@ use Drupal\Core\Form\FormStateInterface;
 /**
  * Configure DrupalX AI settings for this site.
  */
-class DrupalXAISettingsForm extends ConfigFormBase
-{
+class DrupalXAISettingsForm extends ConfigFormBase {
 
   /**
    * {@inheritdoc}
    */
-  public function getFormId()
-  {
+  public function getFormId() {
     return 'drupalx_ai_settings';
   }
 
   /**
    * {@inheritdoc}
    */
-  protected function getEditableConfigNames()
-  {
+  protected function getEditableConfigNames() {
     return ['drupalx_ai.settings'];
   }
 
   /**
    * {@inheritdoc}
    */
-  public function buildForm(array $form, FormStateInterface $form_state)
-  {
+  public function buildForm(array $form, FormStateInterface $form_state) {
     $config = $this->config('drupalx_ai.settings');
 
     $form['api_key'] = [
@@ -103,8 +99,7 @@ class DrupalXAISettingsForm extends ConfigFormBase
   /**
    * {@inheritdoc}
    */
-  public function validateForm(array &$form, FormStateInterface $form_state)
-  {
+  public function validateForm(array &$form, FormStateInterface $form_state) {
     parent::validateForm($form, $form_state);
 
     $image_generator = $form_state->getValue('image_generator');
@@ -121,8 +116,7 @@ class DrupalXAISettingsForm extends ConfigFormBase
   /**
    * {@inheritdoc}
    */
-  public function submitForm(array &$form, FormStateInterface $form_state)
-  {
+  public function submitForm(array &$form, FormStateInterface $form_state) {
     $this->config('drupalx_ai.settings')
       ->set('api_key', $form_state->getValue('api_key'))
       ->set('claude_model', $form_state->getValue('claude_model'))
@@ -133,4 +127,5 @@ class DrupalXAISettingsForm extends ConfigFormBase
 
     parent::submitForm($form, $form_state);
   }
+
 }
