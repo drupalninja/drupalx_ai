@@ -1,29 +1,4 @@
 services:
-  drupalx_ai.paragraph_importer:
-    class: \Drupal\drupalx_ai\Service\ParagraphImporterService
-    arguments:
-      - '@config.factory'
-      - '@entity_type.manager'
-      - '@logger.factory'
-      - '@file_system'
-      - '@graphql_compose_fragments.manager'
-
-  drupalx_ai.anthropic_api:
-    class: \Drupal\drupalx_ai\Service\AnthropicApiService
-    arguments: ['@http_client_factory', '@config.factory', '@logger.factory']
-
-  drupalx_ai.component_reader:
-    class: \Drupal\drupalx_ai\Service\ComponentReaderService
-    arguments: ['@logger.factory']
-
-  drupalx_ai.storybook_generator:
-    class: \Drupal\drupalx_ai\Service\StorybookGeneratorService
-    arguments: ['@logger.factory', '@drupalx_ai.anthropic_api']
-
-  drupalx_ai.cypress_generator:
-    class: \Drupal\drupalx_ai\Service\CypressGeneratorService
-    arguments: ['@logger.factory', '@drupalx_ai.anthropic_api']
-
   drupalx_ai.import_paragraph_type_commands:
     class: \Drupal\drupalx_ai\Commands\ImportParagraphTypeCommands
     arguments:
@@ -54,5 +29,17 @@ services:
       - '@drupalx_ai.anthropic_api'
       - '@drupalx_ai.component_reader'
       - '@drupalx_ai.cypress_generator'
+    tags:
+      - { name: drush.command }
+
+  drupalx_ai.create_mock_landing_commands:
+    class: \Drupal\drupalx_ai\Commands\CreateMockLandingCommands
+    arguments: ['@drupalx_ai.mock_landing_page']
+    tags:
+      - { name: drush.command }
+
+  drupalx_ai.ai_landing_page_commands:
+    class: \Drupal\drupalx_ai\Commands\AiLandingPageCommands
+    arguments: ['@drupalx_ai.ai_landing_page_service']
     tags:
       - { name: drush.command }

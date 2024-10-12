@@ -1,0 +1,50 @@
+services:
+  drupalx_ai.paragraph_importer:
+    class: \Drupal\drupalx_ai\Service\ParagraphImporterService
+    arguments:
+      - '@config.factory'
+      - '@entity_type.manager'
+      - '@logger.factory'
+      - '@file_system'
+      - '@graphql_compose_fragments.manager'
+
+  drupalx_ai.anthropic_api:
+    class: \Drupal\drupalx_ai\Service\AnthropicApiService
+    arguments: ['@http_client_factory', '@config.factory', '@logger.factory']
+
+  drupalx_ai.component_reader:
+    class: \Drupal\drupalx_ai\Service\ComponentReaderService
+    arguments: ['@logger.factory']
+
+  drupalx_ai.storybook_generator:
+    class: \Drupal\drupalx_ai\Service\StorybookGeneratorService
+    arguments: ['@logger.factory', '@drupalx_ai.anthropic_api']
+
+  drupalx_ai.cypress_generator:
+    class: \Drupal\drupalx_ai\Service\CypressGeneratorService
+    arguments: ['@logger.factory', '@drupalx_ai.anthropic_api']
+
+  drupalx_ai.paragraph_structure:
+    class: \Drupal\drupalx_ai\Service\ParagraphStructureService
+    arguments: ['@entity_type.manager', '@entity_field.manager']
+
+  drupalx_ai.mock_landing_page:
+    class: \Drupal\drupalx_ai\Service\MockLandingPageService
+    arguments:
+      - '@entity_type.manager'
+      - '@file_system'
+      - '@http_client'
+      - '@logger.factory'
+      - '@drupalx_ai.paragraph_structure'
+      - '@config.factory'
+      - '@module_handler'
+
+  drupalx_ai.ai_landing_page_service:
+    class: \Drupal\drupalx_ai\Service\AiLandingPageService
+    arguments:
+      - '@entity_type.manager'
+      - '@logger.factory'
+      - '@drupalx_ai.mock_landing_page'
+      - '@drupalx_ai.anthropic_api'
+      - '@drupalx_ai.paragraph_structure'
+      - '@config.factory'
