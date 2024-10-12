@@ -272,7 +272,12 @@ final class AiLandingPageService
           // Look for closest match by comparing to Material Icon names.
           $iconName = $this->paragraphStructureService->getBestIconMatch($fieldValue);
           $paragraph->set($fieldName, $iconName);
-        } else {
+        }
+        elseif ($fieldName === 'field_features_text') {
+          $cleanedFieldValue = preg_replace('/^[\W_]+/m', '', $fieldValue);
+          $paragraph->set($fieldName, $cleanedFieldValue);
+        }
+        else {
           $paragraph->set($fieldName, $fieldValue);
         }
       }
