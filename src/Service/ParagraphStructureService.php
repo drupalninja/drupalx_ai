@@ -41,15 +41,24 @@ class ParagraphStructureService {
   /**
    * Get the structure of all paragraph bundles.
    *
+   * @param bool $exclude_views
+   *   Exclude Views paragraph type.
+   *
    * @return array
    *   An array of paragraph bundle structures.
    */
-  public function getParagraphStructures() {
+  public function getParagraphStructures($exclude_views = FALSE) {
     $paragraph_types = $this->entityTypeManager->getStorage('paragraphs_type')->loadMultiple();
     $output = [];
 
     foreach ($paragraph_types as $paragraph_type) {
       $bundle_id = $paragraph_type->id();
+
+      // Skip the 'views' paragraph type if $exclude_views is TRUE.
+      if ($exclude_views && $bundle_id === 'views') {
+        continue;
+      }
+
       $field_definitions = $this->entityFieldManager->getFieldDefinitions('paragraph', $bundle_id);
 
       $paragraph_info = (object) [
