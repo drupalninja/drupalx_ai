@@ -43,3 +43,9 @@ services:
     arguments: ['@drupalx_ai.ai_landing_page_service']
     tags:
       - { name: drush.command }
+
+  drupalx_ai.update_tailwind_theme_commands:
+    class: Drupal\drupalx_ai\Commands\UpdateTailwindThemeCommands
+    arguments: ['@config.factory', '@drupalx_ai.anthropic_api']
+    tags:
+      - { name: drush.command }
