@@ -2,12 +2,12 @@
 
 ## Overview
 
-The DrupalX AI module integrates AI-powered functionality into Drupal, specifically for importing paragraph types based on Next.js components. This module uses the Anthropic Claude API to analyze Next.js components and suggest corresponding Drupal paragraph type structures.
+The DrupalX AI module integrates AI-powered functionality into Drupal, specifically for importing paragraph types based on Next.js components. This module uses the Anthropic Claude API and OpenAI to analyze Next.js components and suggest corresponding Drupal paragraph type structures.
 
 ## Features
 
 - Drush command for importing paragraph types from Next.js components
-- Integration with Anthropic's Claude API for AI-powered analysis
+- Integration with Anthropic's Claude and OpenAI API for AI-powered analysis
 - Configurable API key settings
 - Automatic generation of Drupal paragraph type structures
 
@@ -15,7 +15,7 @@ The DrupalX AI module integrates AI-powered functionality into Drupal, specifica
 
 - Drupal 10
 - Drush 11+
-- Anthropic API key
+- Anthropic or OpenAI API key
 
 ## Installation
 
@@ -51,6 +51,7 @@ drush dai-ifc
 ```
 
 The command will guide you through the following steps:
+
 1. Select a Next.js component from the `../nextjs/components/` directory
 2. Choose a specific file from the selected component directory
 3. Review the AI-generated paragraph type structure

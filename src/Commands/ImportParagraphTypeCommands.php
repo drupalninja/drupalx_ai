@@ -4,7 +4,7 @@ namespace Drupal\drupalx_ai\Commands;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
-use Drupal\drupalx_ai\Service\AnthropicApiService;
+use Drupal\drupalx_ai\Service\AiModelApiService;
 use Drupal\drupalx_ai\Service\ComponentReaderService;
 use Drupal\drupalx_ai\Service\ParagraphImporterService;
 use Drush\Commands\DrushCommands;
@@ -40,11 +40,11 @@ class ImportParagraphTypeCommands extends DrushCommands {
   protected $loggerFactory;
 
   /**
-   * The Anthropic API service.
+   * The AI Model API service.
    *
-   * @var \Drupal\drupalx_ai\Service\AnthropicApiService
+   * @var \Drupal\drupalx_ai\Service\AiModelApiService
    */
-  protected $anthropicApiService;
+  protected $aiModelApiService;
 
   /**
    * The component reader service.
@@ -62,17 +62,17 @@ class ImportParagraphTypeCommands extends DrushCommands {
    *   The paragraph importer service.
    * @param \Drupal\Core\Logger\LoggerChannelFactoryInterface $logger_factory
    *   The logger factory.
-   * @param \Drupal\drupalx_ai\Service\AnthropicApiService $anthropic_api_service
-   *   The Anthropic API service.
+   * @param \Drupal\drupalx_ai\Service\AiModelApiService $ai_model_api_service
+   *   The AI Model API service.
    * @param \Drupal\drupalx_ai\Service\ComponentReaderService $component_reader
    *   The component reader service.
    */
-  public function __construct(ConfigFactoryInterface $config_factory, ParagraphImporterService $paragraph_importer, LoggerChannelFactoryInterface $logger_factory, AnthropicApiService $anthropic_api_service, ComponentReaderService $component_reader) {
+  public function __construct(ConfigFactoryInterface $config_factory, ParagraphImporterService $paragraph_importer, LoggerChannelFactoryInterface $logger_factory, AiModelApiService $ai_model_api_service, ComponentReaderService $component_reader) {
     parent::__construct();
     $this->configFactory = $config_factory;
     $this->paragraphImporter = $paragraph_importer;
     $this->loggerFactory = $logger_factory;
-    $this->anthropicApiService = $anthropic_api_service;
+    $this->aiModelApiService = $ai_model_api_service;
     $this->componentReader = $component_reader;
   }
 
@@ -84,7 +84,7 @@ class ImportParagraphTypeCommands extends DrushCommands {
       $container->get('config.factory'),
       $container->get('drupalx_ai.paragraph_importer'),
       $container->get('logger.factory'),
-      $container->get('drupalx_ai.anthropic_api'),
+      $container->get('drupalx_ai.ai_model_api'),
       $container->get('drupalx_ai.component_reader')
     );
   }
@@ -99,7 +99,7 @@ class ImportParagraphTypeCommands extends DrushCommands {
   public function importParagraphTypeFromComponent(OutputInterface $output) {
     // Check if API key is set before proceeding.
     if (empty($this->configFactory->get('drupalx_ai.settings')->get('api_key'))) {
-      $output->writeln("<error>Anthropic API key is not set. Please configure it in the DrupalX AI Settings before running this command.</error>");
+      $output->writeln("<error>AI API key is not set. Please configure it in the DrupalX AI Settings before running this command.</error>");
       return;
     }
 
@@ -204,7 +204,7 @@ class ImportParagraphTypeCommands extends DrushCommands {
       ],
     ];
 
-    return $this->anthropicApiService->callAnthropic($prompt, $tools, 'suggest_paragraph_type');
+    return $this->aiModelApiService->callAiApi($prompt, $tools, 'suggest_paragraph_type');
   }
 
 }

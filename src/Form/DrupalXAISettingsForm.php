@@ -30,27 +30,84 @@ class DrupalXAISettingsForm extends ConfigFormBase {
   public function buildForm(array $form, FormStateInterface $form_state) {
     $config = $this->config('drupalx_ai.settings');
 
-    $form['api_key'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Anthropic API Key'),
-      '#default_value' => $config->get('api_key'),
-      '#description' => $this->t('Enter your Anthropic API key.'),
+    // AI Provider settings.
+    $form['ai_provider'] = [
+      '#type' => 'fieldset',
+      '#title' => $this->t('AI Provider Settings'),
+    ];
+
+    $form['ai_provider']['provider'] = [
+      '#type' => 'select',
+      '#title' => $this->t('AI Provider'),
+      '#options' => [
+        'anthropic' => $this->t('Anthropic'),
+        'openai' => $this->t('OpenAI'),
+      ],
+      '#default_value' => $config->get('ai_provider') ?: 'anthropic',
       '#required' => TRUE,
     ];
 
-    $form['claude_model'] = [
+    $form['ai_provider']['api_key'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('API Key'),
+      '#default_value' => $config->get('api_key'),
+      '#description' => $this->t('Enter your API key for the selected provider.'),
+      '#required' => TRUE,
+    ];
+
+    // Anthropic-specific settings.
+    $form['ai_provider']['anthropic_settings'] = [
+      '#type' => 'fieldset',
+      '#title' => $this->t('Anthropic Settings'),
+      '#states' => [
+        'visible' => [
+          ':input[name="provider"]' => ['value' => 'anthropic'],
+        ],
+      ],
+    ];
+
+    $form['ai_provider']['anthropic_settings']['claude_model'] = [
       '#type' => 'select',
       '#title' => $this->t('Claude Model'),
       '#options' => [
         'claude-3-haiku-20240307' => $this->t('Claude 3 Haiku (Faster, cheaper)'),
         'claude-3-sonnet-20240229' => $this->t('Claude 3 Sonnet (More capable)'),
+        'claude-3-opus-20240229' => $this->t('Claude 3 Opus (Most capable)'),
       ],
       '#default_value' => $config->get('claude_model') ?: 'claude-3-haiku-20240307',
-      '#description' => $this->t('Choose the Claude model to use. Haiku is faster and cheaper, while Sonnet is more capable.'),
-      '#required' => TRUE,
+      '#description' => $this->t('Choose the Claude model to use.'),
     ];
 
+    // OpenAI-specific settings.
+    $form['ai_provider']['openai_settings'] = [
+      '#type' => 'fieldset',
+      '#title' => $this->t('OpenAI Settings'),
+      '#states' => [
+        'visible' => [
+          ':input[name="provider"]' => ['value' => 'openai'],
+        ],
+      ],
+    ];
+
+    $form['ai_provider']['openai_settings']['openai_model'] = [
+      '#type' => 'select',
+      '#title' => $this->t('OpenAI Model'),
+      '#options' => [
+        'gpt-3.5-turbo' => $this->t('GPT-3.5 Turbo (Very fast, cheap)'),
+        'gpt-4o' => $this->t('GPT-4o (More capable)'),
+        'gpt-4o-mini' => $this->t('GPT-4o mini (Faster, cheaper)'),
+      ],
+      '#default_value' => $config->get('openai_model') ?: 'gpt-4o-mini',
+      '#description' => $this->t('Choose the OpenAI model to use.'),
+    ];
+
+    // Image Generator settings.
     $form['image_generator'] = [
+      '#type' => 'fieldset',
+      '#title' => $this->t('Image Generator Settings'),
+    ];
+
+    $form['image_generator']['service'] = [
       '#type' => 'radios',
       '#title' => $this->t('Image Generator'),
       '#options' => [
@@ -63,32 +120,32 @@ class DrupalXAISettingsForm extends ConfigFormBase {
       '#required' => TRUE,
     ];
 
-    $form['pexels_api_key'] = [
+    $form['image_generator']['pexels_api_key'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Pexels API Key'),
       '#default_value' => $config->get('pexels_api_key'),
       '#description' => $this->t('Enter your Pexels API key for fetching images.'),
       '#states' => [
         'required' => [
-          ':input[name="image_generator"]' => ['value' => 'pexels'],
+          ':input[name="service"]' => ['value' => 'pexels'],
         ],
         'visible' => [
-          ':input[name="image_generator"]' => ['value' => 'pexels'],
+          ':input[name="service"]' => ['value' => 'pexels'],
         ],
       ],
     ];
 
-    $form['unsplash_api_key'] = [
+    $form['image_generator']['unsplash_api_key'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Unsplash API Key'),
       '#default_value' => $config->get('unsplash_api_key'),
       '#description' => $this->t('Enter your Unsplash API key for fetching images.'),
       '#states' => [
         'required' => [
-          ':input[name="image_generator"]' => ['value' => 'unsplash'],
+          ':input[name="service"]' => ['value' => 'unsplash'],
         ],
         'visible' => [
-          ':input[name="image_generator"]' => ['value' => 'unsplash'],
+          ':input[name="service"]' => ['value' => 'unsplash'],
         ],
       ],
     ];
@@ -102,7 +159,16 @@ class DrupalXAISettingsForm extends ConfigFormBase {
   public function validateForm(array &$form, FormStateInterface $form_state) {
     parent::validateForm($form, $form_state);
 
-    $image_generator = $form_state->getValue('image_generator');
+    $provider = $form_state->getValue('provider');
+    $image_generator = $form_state->getValue('service');
+
+    if ($provider === 'anthropic' && empty($form_state->getValue('claude_model'))) {
+      $form_state->setErrorByName('claude_model', $this->t('Claude Model is required when Anthropic is selected as the AI provider.'));
+    }
+
+    if ($provider === 'openai' && empty($form_state->getValue('openai_model'))) {
+      $form_state->setErrorByName('openai_model', $this->t('OpenAI Model is required when OpenAI is selected as the AI provider.'));
+    }
 
     if ($image_generator === 'pexels' && empty($form_state->getValue('pexels_api_key'))) {
       $form_state->setErrorByName('pexels_api_key', $this->t('Pexels API Key is required when Pexels is selected as the image generator.'));
@@ -118,9 +184,11 @@ class DrupalXAISettingsForm extends ConfigFormBase {
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
     $this->config('drupalx_ai.settings')
+      ->set('ai_provider', $form_state->getValue('provider'))
       ->set('api_key', $form_state->getValue('api_key'))
       ->set('claude_model', $form_state->getValue('claude_model'))
-      ->set('image_generator', $form_state->getValue('image_generator'))
+      ->set('openai_model', $form_state->getValue('openai_model'))
+      ->set('image_generator', $form_state->getValue('service'))
       ->set('pexels_api_key', $form_state->getValue('pexels_api_key'))
       ->set('unsplash_api_key', $form_state->getValue('unsplash_api_key'))
       ->save();

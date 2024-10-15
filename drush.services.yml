@@ -5,7 +5,7 @@ services:
       - '@config.factory'
       - '@drupalx_ai.paragraph_importer'
       - '@logger.factory'
-      - '@drupalx_ai.anthropic_api'
+      - '@drupalx_ai.ai_model_api'
       - '@drupalx_ai.component_reader'
     tags:
       - { name: drush.command }
@@ -15,7 +15,7 @@ services:
     arguments:
       - '@config.factory'
       - '@logger.factory'
-      - '@drupalx_ai.anthropic_api'
+      - '@drupalx_ai.ai_model_api'
       - '@drupalx_ai.component_reader'
       - '@drupalx_ai.storybook_generator'
     tags:
@@ -26,7 +26,7 @@ services:
     arguments:
       - '@config.factory'
       - '@logger.factory'
-      - '@drupalx_ai.anthropic_api'
+      - '@drupalx_ai.ai_model_api'
       - '@drupalx_ai.component_reader'
       - '@drupalx_ai.cypress_generator'
     tags:
@@ -46,6 +46,6 @@ services:
 
   drupalx_ai.update_tailwind_theme_commands:
     class: Drupal\drupalx_ai\Commands\UpdateTailwindThemeCommands
-    arguments: ['@config.factory', '@drupalx_ai.anthropic_api']
+    arguments: ['@config.factory', '@drupalx_ai.ai_model_api']
     tags:
       - { name: drush.command }

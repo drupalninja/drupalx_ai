@@ -16,23 +16,23 @@ class StorybookGeneratorService {
   protected $loggerFactory;
 
   /**
-   * The Anthropic API service.
+   * The AI Model API service.
    *
-   * @var \Drupal\drupalx_ai\Service\AnthropicApiService
+   * @var \Drupal\drupalx_ai\Service\AiModelApiService
    */
-  protected $anthropicApiService;
+  protected $aiModelApiService;
 
   /**
    * Constructor for StorybookGeneratorService.
    *
    * @param \Drupal\Core\Logger\LoggerChannelFactoryInterface $logger_factory
    *   The logger factory.
-   * @param \Drupal\drupalx_ai\Service\AnthropicApiService $anthropic_api_service
-   *   The Anthropic API service.
+   * @param \Drupal\drupalx_ai\Service\AiModelApiService $ai_model_api_service
+   *   The AI Model API service.
    */
-  public function __construct(LoggerChannelFactoryInterface $logger_factory, AnthropicApiService $anthropic_api_service) {
+  public function __construct(LoggerChannelFactoryInterface $logger_factory, AiModelApiService $ai_model_api_service) {
     $this->loggerFactory = $logger_factory;
-    $this->anthropicApiService = $anthropic_api_service;
+    $this->aiModelApiService = $ai_model_api_service;
   }
 
   /**
@@ -96,7 +96,7 @@ class StorybookGeneratorService {
       ],
     ];
 
-    $result = $this->anthropicApiService->callAnthropic($prompt, $tools, 'generate_storybook_story');
+    $result = $this->aiModelApiService->callAiApi($prompt, $tools, 'generate_storybook_story');
 
     if (isset($result['story_content'])) {
       return $result['story_content'];

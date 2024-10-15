@@ -4,7 +4,7 @@ namespace Drupal\drupalx_ai\Commands;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
-use Drupal\drupalx_ai\Service\AnthropicApiService;
+use Drupal\drupalx_ai\Service\AiModelApiService;
 use Drupal\drupalx_ai\Service\ComponentReaderService;
 use Drupal\drupalx_ai\Service\StorybookGeneratorService;
 use Drush\Commands\DrushCommands;
@@ -33,11 +33,11 @@ class GenerateStorybookCommands extends DrushCommands {
   protected $loggerFactory;
 
   /**
-   * The Anthropic API service.
+   * The AI Model API service.
    *
-   * @var \Drupal\drupalx_ai\Service\AnthropicApiService
+   * @var \Drupal\drupalx_ai\Service\AiModelApiService
    */
-  protected $anthropicApiService;
+  protected $aiModelApiService;
 
   /**
    * The component reader service.
@@ -60,8 +60,8 @@ class GenerateStorybookCommands extends DrushCommands {
    *   The config factory.
    * @param \Drupal\Core\Logger\LoggerChannelFactoryInterface $logger_factory
    *   The logger factory.
-   * @param \Drupal\drupalx_ai\Service\AnthropicApiService $anthropic_api_service
-   *   The Anthropic API service.
+   * @param \Drupal\drupalx_ai\Service\AiModelApiService $ai_model_api_service
+   *   The AI Model API service.
    * @param \Drupal\drupalx_ai\Service\ComponentReaderService $component_reader
    *   The component reader service.
    * @param \Drupal\drupalx_ai\Service\StorybookGeneratorService $storybook_generator
@@ -70,14 +70,14 @@ class GenerateStorybookCommands extends DrushCommands {
   public function __construct(
     ConfigFactoryInterface $config_factory,
     LoggerChannelFactoryInterface $logger_factory,
-    AnthropicApiService $anthropic_api_service,
+    AiModelApiService $ai_model_api_service,
     ComponentReaderService $component_reader,
     StorybookGeneratorService $storybook_generator,
   ) {
     parent::__construct();
     $this->configFactory = $config_factory;
     $this->loggerFactory = $logger_factory;
-    $this->anthropicApiService = $anthropic_api_service;
+    $this->aiModelApiService = $ai_model_api_service;
     $this->componentReader = $component_reader;
     $this->storybookGenerator = $storybook_generator;
   }
@@ -89,7 +89,7 @@ class GenerateStorybookCommands extends DrushCommands {
     return new static(
       $container->get('config.factory'),
       $container->get('logger.factory'),
-      $container->get('drupalx_ai.anthropic_api'),
+      $container->get('drupalx_ai.ai_model_api'),
       $container->get('drupalx_ai.component_reader'),
       $container->get('drupalx_ai.storybook_generator')
     );
@@ -105,7 +105,7 @@ class GenerateStorybookCommands extends DrushCommands {
   public function generateStorybookStory(OutputInterface $output) {
     // Check if API key is set before proceeding.
     if (empty($this->configFactory->get('drupalx_ai.settings')->get('api_key'))) {
-      $output->writeln("<error>Anthropic API key is not set. Please configure it in the DrupalX AI Settings before running this command.</error>");
+      $output->writeln("<error>AI API key is not set. Please configure it in the DrupalX AI Settings before running this command.</error>");
       return;
     }
 

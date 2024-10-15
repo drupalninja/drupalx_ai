@@ -30,8 +30,8 @@ final class AiLandingPageService {
    *   The logger factory.
    * @param \Drupal\drupalx_ai\Service\MockLandingPageService $mockLandingPageService
    *   The mock landing page service.
-   * @param \Drupal\drupalx_ai\Service\AnthropicApiService $anthropicApiService
-   *   The Anthropic API service.
+   * @param \Drupal\drupalx_ai\Service\AiModelApiService $aiModelApiService
+   *   The AI Model API service.
    * @param \Drupal\drupalx_ai\Service\ParagraphStructureService $paragraphStructureService
    *   The paragraph structure service.
    * @param \Drupal\Core\Config\ConfigFactoryInterface $configFactory
@@ -41,7 +41,7 @@ final class AiLandingPageService {
     private readonly EntityTypeManagerInterface $entityTypeManager,
     private readonly LoggerChannelFactoryInterface $loggerFactory,
     private readonly MockLandingPageService $mockLandingPageService,
-    private readonly AnthropicApiService $anthropicApiService,
+    private readonly AiModelApiService $aiModelApiService,
     private readonly ParagraphStructureService $paragraphStructureService,
     ConfigFactoryInterface $configFactory,
   ) {
@@ -70,7 +70,7 @@ final class AiLandingPageService {
           'properties' => [
             'page_title' => [
               'type' => 'string',
-              'description' => 'A create title for the landing page',
+              'description' => 'Create title for the landing page',
             ],
             'paragraphs' => [
               'type' => 'array',
@@ -91,12 +91,12 @@ final class AiLandingPageService {
               ],
             ],
           ],
-          'required' => ['paragraphs'],
+          'required' => ['paragraphs', 'page_title'],
         ],
       ],
     ];
 
-    $result = $this->anthropicApiService->callAnthropic($prompt, $tools, 'generate_ai_landing_page');
+    $result = $this->aiModelApiService->callAiApi($prompt, $tools, 'generate_ai_landing_page');
 
     if (is_array($result) && isset($result['paragraphs'])) {
       return $result;
@@ -108,7 +108,7 @@ final class AiLandingPageService {
   }
 
   /**
-   * Builds the prompt for the Anthropic API.
+   * Builds the prompt for the AI API.
    *
    * @param string $description
    *   The user-provided description of the desired landing page.
@@ -121,7 +121,7 @@ final class AiLandingPageService {
   private function buildPrompt(string $description, array $paragraphStructures): string {
     $prompt = "Generate an AI-driven landing page structure with content based on the following description:\n\n";
     $prompt .= "$description\n\n";
-    $prompt .= "For the page title, come up with a clever title appropriate for the paragraph content being generated.\n\n";
+    $prompt .= "CRITICAL: The page_title is required. Create a compelling and relevant title for the landing page based on the content.\n\n";
     $prompt .= "Available paragraph types and their structures (in JSON format):\n\n";
 
     $prompt .= json_encode($paragraphStructures, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n\n";
@@ -147,7 +147,7 @@ final class AiLandingPageService {
     $prompt .= "The structure should be an array of paragraphs, where each paragraph is an object with 'type' and 'fields' properties. The 'fields' property should be an object where keys are field names and values are the content for those fields.\n\n";
     $prompt .= "CRITICAL: Ensure that EVERY paragraph, including sub-paragraphs (such as accordion items or pricing cards), has a 'type' property. Do not omit the 'type' for any paragraph at any level.\n\n";
     $prompt .= "For entity reference fields, use appropriate existing entity names or IDs. For viewsreference fields, use existing view names and display IDs.\n\n";
-    $prompt .= "For list_string fields, make sure to choose a value from the provided options in the 'o' array.\n\n";
+    $prompt .= "For list_string fields, make sure to choose a key from the provided options in the 'o' array.\n\n";
     $prompt .= "In field field_features_text do not include any characters for bullets, only plain text separated by new lines.\n\n";
     $prompt .= "For logo collection limit max to 7 media items.\n\n";
 
@@ -157,8 +157,9 @@ final class AiLandingPageService {
     $prompt .= "    {\n";
     $prompt .= "      \"type\": \"hero\",\n";
     $prompt .= "      \"fields\": {\n";
-    $prompt .= "        \"field_title\": \"Welcome to Our Service\",\n";
-    $prompt .= "        \"field_body\": \"We provide top-notch solutions for your needs.\",\n";
+    $prompt .= "        \"field_heading\": \"Welcome to Our Service\",\n";
+    $prompt .= "        \"field_hero_layout\": \"image_bottom\",\n";
+    $prompt .= "        \"field_summary\": \"We provide top-notch solutions for your needs.\",\n";
     $prompt .= "        \"field_media\": \"Technology\"\n";
     $prompt .= "      }\n";
     $prompt .= "    },\n";

@@ -17,18 +17,18 @@ class CypressGeneratorService {
   protected $loggerFactory;
 
   /**
-   * The Anthropic API service.
+   * The AI Model API service.
    *
-   * @var \Drupal\drupalx_ai\Service\AnthropicApiService
+   * @var \Drupal\drupalx_ai\Service\AiModelApiService
    */
-  protected $anthropicApiService;
+  protected $aiModelApiService;
 
   /**
    * Constructor for CypressGeneratorService.
    */
-  public function __construct(LoggerChannelFactoryInterface $logger_factory, AnthropicApiService $anthropic_api_service) {
+  public function __construct(LoggerChannelFactoryInterface $logger_factory, AiModelApiService $ai_model_api_service) {
     $this->loggerFactory = $logger_factory;
-    $this->anthropicApiService = $anthropic_api_service;
+    $this->aiModelApiService = $ai_model_api_service;
   }
 
   /**
@@ -41,7 +41,7 @@ class CypressGeneratorService {
       return '.' . $class;
     }, $existingClasses));
 
-    // Extract category from story content
+    // Extract category from story content.
     $category = $this->extractCategoryFromStory($storyContent);
 
     $prompt = "Based on this Next.js component named '{$componentName}' and its associated Storybook story, generate a Cypress test:
@@ -103,7 +103,7 @@ class CypressGeneratorService {
       ],
     ];
 
-    $result = $this->anthropicApiService->callAnthropic($prompt, $tools, 'generate_cypress_test');
+    $result = $this->aiModelApiService->callAiApi($prompt, $tools, 'generate_cypress_test');
 
     if (isset($result['test_content'])) {
       // Validate the generated test.
