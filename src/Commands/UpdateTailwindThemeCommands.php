@@ -3,7 +3,7 @@
 namespace Drupal\drupalx_ai\Commands;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
-use Drupal\drupalx_ai\Service\AnthropicApiService;
+use Drupal\drupalx_ai\Service\AiModelApiService;
 use Drush\Commands\DrushCommands;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -11,7 +11,7 @@ use Symfony\Component\Console\Question\Question;
 use Symfony\Component\Filesystem\Filesystem;
 
 /**
- * Provides Drush commands for updating Tailwind theme using Anthropic AI.
+ * Provides Drush commands for updating Tailwind theme using AI.
  */
 final class UpdateTailwindThemeCommands extends DrushCommands {
 
@@ -27,19 +27,19 @@ final class UpdateTailwindThemeCommands extends DrushCommands {
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $configFactory
    *   The configuration factory.
-   * @param \Drupal\drupalx_ai\Service\AnthropicApiService $anthropicApiService
-   *   The Anthropic API service.
+   * @param \Drupal\drupalx_ai\Service\AiModelApiService $aiModelApiService
+   *   The AI Model API service.
    */
   public function __construct(
     private readonly ConfigFactoryInterface $configFactory,
-    private readonly AnthropicApiService $anthropicApiService,
+    private readonly AiModelApiService $aiModelApiService,
   ) {
     parent::__construct();
     $this->filesystem = new Filesystem();
   }
 
   /**
-   * Update the Tailwind theme interactively using Anthropic AI.
+   * Update the Tailwind theme interactively using AI.
    *
    * @command drupalx:update-tailwind-theme
    * @aliases dutt
@@ -78,7 +78,7 @@ final class UpdateTailwindThemeCommands extends DrushCommands {
     $output->writeln("Generating updated Tailwind theme based on your input...");
 
     try {
-      $result = $this->anthropicApiService->callAnthropic($aiPrompt, $tools, 'update_tailwind_theme');
+      $result = $this->aiModelApiService->callAiApi($aiPrompt, $tools, 'update_tailwind_theme');
 
       if (!is_array($result) || !isset($result['updated_css']) || !isset($result['changes_summary'])) {
         throw new \RuntimeException("AI failed to generate an updated Tailwind theme or returned unexpected result");

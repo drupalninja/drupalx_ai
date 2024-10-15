@@ -6,7 +6,7 @@ use Drupal\drupalx_ai\Service\AiLandingPageService;
 use Drush\Commands\DrushCommands;
 
 /**
- * Drush commands for creating AI-generated landing pages using Anthropic API.
+ * Drush commands for creating AI-generated landing pages using APIs.
  */
 class AiLandingPageCommands extends DrushCommands {
   /**
@@ -28,7 +28,7 @@ class AiLandingPageCommands extends DrushCommands {
   }
 
   /**
-   * Creates an AI-generated landing page using Anthropic API.
+   * Creates an AI-generated landing page using APIs.
    *
    * @command drupalx:create-ai-landing-page
    * @aliases dxail
