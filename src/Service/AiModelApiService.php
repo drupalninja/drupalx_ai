@@ -13,11 +13,11 @@ use GuzzleHttp\Exception\RequestException;
 class AiModelApiService {
 
   /**
-   * The HTTP client.
+   * The HTTP client factory.
    *
-   * @var \GuzzleHttp\ClientInterface
+   * @var \Drupal\Core\Http\ClientFactory
    */
-  protected $httpClient;
+  protected $httpClientFactory;
 
   /**
    * The config factory.
@@ -44,40 +44,9 @@ class AiModelApiService {
    *   The logger factory.
    */
   public function __construct(ClientFactory $http_client_factory, ConfigFactoryInterface $config_factory, LoggerChannelFactoryInterface $logger_factory) {
+    $this->httpClientFactory = $http_client_factory;
     $this->configFactory = $config_factory;
     $this->loggerFactory = $logger_factory;
-    $this->initializeHttpClient($http_client_factory);
-  }
-
-  /**
-   * Initialize the HTTP client with the API key from configuration.
-   *
-   * @param \Drupal\Core\Http\ClientFactory $http_client_factory
-   *   The HTTP client factory.
-   */
-  protected function initializeHttpClient(ClientFactory $http_client_factory) {
-    $config = $this->configFactory->get('drupalx_ai.settings');
-    $api_provider = $config->get('ai_provider') ?: 'anthropic';
-    $api_key = $config->get('api_key');
-
-    if (empty($api_key)) {
-      $this->loggerFactory->get('drupalx_ai')->error('AI API key is not set. Please configure it in the DrupalX AI Settings.');
-      throw new \RuntimeException('AI API key is not set');
-    }
-
-    $headers = [
-      'Content-Type' => 'application/json',
-    ];
-
-    if ($api_provider === 'anthropic') {
-      $headers['x-api-key'] = $api_key;
-      $headers['anthropic-version'] = '2023-06-01';
-    }
-    elseif ($api_provider === 'openai') {
-      $headers['Authorization'] = 'Bearer ' . $api_key;
-    }
-
-    $this->httpClient = $http_client_factory->fromOptions(['headers' => $headers]);
   }
 
   /**
@@ -100,6 +69,12 @@ class AiModelApiService {
   public function callAiApi($prompt, array $tools, $expectedFunctionName, $maxRetries = 3, $initialRetryDelay = 1) {
     $config = $this->configFactory->get('drupalx_ai.settings');
     $api_provider = $config->get('ai_provider') ?: 'anthropic';
+    $api_key = $config->get('api_key');
+
+    if (empty($api_key)) {
+      $this->loggerFactory->get('drupalx_ai')->error('AI API key is not set. Please configure it in the DrupalX AI Settings.');
+      return FALSE;
+    }
 
     $this->loggerFactory->get('drupalx_ai')->notice('Using AI provider: @provider', ['@provider' => $api_provider]);
 
@@ -121,6 +96,7 @@ class AiModelApiService {
   protected function callAnthropicApi($prompt, array $tools, $expectedFunctionName, $maxRetries, $initialRetryDelay) {
     $config = $this->configFactory->get('drupalx_ai.settings');
     $claude_model = $config->get('claude_model') ?: 'claude-3-haiku-20240307';
+    $api_key = $config->get('api_key');
 
     $url = 'https://api.anthropic.com/v1/messages';
     $data = [
@@ -135,9 +111,15 @@ class AiModelApiService {
       'tools' => $tools,
     ];
 
+    $headers = [
+      'Content-Type' => 'application/json',
+      'x-api-key' => $api_key,
+      'anthropic-version' => '2023-06-01',
+    ];
+
     $this->loggerFactory->get('drupalx_ai')->notice('Calling Anthropic API with model: @model', ['@model' => $claude_model]);
 
-    return $this->makeApiCallWithRetry($url, $data, $expectedFunctionName, $maxRetries, $initialRetryDelay);
+    return $this->makeApiCallWithRetry($url, $data, $headers, $expectedFunctionName, $maxRetries, $initialRetryDelay);
   }
 
   /**
@@ -146,6 +128,7 @@ class AiModelApiService {
   protected function callOpenAiApi($prompt, array $tools, $expectedFunctionName, $maxRetries, $initialRetryDelay) {
     $config = $this->configFactory->get('drupalx_ai.settings');
     $openai_model = $config->get('openai_model') ?: 'gpt-4o-mini';
+    $api_key = $config->get('api_key');
 
     $url = 'https://api.openai.com/v1/chat/completions';
     $data = [
@@ -163,9 +146,14 @@ class AiModelApiService {
       'tools' => $this->convertToolsToOpenAiFormat($tools),
     ];
 
+    $headers = [
+      'Content-Type' => 'application/json',
+      'Authorization' => 'Bearer ' . $api_key,
+    ];
+
     $this->loggerFactory->get('drupalx_ai')->notice('Calling OpenAI API with model: @model', ['@model' => $openai_model]);
 
-    return $this->makeApiCallWithRetry($url, $data, $expectedFunctionName, $maxRetries, $initialRetryDelay);
+    return $this->makeApiCallWithRetry($url, $data, $headers, $expectedFunctionName, $maxRetries, $initialRetryDelay);
   }
 
   /**
@@ -213,14 +201,15 @@ class AiModelApiService {
   /**
    * Make an API call with retry functionality.
    */
-  protected function makeApiCallWithRetry($url, $data, $expectedFunctionName, $maxRetries, $initialRetryDelay) {
+  protected function makeApiCallWithRetry($url, $data, $headers, $expectedFunctionName, $maxRetries, $initialRetryDelay) {
     $retryCount = 0;
     $retryDelay = $initialRetryDelay;
 
     while ($retryCount <= $maxRetries) {
       try {
         $this->loggerFactory->get('drupalx_ai')->notice('Sending request to AI API (Attempt: @attempt)', ['@attempt' => $retryCount + 1]);
-        $response = $this->httpClient->request('POST', $url, ['json' => $data]);
+        $client = $this->httpClientFactory->fromOptions(['headers' => $headers]);
+        $response = $client->request('POST', $url, ['json' => $data]);
         $this->loggerFactory->get('drupalx_ai')->notice('Received response from AI API');
 
         $responseData = json_decode($response->getBody(), TRUE);

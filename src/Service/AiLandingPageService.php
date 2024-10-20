@@ -320,7 +320,11 @@ final class AiLandingPageService {
    */
   private function preprocessImageSearchTerm(mixed $term): string {
     if (is_array($term)) {
-      // If $term is an array, let's join its elements into a string.
+      // Flatten the array and convert all elements to strings.
+      $term = array_map(function ($item) {
+        return is_array($item) ? implode(' ', $item) : (string) $item;
+      }, $term);
+
       $term = implode(' ', $term);
     }
 
