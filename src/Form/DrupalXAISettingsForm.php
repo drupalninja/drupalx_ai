@@ -114,6 +114,7 @@ class DrupalXAISettingsForm extends ConfigFormBase {
         'placeholder' => $this->t('Placeholder (no key required)'),
         'unsplash' => $this->t('Unsplash'),
         'pexels' => $this->t('Pexels'),
+        'tavily' => $this->t('Tavily'),
       ],
       '#default_value' => $config->get('image_generator') ?: 'placeholder',
       '#description' => $this->t('Choose the image generator service to use.'),
@@ -150,6 +151,21 @@ class DrupalXAISettingsForm extends ConfigFormBase {
       ],
     ];
 
+    $form['image_generator']['tavily_api_key'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Unsplash API Key'),
+      '#default_value' => $config->get('tavily_api_key'),
+      '#description' => $this->t('Enter your Tavily API key for fetching images.'),
+      '#states' => [
+        'required' => [
+          ':input[name="service"]' => ['value' => 'tavily'],
+        ],
+        'visible' => [
+          ':input[name="service"]' => ['value' => 'tavily'],
+        ],
+      ],
+    ];
+
     return parent::buildForm($form, $form_state);
   }
 
@@ -177,6 +193,10 @@ class DrupalXAISettingsForm extends ConfigFormBase {
     if ($image_generator === 'unsplash' && empty($form_state->getValue('unsplash_api_key'))) {
       $form_state->setErrorByName('unsplash_api_key', $this->t('Unsplash API Key is required when Unsplash is selected as the image generator.'));
     }
+
+    if ($image_generator === 'tavily' && empty($form_state->getValue('tavily_api_key'))) {
+      $form_state->setErrorByName('tavily_api_key', $this->t('Tavily API Key is required when Tavily is selected as the image generator.'));
+    }
   }
 
   /**
@@ -191,6 +211,7 @@ class DrupalXAISettingsForm extends ConfigFormBase {
       ->set('image_generator', $form_state->getValue('service'))
       ->set('pexels_api_key', $form_state->getValue('pexels_api_key'))
       ->set('unsplash_api_key', $form_state->getValue('unsplash_api_key'))
+      ->set('tavily_api_key', $form_state->getValue('tavily_api_key'))
       ->save();
 
     parent::submitForm($form, $form_state);

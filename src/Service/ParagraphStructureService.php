@@ -162,7 +162,7 @@ class ParagraphStructureService {
       case 'entity_reference':
         $settings = $field_definition->getSettings();
         if (in_array($settings['target_type'], ['media', 'file'])) {
-          return "Technology";
+          return "A search term for Unsplash that will find a relevant image.";
         }
         return "Reference to {$settings['target_type']}";
 
