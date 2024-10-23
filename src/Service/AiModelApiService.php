@@ -101,7 +101,7 @@ class AiModelApiService {
     $url = 'https://api.anthropic.com/v1/messages';
     $data = [
       'model' => $claude_model,
-      'max_tokens' => 2048,
+      'max_tokens' => 4096,
       'messages' => [
         [
           'role' => 'user',
@@ -112,7 +112,7 @@ class AiModelApiService {
     ];
 
     $headers = [
-      'Content-Type' => 'application/json',
+      'content-type' => 'application/json',
       'x-api-key' => $api_key,
       'anthropic-version' => '2023-06-01',
     ];

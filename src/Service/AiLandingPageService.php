@@ -139,6 +139,7 @@ final class AiLandingPageService {
     $allowedParagraphTypes = $this->mockLandingPageService->getAllowedParagraphTypes('node', 'landing', 'field_content');
     $prompt .= "IMPORTANT: Only use the following paragraph types as top-level paragraphs:\n";
     $prompt .= implode(", ", $allowedParagraphTypes) . "\n\n";
+    $prompt .= "CRITICAL: Use a variety of paragraph types, do not overuse the same types over and over.\n\n";
     $prompt .= "CRITICAL: For fields named 'field_icon', you MUST only use validate Google Material icon names.\n\n";
     $prompt .= "CRITICAL: When generating the landing page structure, ensure that ONLY the allowed paragraph types listed above are used as top-level paragraphs. Other paragraph types can be used as nested paragraphs within these allowed types if the structure permits.\n\n";
 
@@ -149,6 +150,7 @@ final class AiLandingPageService {
     $prompt .= "For entity reference fields, use appropriate existing entity names or IDs. For viewsreference fields, use existing view names and display IDs.\n\n";
     $prompt .= "For list_string fields, make sure to choose a key from the provided options in the 'o' array.\n\n";
     $prompt .= "In field field_features_text do not include any characters for bullets, only plain text separated by new lines.\n\n";
+    $prompt .= "The text paragraph does not have a field_summary field.\n\n";
     $prompt .= "For logo collection limit max to 7 media items.\n\n";
 
     $prompt .= "Example structure:\n";
@@ -226,12 +228,30 @@ final class AiLandingPageService {
    *
    * @param array $paragraphData
    *   The generated data for a single paragraph.
+   * @param string $parentType
+   *   The type of the parent paragraph (optional).
    *
    * @return \Drupal\paragraphs\Entity\Paragraph|null
    *   The created paragraph entity, or null if creation failed.
    */
-  private function createParagraphFromGeneratedContent(array $paragraphData): ?Paragraph {
+  private function createParagraphFromGeneratedContent(array $paragraphData, string $parentType = ''): ?Paragraph {
     try {
+      // Handle the case where '{' is used instead of 'type'.
+      if (!isset($paragraphData['type']) && isset($paragraphData['{'])) {
+        $paragraphData['type'] = $paragraphData['{'];
+        unset($paragraphData['{']);
+      }
+
+      // If parent is 'pricing' and child type is missing, assume 'pricing_card'.
+      if ($parentType === 'pricing' && !isset($paragraphData['type'])) {
+        $paragraphData['type'] = 'pricing_card';
+      }
+
+      if (!isset($paragraphData['type'])) {
+        $this->loggerFactory->get('drupalx_ai')->warning('Paragraph type is missing. Skipping this paragraph.');
+        return NULL;
+      }
+
       $paragraph = Paragraph::create([
         'type' => $paragraphData['type'],
       ]);
@@ -265,20 +285,19 @@ final class AiLandingPageService {
             }
           }
         }
-        elseif (is_array($fieldValue) && isset($fieldValue[0]['type'])) {
+        elseif (is_array($fieldValue) && (isset($fieldValue[0]['type']) || isset($fieldValue[0]['{']))) {
           // This is likely a nested paragraph field.
           $nestedParagraphs = [];
           foreach ($fieldValue as $nestedParagraphData) {
-            $nestedParagraph = $this->createParagraphFromGeneratedContent($nestedParagraphData);
+            // Pass the current paragraph type as the parent type for nested paragraphs
+            $nestedParagraph = $this->createParagraphFromGeneratedContent($nestedParagraphData, $paragraphData['type']);
             if ($nestedParagraph) {
               $nestedParagraphs[] = $nestedParagraph;
             }
           }
           $paragraph->set($fieldName, $nestedParagraphs);
         }
-        // Special handling for field_icon.
         elseif ($fieldName === 'field_icon') {
-          // Look for closest match by comparing to Material Icon names.
           $iconName = $this->paragraphStructureService->getBestIconMatch($fieldValue);
           $paragraph->set($fieldName, $iconName);
         }
@@ -296,6 +315,9 @@ final class AiLandingPageService {
           $paragraph->set($fieldName, !empty($fieldValue) ? $fieldValue : 'left');
         }
         else {
+          if ($fieldDefinition && in_array($fieldDefinition->getType(), ['text', 'text_long', 'text_with_summary'])) {
+            $fieldValue = $this->convertRichTextFormat($fieldValue);
+          }
           $paragraph->set($fieldName, $fieldValue);
         }
       }
@@ -307,6 +329,32 @@ final class AiLandingPageService {
       $this->loggerFactory->get('drupalx_ai')->error('Failed to create paragraph: @message', ['@message' => $e->getMessage()]);
       return NULL;
     }
+  }
+
+  /**
+   * Converts markdown-like syntax and newlines in rich text.
+   */
+  private function convertRichTextFormat(string $text): string {
+    // Convert **text** to <strong>text</strong>.
+    $text = preg_replace('/\*\*(.*?)\*\*/', '<strong>$1</strong>', $text);
+
+    // Convert consecutive dash-prefixed lines to an unordered list.
+    $text = preg_replace_callback(
+      '/(?:^|\n)(-\s*.*(?:\n|$))+/',
+      function ($matches) {
+        $items = preg_split('/\n-\s*/', trim($matches[0]));
+        $items = array_filter(array_map('trim', $items));
+        return '<ul><li>' . implode('</li><li>', array_map(function ($item) {
+          return ltrim($item, '- ');
+        }, $items)) . '</li></ul>';
+      },
+      $text
+    );
+
+    // Convert remaining single newlines to <br> tags.
+    $text = preg_replace('/(?<!\n)\n(?!\n)/', '<br>', $text);
+
+    return $text;
   }
 
   /**
@@ -324,7 +372,6 @@ final class AiLandingPageService {
       $term = array_map(function ($item) {
         return is_array($item) ? implode(' ', $item) : (string) $item;
       }, $term);
-
       $term = implode(' ', $term);
     }
 
@@ -355,8 +402,12 @@ final class AiLandingPageService {
       elseif ($imageGenerator === 'pexels') {
         $newMedia = (int) $this->mockLandingPageService->createMediaEntityFromPexels($searchTerm);
       }
+      elseif ($imageGenerator === 'tavily') {
+        $newMedia = $this->mockLandingPageService->createMediaEntityFromTavily($searchTerm);
+      }
+
       // Default to placeholder image.
-      else {
+      if (empty($newMedia)) {
         $newMedia = (int) $this->mockLandingPageService->getMediaEntityPlaceholder($searchTerm);
       }
 
@@ -376,8 +427,7 @@ final class AiLandingPageService {
       $this->loggerFactory->get('drupalx_ai')->error('Exception while creating media entity: @message', ['@message' => $e->getMessage()]);
     }
 
-    // If creation fails or returns null, fall back to finding an existing
-    // media item.
+    // If creation fails or returns null, fall back to finding an existing media item.
     $mediaStorage = $this->entityTypeManager->getStorage('media');
     $existingMedia = $mediaStorage->loadByProperties([
       'name' => $searchTerm,

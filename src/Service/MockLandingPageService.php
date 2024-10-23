@@ -2,18 +2,18 @@
 
 namespace Drupal\drupalx_ai\Service;
 
+use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\File\FileSystemInterface;
-use Drupal\node\Entity\Node;
-use Drupal\paragraphs\Entity\Paragraph;
+use Drupal\Core\Logger\LoggerChannelFactoryInterface;
+use Drupal\Core\Url;
 use Drupal\file\Entity\File;
 use Drupal\file\FileInterface;
 use Drupal\media\Entity\Media;
-use Drupal\Core\Url;
+use Drupal\node\Entity\Node;
+use Drupal\paragraphs\Entity\Paragraph;
 use GuzzleHttp\ClientInterface;
-use Drupal\Core\Logger\LoggerChannelFactoryInterface;
-use Drupal\Core\Config\ConfigFactoryInterface;
-use Drupal\Core\Extension\ModuleHandlerInterface;
 
 /**
  * Service for creating mock landing pages with paragraphs.
@@ -94,7 +94,7 @@ class MockLandingPageService {
     LoggerChannelFactoryInterface $logger_factory,
     ParagraphStructureService $paragraph_structure_service,
     ConfigFactoryInterface $config_factory,
-    ModuleHandlerInterface $module_handler
+    ModuleHandlerInterface $module_handler,
   ) {
     $this->entityTypeManager = $entity_type_manager;
     $this->fileSystem = $file_system;
@@ -235,7 +235,7 @@ class MockLandingPageService {
             }
           }
           else {
-            // For other entity references, we're not creating actual entities
+            // For other entity references, we're not creating actual entities.
             $paragraph->set($field_name, NULL);
           }
           break;
@@ -333,7 +333,7 @@ class MockLandingPageService {
       $image_data = $image_response->getBody()->getContents();
     }
     catch (\Exception $e) {
-      $this->logger->error('Failed to download image from Unsplash: @message', ['@message' => $e->getMessage()]);
+      $this->logger->warning('Failed to download image from Unsplash: @message', ['@message' => $e->getMessage()]);
       return NULL;
     }
 
@@ -385,7 +385,7 @@ class MockLandingPageService {
     $config = $this->configFactory->get('drupalx_ai.settings');
     $api_key = $config->get('pexels_api_key');
 
-    $search_query = urlencode($alt_text);
+    $search_query = urlencode($alt_text . " image");
 
     // Randomize page number to get different results each time.
     $page = rand(1, 10);
@@ -421,7 +421,7 @@ class MockLandingPageService {
       $image_data = $image_response->getBody()->getContents();
     }
     catch (\Exception $e) {
-      $this->logger->error('Failed to download image from Pexels: @message', ['@message' => $e->getMessage()]);
+      $this->logger->warning('Failed to download image from Pexels: @message', ['@message' => $e->getMessage()]);
       return NULL;
     }
 
@@ -511,6 +511,124 @@ class MockLandingPageService {
     $media->save();
 
     return $media->id();
+  }
+
+  /**
+   * Creates a media entity using an image from Tavily API.
+   *
+   * @param string $alt_text
+   *   The alt text for the image and search term.
+   *
+   * @return int|null
+   *   The media entity ID if successful, null otherwise.
+   */
+  public function createMediaEntityFromTavily($alt_text) {
+    $config = $this->configFactory->get('drupalx_ai.settings');
+    $api_key = $config->get('tavily_api_key');
+
+    if (empty($api_key)) {
+      $this->logger->error('Tavily API key is not configured');
+      return NULL;
+    }
+
+    $search_query = urlencode($alt_text . " image");
+
+    try {
+      $response = $this->httpClient->post('https://api.tavily.com/search', [
+        'headers' => [
+          'Content-Type' => 'application/json',
+        ],
+        'body' => json_encode([
+          'api_key' => $api_key,
+          'query' => $search_query,
+          'search_depth' => 'basic',
+          'include_answer' => FALSE,
+          'include_images' => TRUE,
+          'include_raw_content' => FALSE,
+          'max_results' => 0,
+          'include_domains' => [],
+          'exclude_domains' => [],
+        ])
+      ]);
+      $data = json_decode($response->getBody(), TRUE);
+    }
+    catch (\Exception $e) {
+      $this->logger->error('Failed to fetch images from Tavily: @message', ['@message' => $e->getMessage()]);
+      return NULL;
+    }
+
+    if (empty($data['images'])) {
+      $this->logger->error('Failed to fetch images from Tavily for alt text: @alt', ['@alt' => $alt_text]);
+      return NULL;
+    }
+
+    // Try up to 2 different images.
+    $attempts = 0;
+    $max_attempts = 2;
+    $tried_indices = [];
+
+    while ($attempts < $max_attempts && count($tried_indices) < count($data['images'])) {
+      // Get available indices that haven't been tried yet.
+      $available_indices = array_diff(array_keys($data['images']), $tried_indices);
+
+      if (empty($available_indices)) {
+        break;
+      }
+
+      // Get the first available image.
+      $index = reset($available_indices);
+      $tried_indices[] = $index;
+      $image_url = $data['images'][$index];
+      $attempts++;
+
+      try {
+        // Try to download and process the image.
+        $image_response = $this->httpClient->get($image_url);
+        $image_data = $image_response->getBody()->getContents();
+
+        // Save the image as a file entity.
+        $directory = 'public://tavily';
+        $this->fileSystem->prepareDirectory($directory, FileSystemInterface::CREATE_DIRECTORY);
+
+        $file = File::create([
+          'filename' => 'tavily_' . time() . '_' . uniqid() . '.jpg',
+          'uri' => $directory . '/tavily_' . time() . '_' . uniqid() . '.jpg',
+          'status' => FileInterface::STATUS_PERMANENT,
+        ]);
+
+        $this->fileSystem->saveData($image_data, $file->getFileUri(), FileSystemInterface::EXISTS_REPLACE);
+        $file->save();
+
+        // Create a media entity.
+        $media = Media::create([
+          'bundle' => 'image',
+          'uid' => 1,
+          'field_image' => [
+            'target_id' => $file->id(),
+            'alt' => $alt_text,
+          ],
+          'name' => $alt_text,
+        ]);
+
+        $media->save();
+
+        // Success! Return the media ID.
+        return $media->id();
+      }
+      catch (\Exception $e) {
+        $this->logger->warning('Failed to process image @number from Tavily', [
+          '@number' => $attempts,
+        ]);
+        // Continue to next iteration to try another image.
+        continue;
+      }
+    }
+
+    // If we get here, all attempts failed.
+    $this->logger->error('Failed to process any images from Tavily after @attempts attempts', [
+      '@attempts' => $attempts,
+    ]);
+    return NULL;
   }
 
 }
