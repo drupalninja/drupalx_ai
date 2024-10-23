@@ -42,6 +42,7 @@ class DrupalXAISettingsForm extends ConfigFormBase {
       '#options' => [
         'anthropic' => $this->t('Anthropic'),
         'openai' => $this->t('OpenAI'),
+        'groq' => $this->t('Groq'),
       ],
       '#default_value' => $config->get('ai_provider') ?: 'anthropic',
       '#required' => TRUE,
@@ -101,7 +102,27 @@ class DrupalXAISettingsForm extends ConfigFormBase {
       '#description' => $this->t('Choose the OpenAI model to use.'),
     ];
 
-    // Image Generator settings.
+    // Groq-specific settings.
+    $form['ai_provider']['groq_settings'] = [
+      '#type' => 'fieldset',
+      '#title' => $this->t('Groq Settings'),
+      '#states' => [
+        'visible' => [
+          ':input[name="provider"]' => ['value' => 'groq'],
+        ],
+      ],
+    ];
+
+    $form['ai_provider']['groq_settings']['groq_model'] = [
+      '#type' => 'select',
+      '#title' => $this->t('Groq Model'),
+      '#options' => [
+        'llama-3.1-70b-versatile' => $this->t('LLama 3.1-70B (Versatile)'),
+      ],
+      '#default_value' => $config->get('groq_model') ?: 'mixtral-8x7b-32768',
+      '#description' => $this->t('Choose the Groq model to use.'),
+    ];
+
     $form['image_generator'] = [
       '#type' => 'fieldset',
       '#title' => $this->t('Image Generator Settings'),
@@ -153,7 +174,7 @@ class DrupalXAISettingsForm extends ConfigFormBase {
 
     $form['image_generator']['tavily_api_key'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('Unsplash API Key'),
+      '#title' => $this->t('Tavily API Key'),
       '#default_value' => $config->get('tavily_api_key'),
       '#description' => $this->t('Enter your Tavily API key for fetching images.'),
       '#states' => [
@@ -186,6 +207,10 @@ class DrupalXAISettingsForm extends ConfigFormBase {
       $form_state->setErrorByName('openai_model', $this->t('OpenAI Model is required when OpenAI is selected as the AI provider.'));
     }
 
+    if ($provider === 'groq' && empty($form_state->getValue('groq_model'))) {
+      $form_state->setErrorByName('groq_model', $this->t('Groq Model is required when Groq is selected as the AI provider.'));
+    }
+
     if ($image_generator === 'pexels' && empty($form_state->getValue('pexels_api_key'))) {
       $form_state->setErrorByName('pexels_api_key', $this->t('Pexels API Key is required when Pexels is selected as the image generator.'));
     }
@@ -208,6 +233,7 @@ class DrupalXAISettingsForm extends ConfigFormBase {
       ->set('api_key', $form_state->getValue('api_key'))
       ->set('claude_model', $form_state->getValue('claude_model'))
       ->set('openai_model', $form_state->getValue('openai_model'))
+      ->set('groq_model', $form_state->getValue('groq_model'))
       ->set('image_generator', $form_state->getValue('service'))
       ->set('pexels_api_key', $form_state->getValue('pexels_api_key'))
       ->set('unsplash_api_key', $form_state->getValue('unsplash_api_key'))
