@@ -137,8 +137,9 @@ final class AiLandingPageService {
     $prompt .= "  - 'o': (for list_string fields only) an array of allowed options\n\n";
 
     $allowedParagraphTypes = $this->mockLandingPageService->getAllowedParagraphTypes('node', 'landing', 'field_content');
-    $prompt .= "IMPORTANT: Only use the following paragraph types as top-level paragraphs:\n";
+    $prompt .= "IMPORTANT: Only use the following paragraph types as top-level array of paragraphs:\n";
     $prompt .= implode(", ", $allowedParagraphTypes) . "\n\n";
+    $prompt .= "CRITICAL: The 'bullet' paragraph is never in the top level array of paragraphs.\n\n";
     $prompt .= "CRITICAL: Use a variety of paragraph types, do not overuse the same types over and over.\n\n";
     $prompt .= "CRITICAL: For fields named 'field_icon', you MUST only use validate Google Material icon names.\n\n";
     $prompt .= "CRITICAL: When generating the landing page structure, ensure that ONLY the allowed paragraph types listed above are used as top-level paragraphs. Other paragraph types can be used as nested paragraphs within these allowed types if the structure permits.\n\n";
@@ -150,6 +151,7 @@ final class AiLandingPageService {
     $prompt .= "For entity reference fields, use appropriate existing entity names or IDs. For viewsreference fields, use existing view names and display IDs.\n\n";
     $prompt .= "For list_string fields, make sure to choose a key from the provided options in the 'o' array.\n\n";
     $prompt .= "In field field_features_text do not include any characters for bullets, only plain text separated by new lines.\n\n";
+    $prompt .= "Stat items should always have a title value.\n\n";
     $prompt .= "The text paragraph does not have a field_summary field.\n\n";
     $prompt .= "For logo collection limit max to 7 media items.\n\n";
 
