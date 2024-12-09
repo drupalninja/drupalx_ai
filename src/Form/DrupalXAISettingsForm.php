@@ -30,6 +30,19 @@ class DrupalXAISettingsForm extends ConfigFormBase {
   public function buildForm(array $form, FormStateInterface $form_state) {
     $config = $this->config('drupalx_ai.settings');
 
+    // Theme settings.
+    $form['theme'] = [
+      '#type' => 'fieldset',
+      '#title' => $this->t('Theme Settings'),
+    ];
+
+    $form['theme']['is_nextjs'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Next.js Theme?'),
+      '#description' => $this->t('Enable if this is a Next.js theme.'),
+      '#default_value' => $config->get('is_nextjs') ?: FALSE,
+    ];
+
     // AI Provider settings.
     $form['ai_provider'] = [
       '#type' => 'fieldset',
@@ -229,6 +242,7 @@ class DrupalXAISettingsForm extends ConfigFormBase {
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
     $this->config('drupalx_ai.settings')
+      ->set('is_nextjs', $form_state->getValue('is_nextjs'))
       ->set('ai_provider', $form_state->getValue('provider'))
       ->set('api_key', $form_state->getValue('api_key'))
       ->set('claude_model', $form_state->getValue('claude_model'))

@@ -50,7 +50,12 @@ final class UpdateTailwindThemeCommands extends DrushCommands {
    *   or if the AI fails to generate an updated theme.
    */
   public function updateTailwindTheme(InputInterface $input, OutputInterface $output): void {
-    $globalsPath = DRUPAL_ROOT . '/../nextjs/app/globals.css';
+    $config = $this->configFactory->get('drupalx_ai.settings');
+    $isNextjs = $config->get('is_nextjs');
+
+    $globalsPath = $isNextjs
+      ? DRUPAL_ROOT . '/../nextjs/app/globals.css'
+      : \Drupal::service('theme.manager')->getActiveTheme()->getPath() . '/src/css/globals.css';
 
     if (!$this->filesystem->exists($globalsPath)) {
       throw new \RuntimeException("globals.css file not found at {$globalsPath}");
@@ -62,7 +67,7 @@ final class UpdateTailwindThemeCommands extends DrushCommands {
       throw new \RuntimeException("Failed to read the contents of {$globalsPath}");
     }
 
-    $question = new Question('Enter your request for updating the Tailwind theme (e.g., "Make the color scheme more vibrant and increase contrast"):');
+    $question = new Question('Enter your request for updating the Tailwind theme (e.g., "Make the color scheme more vibrant and increase contrast")');
     $question->setValidator(function ($answer) {
       if (empty($answer)) {
         throw new \RuntimeException('The prompt cannot be empty.');
