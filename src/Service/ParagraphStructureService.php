@@ -228,7 +228,7 @@ class ParagraphStructureService {
   public function getBestIconMatch($search_term) {
     // Check if the file exists.
     $module_path = \Drupal::service('extension.list.module')->getPath('drupalx_ai');
-    $filename = DRUPAL_ROOT . '/' . $module_path . '/files/material-icon-names.txt';
+    $filename = DRUPAL_ROOT . '/' . $module_path . '/files/lucide-icon-names.txt';
 
     if (!file_exists($filename)) {
       return 'star';
