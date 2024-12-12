@@ -198,7 +198,7 @@ class ParagraphImporterService {
     $field_variables = [];
     foreach ($paragraph_data->fields as $field) {
       $field_name = 'field_' . $field['name'];
-      $field_variables[] = "        {$field['name']}: content.{$field_name}|render";
+      $field_variables[] = "        {$field['name']}: content.{$field_name}|render|trim";
     }
     $field_vars = implode(",\n", $field_variables);
 
@@ -218,7 +218,7 @@ class ParagraphImporterService {
  */
 #}
 {%
-  set classes = []
+  set classes = ['container']
 %}
 
 <div{{ attributes.addClass(classes) }}>
@@ -318,10 +318,81 @@ TWIG;
     if ($field_type === 'list_string') {
       $widget_type = 'options_select';
     }
+    elseif ($field_type === 'image') {
+      $widget_type = 'image_image';
+    }
+    elseif ($field_type === 'link') {
+      $widget_type = 'link_default';
+    }
+    elseif ($field_type === 'text_long' || $field_type === 'text_with_summary') {
+      $widget_type = 'text_textarea';
+    }
 
     $form_display->setComponent($field_name, [
       'type' => $widget_type,
       'weight' => 0,
+    ])->save();
+
+    // Update the view display
+    $view_display = $this->entityTypeManager
+      ->getStorage('entity_view_display')
+      ->load('paragraph.' . $paragraph_type_id . '.default');
+
+    if (!$view_display) {
+      $view_display = $this->entityTypeManager
+        ->getStorage('entity_view_display')
+        ->create([
+          'targetEntityType' => 'paragraph',
+          'bundle' => $paragraph_type_id,
+          'mode' => 'default',
+          'status' => TRUE,
+        ]);
+    }
+
+    // Set appropriate formatter type based on field type
+    $formatter_type = 'string';
+    $formatter_settings = [];
+
+    switch ($field_type) {
+      case 'list_string':
+        $formatter_type = 'list_default';
+        break;
+
+      case 'image':
+        $formatter_type = 'image';
+        $formatter_settings = [
+          'image_style' => 'large',
+          'image_link' => '',
+        ];
+        break;
+
+      case 'link':
+        $formatter_type = 'link';
+        break;
+
+      case 'text_long':
+      case 'text_with_summary':
+        $formatter_type = 'text_default';
+        break;
+
+      case 'boolean':
+        $formatter_type = 'boolean';
+        break;
+
+      case 'datetime':
+        $formatter_type = 'datetime_default';
+        break;
+
+      case 'entity_reference':
+        $formatter_type = 'entity_reference_label';
+        break;
+    }
+
+    $view_display->setComponent($field_name, [
+      'type' => $formatter_type,
+      'weight' => 0,
+      'settings' => $formatter_settings,
+      'label' => 'hidden',
     ])->save();
   }
 
