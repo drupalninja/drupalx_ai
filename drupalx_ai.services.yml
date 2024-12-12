@@ -7,7 +7,7 @@ services:
       - '@entity_type.manager'
       - '@logger.factory'
       - '@file_system'
-      - '@graphql_compose_fragments.manager'
+      - '@?graphql_compose_fragments.manager'
 
   drupalx_ai.ai_model_api:
     class: \Drupal\drupalx_ai\Service\AiModelApiService
@@ -15,7 +15,9 @@ services:
 
   drupalx_ai.component_reader:
     class: \Drupal\drupalx_ai\Service\ComponentReaderService
-    arguments: ['@logger.factory']
+    arguments:
+      - '@config.factory'
+      - '@logger.factory'
 
   drupalx_ai.storybook_generator:
     class: \Drupal\drupalx_ai\Service\StorybookGeneratorService

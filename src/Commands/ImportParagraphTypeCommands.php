@@ -90,7 +90,7 @@ class ImportParagraphTypeCommands extends DrushCommands {
   }
 
   /**
-   * Import a new paragraph type based on a Next.js component using AI.
+   * Import a new paragraph type based on a theme component using AI.
    *
    * @command drupalx-ai:import-from-component
    * @aliases dai-ifc
@@ -135,10 +135,10 @@ class ImportParagraphTypeCommands extends DrushCommands {
   }
 
   /**
-   * Generate paragraph type details using Claude 3 Haiku.
+   * Generate paragraph type details using AI model.
    */
   protected function generateParagraphTypeDetails($componentName, $componentContent) {
-    $prompt = "Based on this Next.js component named '{$componentName}', suggest a Drupal paragraph type
+    $prompt = "Based on this component named '{$componentName}', suggest a Drupal paragraph type
       structure using the suggest_paragraph_type function:\n\n{$componentContent}.
       The name of the paragraph should not include the word 'paragraph'.
       For fields, only lowercase alphanumeric characters and underscores are allowed,
@@ -149,7 +149,7 @@ class ImportParagraphTypeCommands extends DrushCommands {
     $tools = [
       [
         'name' => 'suggest_paragraph_type',
-        'description' => "Suggests a Drupal paragraph type structure based on a Next.js component",
+        'description' => "Suggests a Drupal paragraph type structure based on a theme component",
         'input_schema' => [
           'type' => 'object',
           'properties' => [
@@ -193,6 +193,13 @@ class ImportParagraphTypeCommands extends DrushCommands {
                   'sample_value' => [
                     'type' => 'string',
                     'description' => 'Sample value for the field',
+                  ],
+                  'options' => [
+                    'type' => 'array',
+                    'items' => [
+                      'type' => 'string',
+                    ],
+                    'description' => 'Array of string options for the field (list text only)',
                   ],
                 ],
                 'required' => ['name', 'label', 'type', 'sample_value'],
