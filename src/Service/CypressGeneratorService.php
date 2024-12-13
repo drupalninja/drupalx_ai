@@ -44,7 +44,7 @@ class CypressGeneratorService {
     // Extract category from story content.
     $category = $this->extractCategoryFromStory($storyContent);
 
-    $prompt = "Based on this Next.js component named '{$componentName}' and its associated Storybook story, generate a Cypress test:
+    $prompt = "Based on this component named '{$componentName}' and its associated Storybook story, generate a Cypress test:
 
     Component Content:
     {$componentContent}
@@ -89,7 +89,7 @@ class CypressGeneratorService {
     $tools = [
       [
         'name' => 'generate_cypress_test',
-        'description' => "Generates a Cypress test for a Next.js component",
+        'description' => "Generates a Cypress test for a component",
         'input_schema' => [
           'type' => 'object',
           'properties' => [

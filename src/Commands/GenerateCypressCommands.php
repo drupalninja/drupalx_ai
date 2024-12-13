@@ -96,7 +96,7 @@ class GenerateCypressCommands extends DrushCommands {
   }
 
   /**
-   * Generate a Cypress test for a Next.js component.
+   * Generate a Cypress test for a component.
    *
    * @command drupalx-ai:generate-cypress
    * @aliases dai-gc
@@ -108,6 +108,10 @@ class GenerateCypressCommands extends DrushCommands {
       $output->writeln("<error>AI API key is not set. Please configure it in the DrupalX AI Settings before running this command.</error>");
       return;
     }
+
+    // Get configuration
+    $config = $this->configFactory->get('drupalx_ai.settings');
+    $is_nextjs = $config->get('is_nextjs');
 
     // Use the ComponentReaderService to get the component and story files.
     $componentFolderName = $this->componentReader->askComponentFolder($this->io());
@@ -126,9 +130,15 @@ class GenerateCypressCommands extends DrushCommands {
       return;
     }
 
-    // Write the Cypress test to a file in the same folder as the component.
+    // Set the path based on configuration
     $cypressFileName = $componentName . '.cy.js';
-    $cypressFilePath = "../nextjs/components/{$componentFolderName}/{$cypressFileName}";
+    if ($is_nextjs) {
+      $cypressFilePath = "../nextjs/components/{$componentFolderName}/{$cypressFileName}";
+    }
+    else {
+      $activeThemePath = \Drupal::service('theme.manager')->getActiveTheme()->getPath();
+      $cypressFilePath = "{$activeThemePath}/components/{$componentFolderName}/{$cypressFileName}";
+    }
 
     if (file_put_contents($cypressFilePath, $cypressContent) === FALSE) {
       $output->writeln("<error>Failed to write Cypress test to file: {$cypressFilePath}</error>");

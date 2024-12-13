@@ -110,23 +110,31 @@ class ComponentReaderService {
       return [FALSE, FALSE, FALSE];
     }
 
-    // Set file extensions based on theme type.
-    $component_ext = $is_nextjs ? 'tsx' : 'js';
-    $story_ext = $is_nextjs ? 'tsx' : 'js';
-
-    // Get list of component files.
-    $component_files = array_filter(
-      scandir($component_path),
-      function ($file) use ($component_ext) {
-        return pathinfo($file, PATHINFO_EXTENSION) === $component_ext
-          && preg_match('/\.stories\.' . $component_ext . '$/', $file);
-      }
-    );
+    // Get list of component files based on theme type.
+    if ($is_nextjs) {
+      // For Next.js, look for .tsx files that aren't stories
+      $component_files = array_filter(
+        scandir($component_path),
+        function ($file) {
+          return pathinfo($file, PATHINFO_EXTENSION) === 'tsx'
+            && !str_contains($file, '.stories.tsx');
+        }
+      );
+    }
+    else {
+      // For Drupal, look for .twig files
+      $component_files = array_filter(
+        scandir($component_path),
+        function ($file) {
+          return pathinfo($file, PATHINFO_EXTENSION) === 'twig';
+        }
+      );
+    }
 
     // Check if any suitable files were found.
     if (empty($component_files)) {
-      $logger->warning('No suitable .@ext files found in the @folder component directory.', [
-        '@ext' => $component_ext,
+      $logger->warning('No suitable @type files found in the @folder component directory.', [
+        '@type' => $is_nextjs ? 'TSX' : 'Twig',
         '@folder' => $component_folder_name,
       ]);
       return [FALSE, FALSE, FALSE];
@@ -138,10 +146,17 @@ class ComponentReaderService {
       array_combine($component_files, $component_files)
     );
 
-    // Build file paths.
+    // Get component name and build file paths.
     $component_name = pathinfo($selected_file, PATHINFO_FILENAME);
     $component_file_path = "{$component_path}/{$selected_file}";
-    $story_file_path = "{$component_path}/{$component_name}.{$component_ext}";
+
+    // Set story file path based on theme type.
+    if ($is_nextjs) {
+      $story_file_path = "{$component_path}/{$component_name}.stories.tsx";
+    }
+    else {
+      $story_file_path = "{$component_path}/{$component_name}.stories.js";
+    }
 
     // Verify component file is readable.
     if (!is_readable($component_file_path)) {
