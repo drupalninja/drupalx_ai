@@ -105,15 +105,15 @@ class ImportParagraphTypeCommands extends DrushCommands {
 
     // Use the ComponentReaderService for these operations.
     $componentFolderName = $this->componentReader->askComponentFolder($this->io());
-    [$componentName, $componentContent] = $this->componentReader->readComponentFiles($componentFolderName, $this->io());
+    [$componentName, $componentContent, $storyContent] = $this->componentReader->readComponentFiles($componentFolderName, $this->io());
 
     if (!$componentContent) {
       $output->writeln("<error>Could not read component file. Please check the file exists and is readable.</error>");
       return;
     }
 
-    // Generate paragraph type details using Claude 3 Haiku.
-    $paragraphTypeDetails = $this->generateParagraphTypeDetails($componentName, $componentContent);
+    // Generate paragraph type details using AI model.
+    $paragraphTypeDetails = $this->generateParagraphTypeDetails($componentName, $componentContent, $storyContent);
 
     if (!$paragraphTypeDetails) {
       $output->writeln("<error>Failed to generate paragraph type details from the component.</error>");
@@ -132,15 +132,26 @@ class ImportParagraphTypeCommands extends DrushCommands {
     // Import the paragraph type using the ParagraphImporterService.
     $result = $this->paragraphImporter->importParagraphType((object) $paragraphTypeDetails);
     $output->writeln($result);
+
+    // For twig templates we need to clear caches.
+    $config = $this->configFactory->get('drupalx_ai.settings');
+    $is_nextjs = $config->get('is_nextjs');
+
+    if (!$is_nextjs) {
+      drupal_flush_all_caches();
+      $output->writeln("<info>All caches have been flushed.</info>");
+    }
   }
 
   /**
    * Generate paragraph type details using AI model.
    */
-  protected function generateParagraphTypeDetails($componentName, $componentContent) {
+  protected function generateParagraphTypeDetails($componentName, $componentContent, $storyContent) {
     $prompt = "Based on this component named '{$componentName}', suggest a Drupal paragraph type
       structure using the suggest_paragraph_type function:\n\n{$componentContent}.
+      Also use content from this component's story {$storyContent} to imform the paragraph type.
       The name of the paragraph should not include the word 'paragraph'.
+      Make sure the name of the paragraph is the exact same as the name of the component.
       For fields, only lowercase alphanumeric characters and underscores are allowed,
       and only lowercase letters and underscore are allowed as the first character.
       Do not add '_component' to the name of the component.
