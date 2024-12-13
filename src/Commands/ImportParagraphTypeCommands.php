@@ -143,6 +143,7 @@ class ImportParagraphTypeCommands extends DrushCommands {
       The name of the paragraph should not include the word 'paragraph'.
       For fields, only lowercase alphanumeric characters and underscores are allowed,
       and only lowercase letters and underscore are allowed as the first character.
+      Do not add '_component' to the name of the component.
       Do not use the field type 'list_text' - the correct type is 'list_string'.
       Use only Drupal 10 valid field types. For images use the 'image' field type.";
 

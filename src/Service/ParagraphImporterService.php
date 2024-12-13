@@ -355,7 +355,7 @@ TWIG;
 
     switch ($field_type) {
       case 'list_string':
-        $formatter_type = 'list_default';
+        $formatter_type = 'list_key';
         break;
 
       case 'image':
