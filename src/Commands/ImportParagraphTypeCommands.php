@@ -133,14 +133,8 @@ class ImportParagraphTypeCommands extends DrushCommands {
     $result = $this->paragraphImporter->importParagraphType((object) $paragraphTypeDetails);
     $output->writeln($result);
 
-    // For twig templates we need to clear caches.
-    $config = $this->configFactory->get('drupalx_ai.settings');
-    $is_nextjs = $config->get('is_nextjs');
-
-    if (!$is_nextjs) {
-      drupal_flush_all_caches();
-      $output->writeln("<info>All caches have been flushed.</info>");
-    }
+    drupal_flush_all_caches();
+    $output->writeln("<info>All caches have been flushed.</info>");
   }
 
   /**
