@@ -33,12 +33,6 @@ services:
     tags:
       - { name: drush.command }
 
-  drupalx_ai.create_mock_landing_commands:
-    class: \Drupal\drupalx_ai\Commands\CreateMockLandingCommands
-    arguments: ['@drupalx_ai.mock_landing_page']
-    tags:
-      - { name: drush.command }
-
   drupalx_ai.ai_landing_page_commands:
     class: \Drupal\drupalx_ai\Commands\AiLandingPageCommands
     arguments: ['@drupalx_ai.ai_landing_page_service']
