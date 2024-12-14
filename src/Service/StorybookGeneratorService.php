@@ -2,6 +2,7 @@
 
 namespace Drupal\drupalx_ai\Service;
 
+use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 
 /**
@@ -23,48 +24,138 @@ class StorybookGeneratorService {
   protected $aiModelApiService;
 
   /**
-   * Constructor for StorybookGeneratorService.
+   * The config factory.
    *
-   * @param \Drupal\Core\Logger\LoggerChannelFactoryInterface $logger_factory
-   *   The logger factory.
-   * @param \Drupal\drupalx_ai\Service\AiModelApiService $ai_model_api_service
-   *   The AI Model API service.
+   * @var \Drupal\Core\Config\ConfigFactoryInterface
    */
-  public function __construct(LoggerChannelFactoryInterface $logger_factory, AiModelApiService $ai_model_api_service) {
+  protected $configFactory;
+
+  /**
+   * Constructor for StorybookGeneratorService.
+   */
+  public function __construct(
+    LoggerChannelFactoryInterface $logger_factory,
+    AiModelApiService $ai_model_api_service,
+    ConfigFactoryInterface $config_factory
+  ) {
     $this->loggerFactory = $logger_factory;
     $this->aiModelApiService = $ai_model_api_service;
+    $this->configFactory = $config_factory;
   }
 
   /**
    * Generate a Storybook story for a given component.
-   *
-   * @param string $componentName
-   *   The name of the component.
-   * @param string $componentContent
-   *   The content of the component file.
-   * @param string $category
-   *   The category of the component.
-   *
-   * @return string|null
-   *   The generated Storybook story content, or null if generation failed.
    */
   public function generateStorybookStory($componentName, $componentContent, $category) {
-    $prompt = "Based on this Next.js component named '{$componentName}' in the '{$category}' category, use
-    the generate_storybook_story function to generate a Storybook story in TypeScript:
+    $config = $this->configFactory->get('drupalx_ai.settings');
+    $is_nextjs = $config->get('is_nextjs');
+
+    // Determine if the component is a Twig template
+    $isTwig = !$is_nextjs || str_contains($componentContent, '.twig');
+
+    // Capitalize the component name for the story title
+    $capitalizedName = ucfirst($componentName);
+
+    if ($isTwig) {
+      return $this->generateTwigStory($componentName, $capitalizedName, $componentContent, $category);
+    }
+    else {
+      return $this->generateNextJsStory($componentName, $capitalizedName, $componentContent, $category);
+    }
+  }
+
+  /**
+   * Generate a Storybook story for a Twig component.
+   */
+  protected function generateTwigStory($componentName, $capitalizedName, $componentContent, $category) {
+    $prompt = "Based on this Twig component named '{$capitalizedName}' in the '{$category}' category, generate
+    a Storybook story that uses the Drupal HTML format. The component content is:
 
     {$componentContent}
 
-    Please create a Storybook story that demonstrates the component's usage, including different prop variations if applicable. Use the following example as a template for the structure and format of the story:
+    Please create a Storybook story that demonstrates the component's usage with proper Twig template integration.
+    The story should:
+    1. Import the Twig template with the original (non-capitalized) component name
+    2. Define meaningful argTypes for all component variables
+    3. Include a renderComponent function that passes args to the template
+    4. Create multiple component variants as named exports
+    5. Follow this structure, making sure the title uses the capitalized name:
+
+    ```javascript
+    import template from './{$componentName}.twig';
+
+    export default {
+      title: '{$category}/{$capitalizedName}',
+      argTypes: {
+        // Define controls for Twig variables
+      },
+    };
+
+    const renderComponent = (args) => {
+      return template({
+        // Pass args to template
+      });
+    };
+
+    export const Default = {
+      render: renderComponent,
+      args: {
+        // Default properties
+      },
+    };
+    ```
+
+    Include multiple variants based on the component's parameters and possible states.";
+
+    $tools = [
+      [
+        'name' => 'generate_storybook_story',
+        'description' => "Generates a Storybook story for a Twig component",
+        'input_schema' => [
+          'type' => 'object',
+          'properties' => [
+            'story_content' => [
+              'type' => 'string',
+              'description' => 'The content of the Storybook story',
+            ],
+          ],
+          'required' => ['story_content'],
+        ],
+      ],
+    ];
+
+    $result = $this->aiModelApiService->callAiApi($prompt, $tools, 'generate_storybook_story');
+
+    if (isset($result['story_content'])) {
+      return $result['story_content'];
+    }
+
+    $this->loggerFactory->get('drupalx_ai')->error('Failed to generate Twig Storybook story for component: @component', [
+      '@component' => $capitalizedName,
+    ]);
+    return NULL;
+  }
+
+  /**
+   * Generate a Storybook story for a Next.js component.
+   */
+  protected function generateNextJsStory($componentName, $capitalizedName, $componentContent, $category) {
+    $prompt = "Based on this Next.js component named '{$capitalizedName}' in the '{$category}' category, generate
+    a Storybook story in TypeScript. The component content is:
+
+    {$componentContent}
+
+    Please create a Storybook story that follows the Next.js/React TypeScript format, making sure to use the capitalized name in the title:
 
     ```typescript
     import type { Meta, StoryObj } from '@storybook/react';
     import {$componentName} from './{$componentName}';
 
     const meta: Meta<typeof {$componentName}> = {
-      title: '{$category}/{$componentName}',
+      title: '{$category}/{$capitalizedName}',
       component: {$componentName},
       argTypes: {
-        // Define argTypes based on the component's props
+        // Define TypeScript-aware argTypes
       },
     };
 
@@ -73,11 +164,10 @@ class StorybookGeneratorService {
 
     export const Default: Story = {
       args: {
-        // Define default args
+        // Define TypeScript-compatible args
       },
     };
-    ```
-    Import the default component object from the component file. Ensure that the story reflects the '{$category}' category in its structure and content where appropriate.";
+    ```";
 
     $tools = [
       [
@@ -102,9 +192,8 @@ class StorybookGeneratorService {
       return $result['story_content'];
     }
 
-    $this->loggerFactory->get('drupalx_ai')->error('Failed to generate Storybook story for component: @component in category: @category', [
-      '@component' => $componentName,
-      '@category' => $category,
+    $this->loggerFactory->get('drupalx_ai')->error('Failed to generate Next.js Storybook story for component: @component', [
+      '@component' => $capitalizedName,
     ]);
     return NULL;
   }
