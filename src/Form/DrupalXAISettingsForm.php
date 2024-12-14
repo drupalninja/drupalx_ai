@@ -56,6 +56,7 @@ class DrupalXAISettingsForm extends ConfigFormBase {
         'anthropic' => $this->t('Anthropic'),
         'openai' => $this->t('OpenAI'),
         'groq' => $this->t('Groq'),
+        'fireworks' => $this->t('Fireworks'),
       ],
       '#default_value' => $config->get('ai_provider') ?: 'anthropic',
       '#required' => TRUE,
@@ -134,6 +135,27 @@ class DrupalXAISettingsForm extends ConfigFormBase {
       ],
       '#default_value' => $config->get('groq_model') ?: 'mixtral-8x7b-32768',
       '#description' => $this->t('Choose the Groq model to use.'),
+    ];
+
+    // Fireworks-specific settings.
+    $form['ai_provider']['fireworks_settings'] = [
+      '#type' => 'fieldset',
+      '#title' => $this->t('Fireworks Settings'),
+      '#states' => [
+        'visible' => [
+          ':input[name="provider"]' => ['value' => 'fireworks'],
+        ],
+      ],
+    ];
+
+    $form['ai_provider']['fireworks_settings']['fireworks_model'] = [
+      '#type' => 'select',
+      '#title' => $this->t('Fireworks Model'),
+      '#options' => [
+        'accounts/fireworks/models/firefunction-v2' => $this->t('Firefunction v2'),
+      ],
+      '#default_value' => $config->get('fireworks_model') ?: 'accounts/fireworks/models/firefunction-v2',
+      '#description' => $this->t('Choose the Fireworks model to use.'),
     ];
 
     $form['image_generator'] = [
@@ -224,6 +246,10 @@ class DrupalXAISettingsForm extends ConfigFormBase {
       $form_state->setErrorByName('groq_model', $this->t('Groq Model is required when Groq is selected as the AI provider.'));
     }
 
+    if ($provider === 'fireworks' && empty($form_state->getValue('fireworks_model'))) {
+      $form_state->setErrorByName('fireworks_model', $this->t('Fireworks Model is required when Fireworks is selected as the AI provider.'));
+    }
+
     if ($image_generator === 'pexels' && empty($form_state->getValue('pexels_api_key'))) {
       $form_state->setErrorByName('pexels_api_key', $this->t('Pexels API Key is required when Pexels is selected as the image generator.'));
     }
@@ -248,6 +274,7 @@ class DrupalXAISettingsForm extends ConfigFormBase {
       ->set('claude_model', $form_state->getValue('claude_model'))
       ->set('openai_model', $form_state->getValue('openai_model'))
       ->set('groq_model', $form_state->getValue('groq_model'))
+      ->set('fireworks_model', $form_state->getValue('fireworks_model'))
       ->set('image_generator', $form_state->getValue('service'))
       ->set('pexels_api_key', $form_state->getValue('pexels_api_key'))
       ->set('unsplash_api_key', $form_state->getValue('unsplash_api_key'))

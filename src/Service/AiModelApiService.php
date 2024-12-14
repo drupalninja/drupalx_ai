@@ -8,7 +8,7 @@ use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use GuzzleHttp\Exception\RequestException;
 
 /**
- * Service for making calls to various AI APIs (Anthropic, OpenAI).
+ * Service for making calls to various AI APIs (Anthropic, OpenAI, Groq, Fireworks).
  */
 class AiModelApiService {
 
@@ -88,6 +88,9 @@ class AiModelApiService {
       case 'groq':
         return $this->callGroqApi($prompt, $tools, $expectedFunctionName, $maxRetries, $initialRetryDelay);
 
+      case 'fireworks':
+        return $this->callFireworksApi($prompt, $tools, $expectedFunctionName, $maxRetries, $initialRetryDelay);
+
       default:
         $this->loggerFactory->get('drupalx_ai')->error('Invalid AI provider selected. Defaulting to Anthropic.');
         return $this->callAnthropicApi($prompt, $tools, $expectedFunctionName, $maxRetries, $initialRetryDelay);
@@ -138,6 +141,61 @@ class AiModelApiService {
     ];
 
     $this->loggerFactory->get('drupalx_ai')->notice('Calling Groq API with model: @model', ['@model' => $groq_model]);
+
+    return $this->makeApiCallWithRetry($url, $data, $headers, $expectedFunctionName, $maxRetries, $initialRetryDelay);
+  }
+
+  /**
+   * Makes an API call to Fireworks' completion endpoint with retry functionality.
+   *
+   * @param string $prompt
+   *   The user prompt/question to send to the Fireworks API.
+   * @param array $tools
+   *   Array of tools/functions that the model can use to respond.
+   * @param string $expectedFunctionName
+   *   The name of the function that is expected to be called by the model.
+   * @param int $maxRetries
+   *   Maximum number of retry attempts for failed API calls.
+   * @param int $initialRetryDelay
+   *   Initial delay in seconds between retry attempts. May increase with backoff.
+   *
+   * @return array
+   *   The decoded JSON response from the Fireworks API.
+   */
+  protected function callFireworksApi($prompt, array $tools, $expectedFunctionName, $maxRetries, $initialRetryDelay) {
+    $config = $this->configFactory->get('drupalx_ai.settings');
+    $fireworks_model = $config->get('fireworks_model') ?: 'accounts/fireworks/models/firefunction-v2';
+    $api_key = $config->get('api_key');
+
+    $url = 'https://api.fireworks.ai/inference/v1/chat/completions';
+    $data = [
+      'model' => $fireworks_model,
+      'max_tokens' => 4000,
+      'top_p' => 1,
+      'top_k' => 40,
+      'presence_penalty' => 0,
+      'frequency_penalty' => 0,
+      'temperature' => 0.6,
+      'messages' => [
+        [
+          'role' => 'system',
+          'content' => 'You are a helpful assistant. Use the supplied tools to assist the user.',
+        ],
+        [
+          'role' => 'user',
+          'content' => $prompt,
+        ],
+      ],
+      'tools' => $this->convertToolsToOpenAiFormat($tools),
+    ];
+
+    $headers = [
+      'Accept' => 'application/json',
+      'Content-Type' => 'application/json',
+      'Authorization' => 'Bearer ' . $api_key,
+    ];
+
+    $this->loggerFactory->get('drupalx_ai')->notice('Calling Fireworks API with model: @model', ['@model' => $fireworks_model]);
 
     return $this->makeApiCallWithRetry($url, $data, $headers, $expectedFunctionName, $maxRetries, $initialRetryDelay);
   }
@@ -371,6 +429,7 @@ class AiModelApiService {
 
       case 'openai':
       case 'groq':
+      case 'fireworks':
         return $this->parseOpenAiResponse($responseData, $expectedFunctionName);
 
       default:
@@ -477,7 +536,7 @@ class AiModelApiService {
         return TRUE;
       }
     }
-    elseif (($api_provider === 'openai' || $api_provider === 'groq') && isset($errorData['error']['type']) && $errorData['error']['type'] === 'rate_limit_exceeded') {
+    elseif (in_array($api_provider, ['openai', 'groq', 'fireworks']) && isset($errorData['error']['type']) && $errorData['error']['type'] === 'rate_limit_exceeded') {
       $this->loggerFactory->get('drupalx_ai')->warning(
         '@provider API rate limit exceeded. Retrying in @seconds seconds...',
         ['@provider' => ucfirst($api_provider), '@seconds' => $retryDelay]
