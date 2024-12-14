@@ -141,7 +141,7 @@ final class AiLandingPageService {
     $prompt .= implode(", ", $allowedParagraphTypes) . "\n\n";
     $prompt .= "CRITICAL: The 'bullet' paragraph is never in the top level array of paragraphs.\n\n";
     $prompt .= "CRITICAL: Use a variety of paragraph types, do not overuse the same types over and over.\n\n";
-    $prompt .= "CRITICAL: For fields named 'field_icon', you MUST only use validate Google Material icon names.\n\n";
+    $prompt .= "CRITICAL: For fields named 'field_icon', you MUST only use valid Lucide icon names (e.g. -arrow-right').\n\n";
     $prompt .= "CRITICAL: When generating the landing page structure, ensure that ONLY the allowed paragraph types listed above are used as top-level paragraphs. Other paragraph types can be used as nested paragraphs within these allowed types if the structure permits.\n\n";
 
     $prompt .= "Please generate a landing page structure using these paragraph types. Fill in realistic content for each field. Use a variety of paragraph types to create an engaging and diverse landing page, while adhering to the allowed top-level paragraph types. When you're done, call the generate_ai_landing_page function with the generated structure.\n\n";

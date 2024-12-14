@@ -90,10 +90,10 @@ class ImportParagraphTypeCommands extends DrushCommands {
   }
 
   /**
-   * Import a new paragraph type based on a Next.js component using AI.
+   * Import a new paragraph type based on a theme component using AI.
    *
    * @command drupalx-ai:import-from-component
-   * @aliases dai-ifc
+   * @aliases dxcomp
    * @usage drush drupalx-ai:import-from-component
    */
   public function importParagraphTypeFromComponent(OutputInterface $output) {
@@ -105,15 +105,15 @@ class ImportParagraphTypeCommands extends DrushCommands {
 
     // Use the ComponentReaderService for these operations.
     $componentFolderName = $this->componentReader->askComponentFolder($this->io());
-    [$componentName, $componentContent] = $this->componentReader->readComponentFiles($componentFolderName, $this->io());
+    [$componentName, $componentContent, $storyContent] = $this->componentReader->readComponentFiles($componentFolderName, $this->io());
 
     if (!$componentContent) {
       $output->writeln("<error>Could not read component file. Please check the file exists and is readable.</error>");
       return;
     }
 
-    // Generate paragraph type details using Claude 3 Haiku.
-    $paragraphTypeDetails = $this->generateParagraphTypeDetails($componentName, $componentContent);
+    // Generate paragraph type details using AI model.
+    $paragraphTypeDetails = $this->generateParagraphTypeDetails($componentName, $componentContent, $storyContent);
 
     if (!$paragraphTypeDetails) {
       $output->writeln("<error>Failed to generate paragraph type details from the component.</error>");
@@ -132,24 +132,30 @@ class ImportParagraphTypeCommands extends DrushCommands {
     // Import the paragraph type using the ParagraphImporterService.
     $result = $this->paragraphImporter->importParagraphType((object) $paragraphTypeDetails);
     $output->writeln($result);
+
+    drupal_flush_all_caches();
+    $output->writeln("<info>All caches have been flushed.</info>");
   }
 
   /**
-   * Generate paragraph type details using Claude 3 Haiku.
+   * Generate paragraph type details using AI model.
    */
-  protected function generateParagraphTypeDetails($componentName, $componentContent) {
-    $prompt = "Based on this Next.js component named '{$componentName}', suggest a Drupal paragraph type
+  protected function generateParagraphTypeDetails($componentName, $componentContent, $storyContent) {
+    $prompt = "Based on this component named '{$componentName}', suggest a Drupal paragraph type
       structure using the suggest_paragraph_type function:\n\n{$componentContent}.
+      Also use content from this component's story {$storyContent} to imform the paragraph type.
       The name of the paragraph should not include the word 'paragraph'.
+      Make sure the name of the paragraph is the exact same as the name of the component.
       For fields, only lowercase alphanumeric characters and underscores are allowed,
       and only lowercase letters and underscore are allowed as the first character.
+      Do not add '_component' to the name of the component.
       Do not use the field type 'list_text' - the correct type is 'list_string'.
       Use only Drupal 10 valid field types. For images use the 'image' field type.";
 
     $tools = [
       [
         'name' => 'suggest_paragraph_type',
-        'description' => "Suggests a Drupal paragraph type structure based on a Next.js component",
+        'description' => "Suggests a Drupal paragraph type structure based on a theme component",
         'input_schema' => [
           'type' => 'object',
           'properties' => [
@@ -193,6 +199,13 @@ class ImportParagraphTypeCommands extends DrushCommands {
                   'sample_value' => [
                     'type' => 'string',
                     'description' => 'Sample value for the field',
+                  ],
+                  'options' => [
+                    'type' => 'array',
+                    'items' => [
+                      'type' => 'string',
+                    ],
+                    'description' => 'Array of string options for the field (list text only)',
                   ],
                 ],
                 'required' => ['name', 'label', 'type', 'sample_value'],

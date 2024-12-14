@@ -5,7 +5,7 @@ namespace Drupal\drupalx_ai\Service;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 
 /**
- * Service for generating Cypress tests using only class-based selectors and .exist() assertions.
+ * Service for generating Cypress tests.
  */
 class CypressGeneratorService {
 
@@ -32,19 +32,52 @@ class CypressGeneratorService {
   }
 
   /**
+   * Extract classes from the component content.
+   */
+  private function extractClasses($componentContent) {
+    // Match both className="..." and class="..." patterns.
+    $patterns = [
+      '/className="([^"]+)"/',
+      '/class="([^"]+)"/',
+    ];
+
+    $allClasses = [];
+    foreach ($patterns as $pattern) {
+      preg_match_all($pattern, $componentContent, $matches);
+      if (!empty($matches[1])) {
+        foreach ($matches[1] as $classString) {
+          // Split space-separated classes and add to array.
+          $classes = preg_split('/\s+/', trim($classString));
+          $allClasses = array_merge($allClasses, $classes);
+        }
+      }
+    }
+
+    // Filter out empty values and duplicates.
+    return array_unique(array_filter($allClasses));
+  }
+
+  /**
    * Generate a Cypress test for a given component.
    */
   public function generateCypressTest($componentFolderName, $componentName, $componentContent, $storyContent) {
     $existingClasses = $this->extractClasses($componentContent);
 
+    // Validate that we actually found some classes.
+    if (empty($existingClasses)) {
+      $this->loggerFactory->get('drupalx_ai')->warning('No classes found in component: @component', [
+        '@component' => $componentName,
+      ]);
+      return NULL;
+    }
+
     $classesString = implode(', ', array_map(function ($class) {
       return '.' . $class;
     }, $existingClasses));
 
-    // Extract category from story content.
     $category = $this->extractCategoryFromStory($storyContent);
 
-    $prompt = "Based on this Next.js component named '{$componentName}' and its associated Storybook story, generate a Cypress test:
+    $prompt = "Based on this component named '{$componentName}' and its associated Storybook story, generate a Cypress test:
 
     Component Content:
     {$componentContent}
@@ -57,12 +90,15 @@ class CypressGeneratorService {
     ") . "Create a Cypress test that confirms the existence of key elements in the component using class-based selectors.
     The test should primarily use .exist() assertions to verify the presence of elements.
 
-    CRITICAL: You MUST ONLY use the following classes in your Cypress test selectors. These are the ONLY classes that exist in the component:
-    Classes: {$classesString}
+    CRITICAL: You MUST ONLY use the following valid classes in your selectors:
+    {$classesString}
 
-    DO NOT use any classes that are not in the above list. DO NOT use any HTML tags or attributes as selectors.
+    Each selector MUST include at least one class from the above list.
+    DO NOT generate empty selectors like '.'.
+    DO NOT use any classes that are not in the above list.
+    DO NOT use any HTML tags or attributes as selectors.
 
-    Use the following example as a template for the structure and format of the test:
+    Use this exact format for the test structure:
 
     ```javascript
     describe('{$componentName} Component', () => {
@@ -71,25 +107,16 @@ class CypressGeneratorService {
       });
 
       it('should contain all expected elements', () => {
-        cy.get('.some-class').should('exist');
-        cy.get('.another-class').should('exist');
-        // Add more .exist() checks for other important classes
+        // Each selector must use one or more classes from the provided list
+        cy.get('.specific-class').should('exist');
       });
-
-      // You can add a few more test cases if absolutely necessary, but keep it minimal
     });
-    ```
-
-    Focus on verifying the existence of key elements using the available classes.
-    Avoid complex interactions or state checks unless absolutely critical to the component's functionality.
-    Remember: ONLY use classes that exist in the component content provided.
-    Skip hover classes which only render when hovering.
-    Keep the tests simple and primarily focused on .exist() assertions.";
+    ```";
 
     $tools = [
       [
         'name' => 'generate_cypress_test',
-        'description' => "Generates a Cypress test for a Next.js component",
+        'description' => "Generates a Cypress test for a component",
         'input_schema' => [
           'type' => 'object',
           'properties' => [
@@ -105,46 +132,34 @@ class CypressGeneratorService {
 
     $result = $this->aiModelApiService->callAiApi($prompt, $tools, 'generate_cypress_test');
 
-    if (isset($result['test_content'])) {
-      // Validate the generated test.
-      $validatedContent = $this->validateAndCleanTest($result['test_content'], $existingClasses);
-      return $validatedContent;
+    if (!isset($result['test_content'])) {
+      $this->loggerFactory->get('drupalx_ai')->error('Failed to generate Cypress test for component: @component', [
+        '@component' => $componentName,
+      ]);
+      return NULL;
     }
 
-    $this->loggerFactory->get('drupalx_ai')->error('Failed to generate Cypress test for component: @component', [
-      '@component' => $componentName,
-    ]);
-    return NULL;
-  }
+    // Validate the generated test.
+    $validatedContent = $this->validateAndCleanTest($result['test_content'], $existingClasses);
 
-  /**
-   * Extract classes from the component content.
-   *
-   * @param string $componentContent
-   *   The content of the component file.
-   *
-   * @return array
-   *   An array of extracted classes.
-   */
-  private function extractClasses($componentContent) {
-    preg_match_all('/className="([^"]+)"/', $componentContent, $matches);
-    return array_unique(explode(' ', implode(' ', $matches[1])));
+    // Additional validation to ensure we're not returning a test with empty selectors.
+    if (strpos($validatedContent, "cy.get('.')") !== false || strpos($validatedContent, 'cy.get(".")') !== false) {
+      $this->loggerFactory->get('drupalx_ai')->error('Generated test contains invalid empty selectors for component: @component', [
+        '@component' => $componentName,
+      ]);
+      return NULL;
+    }
+
+    return $validatedContent;
   }
 
   /**
    * Validate and clean the generated test content.
-   *
-   * @param string $testContent
-   *   The generated test content.
-   * @param array $allowedClasses
-   *   An array of allowed classes.
-   *
-   * @return string
-   *   The validated and cleaned test content.
    */
   private function validateAndCleanTest($testContent, array $allowedClasses) {
     $lines = explode("\n", $testContent);
     $cleanedLines = [];
+    $hasValidSelectors = false;
 
     foreach ($lines as $line) {
       if (strpos($line, 'cy.get(') !== FALSE) {
@@ -152,31 +167,34 @@ class CypressGeneratorService {
         if (!empty($matches[1])) {
           $selector = $matches[1];
           $cleanedSelector = $this->cleanSelector($selector, $allowedClasses);
+
+          // Skip lines with invalid selectors.
+          if ($cleanedSelector === '.' || empty($cleanedSelector)) {
+            continue;
+          }
+
           $line = str_replace($matches[1], $cleanedSelector, $line);
+          $hasValidSelectors = TRUE;
         }
       }
       $cleanedLines[] = $line;
     }
 
-    return implode("\n", $cleanedLines);
+    // Only return the test if it contains valid selectors.
+    return $hasValidSelectors ? implode("\n", $cleanedLines) : NULL;
   }
 
   /**
    * Clean a selector based on allowed classes.
-   *
-   * @param string $selector
-   *   The selector to clean.
-   * @param array $allowed_classes
-   *   An array of allowed class names.
-   *
-   * @return string
-   *   The cleaned selector.
    */
   private function cleanSelector(string $selector, array $allowed_classes): string {
+    // Remove any leading dots and split by remaining dots.
+    $selector = ltrim($selector, '.');
     $parts = explode('.', $selector);
     $cleaned_parts = [];
 
     foreach ($parts as $part) {
+      $part = trim($part);
       if (empty($part)) {
         continue;
       }
@@ -185,17 +203,16 @@ class CypressGeneratorService {
       }
     }
 
-    return empty($cleaned_parts) ? '.' . reset($allowed_classes) : '.' . implode('.', $cleaned_parts);
+    // Return null or empty string if no valid classes found.
+    if (empty($cleaned_parts)) {
+      return '';
+    }
+
+    return '.' . implode('.', $cleaned_parts);
   }
 
   /**
    * Extract the category from the story content.
-   *
-   * @param string $storyContent
-   *   The content of the Storybook story.
-   *
-   * @return string
-   *   The extracted category.
    */
   private function extractCategoryFromStory($storyContent) {
     if ($storyContent === FALSE) {

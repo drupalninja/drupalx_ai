@@ -31,7 +31,7 @@ class AiLandingPageCommands extends DrushCommands {
    * Creates an AI-generated landing page using APIs.
    *
    * @command drupalx:create-ai-landing-page
-   * @aliases dxail
+   * @aliases dxland
    */
   public function createAiLandingPage() {
     $description = $this->io()->ask('Please provide a description of the landing page content you want to generate:');

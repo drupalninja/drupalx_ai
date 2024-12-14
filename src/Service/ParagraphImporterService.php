@@ -73,15 +73,15 @@ class ParagraphImporterService {
    *   The logger factory.
    * @param \Drupal\Core\File\FileSystemInterface $file_system
    *   The file system service.
-   * @param \Drupal\graphql_compose_fragments\FragmentManager $fragment_manager
-   *   The fragment manager.
+   * @param \Drupal\graphql_compose_fragments\FragmentManager|null $fragment_manager
+   *   (optional) The fragment manager.
    */
   public function __construct(
     ConfigFactoryInterface $config_factory,
     EntityTypeManagerInterface $entity_type_manager,
     LoggerChannelFactoryInterface $logger_factory,
     FileSystemInterface $file_system,
-    FragmentManager $fragment_manager,
+    FragmentManager $fragment_manager = NULL,
   ) {
     $this->configFactory = $config_factory;
     $this->entityTypeManager = $entity_type_manager;
@@ -110,24 +110,28 @@ class ParagraphImporterService {
       }
 
       // Create the paragraph type.
-      $paragraph_type = ParagraphsType::create(
-            [
-              'id' => $paragraph_data->id,
-              'label' => $paragraph_data->name,
-              'description' => $paragraph_data->description,
-            ]
-        );
+      $paragraph_type = ParagraphsType::create([
+        'id' => $paragraph_data->id,
+        'label' => $paragraph_data->name,
+        'description' => $paragraph_data->description,
+      ]);
       $paragraph_type->save();
 
-      // Update GraphQL Compose configuration for this paragraph.
-      $config = $this->configFactory->getEditable('graphql_compose.settings');
+      // Get config to determine if we're using NextJS.
+      $config = $this->configFactory->get('drupalx_ai.settings');
+      $is_nextjs = $config->get('is_nextjs');
 
-      // Enable the paragraph type in GraphQL configuration.
-      $config->set("entity_config.paragraph.{$paragraph_data->id}.enabled", TRUE);
-      $config->set("entity_config.paragraph.{$paragraph_data->id}.query_load_enabled", TRUE);
-      $config->set("entity_config.paragraph.{$paragraph_data->id}.edges_enabled", TRUE);
+      if ($is_nextjs) {
+        // Update GraphQL Compose configuration for this paragraph.
+        $config = $this->configFactory->getEditable('graphql_compose.settings');
 
-      $config->save();
+        // Enable the paragraph type in GraphQL configuration.
+        $config->set("entity_config.paragraph.{$paragraph_data->id}.enabled", TRUE);
+        $config->set("entity_config.paragraph.{$paragraph_data->id}.query_load_enabled", TRUE);
+        $config->set("entity_config.paragraph.{$paragraph_data->id}.edges_enabled", TRUE);
+
+        $config->save();
+      }
 
       // Create fields.
       $field_count = 0;
@@ -147,8 +151,13 @@ class ParagraphImporterService {
       // Create a test paragraph on a test landing page.
       $result = $this->createParagraph($paragraph_data);
 
-      // Create a fragment for the paragraph type.
-      $result .= "\n" . $this->createParagraphFragment($paragraph_data->id);
+      // Create integration files based on configuration.
+      if ($is_nextjs) {
+        $result .= "\n" . $this->createParagraphFragment($paragraph_data->id);
+      }
+      else {
+        $result .= "\n" . $this->createParagraphTemplate($paragraph_data);
+      }
 
       return "Paragraph type '{$paragraph_data->name}' successfully created with $field_count fields.\n{$result}";
     }
@@ -159,40 +168,128 @@ class ParagraphImporterService {
   }
 
   /**
+   * Create a Drupal template file for a paragraph type.
+   *
+   * @param object $paragraph_data
+   *   The paragraph data object.
+   *
+   * @return string
+   *   Status message about template creation.
+   */
+  protected function createParagraphTemplate($paragraph_data) {
+    $component_name = str_replace('_', '-', $paragraph_data->id);
+
+    // Get the active theme name.
+    $active_theme = \Drupal::theme()->getActiveTheme();
+    $theme_path = $active_theme->getPath();
+
+    // Create the directory structure relative to theme.
+    $component_dir = $theme_path . "/components/{$component_name}";
+    $template_dir = "{$component_dir}/templates";
+    $template_file = $template_dir . "/paragraph--{$component_name}.html.twig";
+
+    // Create component directory if it doesn't exist.
+    $this->fileSystem->prepareDirectory($component_dir, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS);
+
+    // Create templates subdirectory if it doesn't exist.
+    $this->fileSystem->prepareDirectory($template_dir, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS);
+
+    // Generate field variables for the template.
+    $field_variables = [];
+    foreach ($paragraph_data->fields as $field) {
+      $field_name = 'field_' . $field['name'];
+      $field_variables[] = "        {$field['name']}: content.{$field_name}|render|trim";
+    }
+    $field_vars = implode(",\n", $field_variables);
+
+    // Get the active theme name for the include statement.
+    $theme_name = $active_theme->getName();
+
+    // Generate template content.
+    $template_content = <<<TWIG
+{#
+/**
+ * @file
+ * Default theme implementation to display a {$paragraph_data->name} paragraph.
+ *
+ * @see template_preprocess_paragraph()
+ *
+ * @ingroup themeable
+ */
+#}
+{%
+  set classes = ['container']
+%}
+
+<div{{ attributes.addClass(classes) }}>
+  {{ title_prefix }}
+  {{ title_suffix }}
+
+  {% block content %}
+    {%
+      include '{$theme_name}:{$component_name}' with {
+        {$field_vars}
+      } only
+    %}
+  {% endblock %}
+</div>
+TWIG;
+
+    try {
+      // Save the template file.
+      $this->fileSystem->saveData($template_content, $template_file, FileSystemInterface::EXISTS_REPLACE);
+      return "Created paragraph template at {$template_file}";
+    }
+    catch (\Exception $e) {
+      $this->loggerFactory->get('drupalx_ai')->error('Error creating template file: @message', ['@message' => $e->getMessage()]);
+      return "Error creating template file: " . $e->getMessage();
+    }
+  }
+
+  /**
    * Create a field for a paragraph type and update form display.
    *
    * @param string $paragraph_type_id
    *   The ID of the paragraph type.
-   * @param object $field_data
+   * @param array $field_data
    *   The field data.
    */
-  protected function createField($paragraph_type_id, $field_data) {
+  protected function createField($paragraph_type_id, array $field_data) {
     $field_name = 'field_' . $field_data['name'];
     $field_type = $field_data['type'];
 
+    // Storage configuration.
+    $storage_config = [
+      'field_name' => $field_name,
+      'entity_type' => 'paragraph',
+      'type' => $field_type,
+      'cardinality' => $field_data['cardinality'] ?? 1,
+    ];
+
+    // Add allowed values for list_string field type.
+    if ($field_type === 'list_string' && !empty($field_data['options'])) {
+      $allowed_values = [];
+      foreach ($field_data['options'] as $value) {
+        // Use the value as both the key and label.
+        $allowed_values[$value] = $value;
+      }
+      $storage_config['settings']['allowed_values'] = $allowed_values;
+    }
+
     // Check if field storage already exists.
     if (!FieldStorageConfig::loadByName('paragraph', $field_name)) {
-      FieldStorageConfig::create(
-        [
-          'field_name' => $field_name,
-          'entity_type' => 'paragraph',
-          'type' => $field_type,
-          'cardinality' => $field_data['cardinality'] ?? 1,
-        ]
-      )->save();
+      FieldStorageConfig::create($storage_config)->save();
     }
 
     // Create the field instance.
     if (!FieldConfig::loadByName('paragraph', $paragraph_type_id, $field_name)) {
-      FieldConfig::create(
-        [
-          'field_name' => $field_name,
-          'entity_type' => 'paragraph',
-          'bundle' => $paragraph_type_id,
-          'label' => $field_data['label'],
-          'required' => $field_data['required'] ?? FALSE,
-        ]
-      )->save();
+      FieldConfig::create([
+        'field_name' => $field_name,
+        'entity_type' => 'paragraph',
+        'bundle' => $paragraph_type_id,
+        'label' => $field_data['label'],
+        'required' => $field_data['required'] ?? FALSE,
+      ])->save();
     }
 
     // Update GraphQL Compose configuration for this paragraph field.
@@ -200,7 +297,7 @@ class ParagraphImporterService {
     $config->set("field_config.paragraph.{$paragraph_type_id}.{$field_name}.enabled", TRUE);
     $config->save();
 
-    // Update the form display to include the new field.
+    // Update the form display.
     $form_display = $this->entityTypeManager
       ->getStorage('entity_form_display')
       ->load('paragraph.' . $paragraph_type_id . '.default');
@@ -208,25 +305,95 @@ class ParagraphImporterService {
     if (!$form_display) {
       $form_display = $this->entityTypeManager
         ->getStorage('entity_form_display')
-        ->create(
-          [
-            'targetEntityType' => 'paragraph',
-            'bundle' => $paragraph_type_id,
-            'mode' => 'default',
-            'status' => TRUE,
-          ]
-        );
+        ->create([
+          'targetEntityType' => 'paragraph',
+          'bundle' => $paragraph_type_id,
+          'mode' => 'default',
+          'status' => TRUE,
+        ]);
     }
 
-    /**
-    * @var \Drupal\Core\Entity\EntityFormDisplayInterface $form_display
-    */
-    $form_display->setComponent(
-      $field_name, [
-        'type' => 'string_textfield',
-        'weight' => 0,
-      ]
-    )->save();
+    // Set appropriate widget type based on field type.
+    $widget_type = 'string_textfield';
+    if ($field_type === 'list_string') {
+      $widget_type = 'options_select';
+    }
+    elseif ($field_type === 'image') {
+      $widget_type = 'image_image';
+    }
+    elseif ($field_type === 'link') {
+      $widget_type = 'link_default';
+    }
+    elseif ($field_type === 'text_long' || $field_type === 'text_with_summary') {
+      $widget_type = 'text_textarea';
+    }
+
+    $form_display->setComponent($field_name, [
+      'type' => $widget_type,
+      'weight' => 0,
+    ])->save();
+
+    // Update the view display.
+    $view_display = $this->entityTypeManager
+      ->getStorage('entity_view_display')
+      ->load('paragraph.' . $paragraph_type_id . '.default');
+
+    if (!$view_display) {
+      $view_display = $this->entityTypeManager
+        ->getStorage('entity_view_display')
+        ->create([
+          'targetEntityType' => 'paragraph',
+          'bundle' => $paragraph_type_id,
+          'mode' => 'default',
+          'status' => TRUE,
+        ]);
+    }
+
+    // Set appropriate formatter type based on field type.
+    $formatter_type = 'string';
+    $formatter_settings = [];
+
+    switch ($field_type) {
+      case 'list_string':
+        $formatter_type = 'list_key';
+        break;
+
+      case 'image':
+        $formatter_type = 'image';
+        $formatter_settings = [
+          'image_style' => 'large',
+          'image_link' => '',
+        ];
+        break;
+
+      case 'link':
+        $formatter_type = 'link';
+        break;
+
+      case 'text_long':
+      case 'text_with_summary':
+        $formatter_type = 'text_default';
+        break;
+
+      case 'boolean':
+        $formatter_type = 'boolean';
+        break;
+
+      case 'datetime':
+        $formatter_type = 'datetime_default';
+        break;
+
+      case 'entity_reference':
+        $formatter_type = 'entity_reference_label';
+        break;
+    }
+
+    $view_display->setComponent($field_name, [
+      'type' => $formatter_type,
+      'weight' => 0,
+      'settings' => $formatter_settings,
+      'label' => 'hidden',
+    ])->save();
   }
 
   /**
@@ -350,25 +517,25 @@ class ParagraphImporterService {
       $input
     );
 
-    // 4. Wrap the updated content with the new fragment name
+    // 4. Wrap the updated content with the new fragment name.
     $wrapped = "export const {$newFragmentName} = graphql(`\n" . $updatedDeclaration . "\n`);";
 
-    // 5. Replace `... FragmentName` with `...NameFragment`
+    // 5. Replace `... FragmentName` with `...NameFragment`.
     $withReplacedFragments = preg_replace_callback(
       '/\.\.\.\s+Fragment(\w+)/', function ($matches) {
         return '... ' . $matches[1] . 'Fragment';
       }, $wrapped
     );
 
-    // 6. Extract unique fragments from the wrapped content
+    // 6. Extract unique fragments from the wrapped content.
     preg_match_all('/\.\.\.\s+(\w+)Fragment/', $withReplacedFragments, $fragmentMatches);
     $uniqueFragments = array_unique($fragmentMatches[1]);
     $fragmentsArray = '[' . implode(', ', array_map(fn($frag) => $frag . 'Fragment', $uniqueFragments)) . ']';
 
-    // 7. Insert the fragments array before the final closing parenthesis
+    // 7. Insert the fragments array before the final closing parenthesis.
     $finalOutput = str_replace('`);', "`, {$fragmentsArray});", $withReplacedFragments);
 
-    // 8. Indent every line by 2 spaces
+    // 8. Indent every line by 2 spaces.
     $indentedOutput = preg_replace('/^(?!$)/m', '  ', $finalOutput);
 
     return [$newFragmentName, $indentedOutput];

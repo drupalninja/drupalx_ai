@@ -48,12 +48,6 @@ Use the following Drush command to start the import process:
 drush drupalx-ai:import-from-component
 ```
 
-or use the alias:
-
-```
-drush dai-ifc
-```
-
 ### Generating Storybook Stories
 
 To generate Storybook stories for your components, use:
@@ -68,14 +62,6 @@ To create Cypress tests for your components, use:
 
 ```
 drush drupalx-ai:generate-cypress
-```
-
-### Creating Mock Landing Pages
-
-To create a mock landing page, use:
-
-```
-drush drupalx-ai:create-mock-landing
 ```
 
 ### AI-Assisted Landing Page Creation
