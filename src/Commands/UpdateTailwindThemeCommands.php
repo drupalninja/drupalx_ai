@@ -42,7 +42,7 @@ final class UpdateTailwindThemeCommands extends DrushCommands {
    * Update the Tailwind theme interactively using AI.
    *
    * @command drupalx:update-tailwind-theme
-   * @aliases dutt
+   * @aliases dxtail
    * @usage drush drupalx:update-tailwind-theme
    *
    * @throws \RuntimeException

@@ -112,7 +112,7 @@ class GenerateStorybookCommands extends DrushCommands {
    * Generate a Storybook story for a component.
    *
    * @command drupalx-ai:generate-storybook
-   * @aliases dai-gs
+   * @aliases dxstory
    * @usage drush drupalx-ai:generate-storybook
    */
   public function generateStorybookStory(OutputInterface $output) {
@@ -150,7 +150,7 @@ class GenerateStorybookCommands extends DrushCommands {
       return;
     }
 
-    // Determine the correct path and file extension based on the is_nextjs setting
+    // Determine the correct path and file extension based on the is_nextjs setting.
     if ($is_nextjs) {
       $basePath = '../nextjs/components/';
       $fileExtension = '.stories.tsx';
@@ -162,7 +162,7 @@ class GenerateStorybookCommands extends DrushCommands {
       $fileExtension = '.stories.js';
     }
 
-    // Ensure the component directory exists
+    // Ensure the component directory exists.
     $componentDir = $basePath . $componentFolderName;
     if (!is_dir($componentDir)) {
       mkdir($componentDir, 0777, TRUE);

@@ -112,7 +112,7 @@ class ComponentReaderService {
 
     // Get list of component files based on theme type.
     if ($is_nextjs) {
-      // For Next.js, look for .tsx files that aren't stories
+      // For Next.js, look for .tsx files that aren't stories.
       $component_files = array_filter(
         scandir($component_path),
         function ($file) {
@@ -122,7 +122,7 @@ class ComponentReaderService {
       );
     }
     else {
-      // For Drupal, look for .twig files
+      // For Drupal, look for .twig files.
       $component_files = array_filter(
         scandir($component_path),
         function ($file) {

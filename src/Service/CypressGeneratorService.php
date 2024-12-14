@@ -5,7 +5,7 @@ namespace Drupal\drupalx_ai\Service;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 
 /**
- * Service for generating Cypress tests using only class-based selectors and .exist() assertions.
+ * Service for generating Cypress tests.
  */
 class CypressGeneratorService {
 
@@ -35,10 +35,10 @@ class CypressGeneratorService {
    * Extract classes from the component content.
    */
   private function extractClasses($componentContent) {
-    // Match both className="..." and class="..." patterns
+    // Match both className="..." and class="..." patterns.
     $patterns = [
-      '/className="([^"]+)"/',  // React className pattern
-      '/class="([^"]+)"/'       // Regular HTML class pattern
+      '/className="([^"]+)"/',
+      '/class="([^"]+)"/',
     ];
 
     $allClasses = [];
@@ -46,14 +46,14 @@ class CypressGeneratorService {
       preg_match_all($pattern, $componentContent, $matches);
       if (!empty($matches[1])) {
         foreach ($matches[1] as $classString) {
-          // Split space-separated classes and add to array
+          // Split space-separated classes and add to array.
           $classes = preg_split('/\s+/', trim($classString));
           $allClasses = array_merge($allClasses, $classes);
         }
       }
     }
 
-    // Filter out empty values and duplicates
+    // Filter out empty values and duplicates.
     return array_unique(array_filter($allClasses));
   }
 
@@ -63,7 +63,7 @@ class CypressGeneratorService {
   public function generateCypressTest($componentFolderName, $componentName, $componentContent, $storyContent) {
     $existingClasses = $this->extractClasses($componentContent);
 
-    // Validate that we actually found some classes
+    // Validate that we actually found some classes.
     if (empty($existingClasses)) {
       $this->loggerFactory->get('drupalx_ai')->warning('No classes found in component: @component', [
         '@component' => $componentName,
@@ -139,10 +139,10 @@ class CypressGeneratorService {
       return NULL;
     }
 
-    // Validate the generated test
+    // Validate the generated test.
     $validatedContent = $this->validateAndCleanTest($result['test_content'], $existingClasses);
 
-    // Additional validation to ensure we're not returning a test with empty selectors
+    // Additional validation to ensure we're not returning a test with empty selectors.
     if (strpos($validatedContent, "cy.get('.')") !== false || strpos($validatedContent, 'cy.get(".")') !== false) {
       $this->loggerFactory->get('drupalx_ai')->error('Generated test contains invalid empty selectors for component: @component', [
         '@component' => $componentName,
@@ -168,19 +168,19 @@ class CypressGeneratorService {
           $selector = $matches[1];
           $cleanedSelector = $this->cleanSelector($selector, $allowedClasses);
 
-          // Skip lines with invalid selectors
+          // Skip lines with invalid selectors.
           if ($cleanedSelector === '.' || empty($cleanedSelector)) {
             continue;
           }
 
           $line = str_replace($matches[1], $cleanedSelector, $line);
-          $hasValidSelectors = true;
+          $hasValidSelectors = TRUE;
         }
       }
       $cleanedLines[] = $line;
     }
 
-    // Only return the test if it contains valid selectors
+    // Only return the test if it contains valid selectors.
     return $hasValidSelectors ? implode("\n", $cleanedLines) : NULL;
   }
 
@@ -188,7 +188,7 @@ class CypressGeneratorService {
    * Clean a selector based on allowed classes.
    */
   private function cleanSelector(string $selector, array $allowed_classes): string {
-    // Remove any leading dots and split by remaining dots
+    // Remove any leading dots and split by remaining dots.
     $selector = ltrim($selector, '.');
     $parts = explode('.', $selector);
     $cleaned_parts = [];
@@ -203,7 +203,7 @@ class CypressGeneratorService {
       }
     }
 
-    // Return null or empty string if no valid classes found
+    // Return null or empty string if no valid classes found.
     if (empty($cleaned_parts)) {
       return '';
     }
@@ -225,4 +225,5 @@ class CypressGeneratorService {
 
     return 'general';
   }
+
 }

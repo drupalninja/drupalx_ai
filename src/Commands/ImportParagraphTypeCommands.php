@@ -93,7 +93,7 @@ class ImportParagraphTypeCommands extends DrushCommands {
    * Import a new paragraph type based on a theme component using AI.
    *
    * @command drupalx-ai:import-from-component
-   * @aliases dai-ifc
+   * @aliases dxcomp
    * @usage drush drupalx-ai:import-from-component
    */
   public function importParagraphTypeFromComponent(OutputInterface $output) {

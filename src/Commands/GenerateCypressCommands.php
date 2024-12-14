@@ -99,7 +99,7 @@ class GenerateCypressCommands extends DrushCommands {
    * Generate a Cypress test for a component.
    *
    * @command drupalx-ai:generate-cypress
-   * @aliases dai-gc
+   * @aliases dxcyp
    * @usage drush drupalx-ai:generate-cypress
    */
   public function generateCypressTest(OutputInterface $output) {
@@ -109,7 +109,7 @@ class GenerateCypressCommands extends DrushCommands {
       return;
     }
 
-    // Get configuration
+    // Get configuration.
     $config = $this->configFactory->get('drupalx_ai.settings');
     $is_nextjs = $config->get('is_nextjs');
 
@@ -130,7 +130,7 @@ class GenerateCypressCommands extends DrushCommands {
       return;
     }
 
-    // Set the path based on configuration
+    // Set the path based on configuration.
     $cypressFileName = $componentName . '.cy.js';
     if ($is_nextjs) {
       $cypressFilePath = "../nextjs/components/{$componentFolderName}/{$cypressFileName}";

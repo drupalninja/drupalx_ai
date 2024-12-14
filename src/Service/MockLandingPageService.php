@@ -522,8 +522,7 @@ class MockLandingPageService {
    * @return int|null
    *   The media entity ID if successful, null otherwise.
    */
-  public function createMediaEntityFromTavily($alt_text)
-  {
+  public function createMediaEntityFromTavily($alt_text) {
     $config = $this->configFactory->get('drupalx_ai.settings');
     $api_key = $config->get('tavily_api_key');
 
@@ -552,7 +551,8 @@ class MockLandingPageService {
         ])
       ]);
       $data = json_decode($response->getBody(), TRUE);
-    } catch (\Exception $e) {
+    }
+    catch (\Exception $e) {
       $this->logger->error('Failed to fetch images from Tavily: @message', ['@message' => $e->getMessage()]);
       return NULL;
     }
@@ -562,26 +562,26 @@ class MockLandingPageService {
       return NULL;
     }
 
-    // Shuffle the image indices to try them in random order
+    // Shuffle the image indices to try them in random order.
     $available_indices = array_keys($data['images']);
     shuffle($available_indices);
 
-    // Try up to 2 different random images
+    // Try up to 2 different random images.
     $attempts = 0;
     $max_attempts = 2;
 
     while ($attempts < $max_attempts && !empty($available_indices)) {
-      // Get a random image index
+      // Get a random image index.
       $index = array_pop($available_indices);
       $image_url = $data['images'][$index];
       $attempts++;
 
       try {
-        // Try to download and process the image
+        // Try to download and process the image.
         $image_response = $this->httpClient->get($image_url);
         $image_data = $image_response->getBody()->getContents();
 
-        // Save the image as a file entity
+        // Save the image as a file entity.
         $directory = 'public://tavily';
         $this->fileSystem->prepareDirectory($directory, FileSystemInterface::CREATE_DIRECTORY);
 
@@ -594,7 +594,7 @@ class MockLandingPageService {
         $this->fileSystem->saveData($image_data, $file->getFileUri(), FileSystemInterface::EXISTS_REPLACE);
         $file->save();
 
-        // Create a media entity
+        // Create a media entity.
         $media = Media::create([
           'bundle' => 'image',
           'uid' => 1,
@@ -607,14 +607,14 @@ class MockLandingPageService {
 
         $media->save();
 
-        // Success! Return the media ID
+        // Success! Return the media ID.
         return $media->id();
       } catch (\Exception $e) {
         $this->logger->warning('Failed to process random image @number from Tavily: @error', [
           '@number' => $attempts,
           '@error' => $e->getMessage(),
         ]);
-        // Continue to next iteration to try another random image
+        // Continue to next iteration to try another random image.
         continue;
       }
     }
