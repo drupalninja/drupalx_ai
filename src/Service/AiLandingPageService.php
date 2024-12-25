@@ -99,12 +99,33 @@ final class AiLandingPageService {
     $result = $this->aiModelApiService->callAiApi($prompt, $tools, 'generate_ai_landing_page');
 
     if (is_array($result) && isset($result['paragraphs'])) {
+      // If paragraphs is a string, attempt to decode it.
+      if (is_string($result['paragraphs'])) {
+        try {
+          $decodedParagraphs = json_decode($result['paragraphs'], TRUE, 512, JSON_THROW_ON_ERROR);
+          if (is_array($decodedParagraphs)) {
+            $result['paragraphs'] = $decodedParagraphs;
+          } else {
+            $this->loggerFactory->get('drupalx_ai')->error('Failed to decode paragraphs data: not an array after decoding');
+            return NULL;
+          }
+        } catch (\JsonException $e) {
+          $this->loggerFactory->get('drupalx_ai')->error('Failed to decode paragraphs JSON: @message', ['@message' => $e->getMessage()]);
+          return NULL;
+        }
+      }
+
+      // Validate the structure.
+      if (!is_array($result['paragraphs'])) {
+        $this->loggerFactory->get('drupalx_ai')->error('Paragraphs data is not an array');
+        return NULL;
+      }
+
       return $result;
     }
-    else {
-      $this->loggerFactory->get('drupalx_ai')->error('AI content generation failed or returned unexpected result');
-      return NULL;
-    }
+
+    $this->loggerFactory->get('drupalx_ai')->error('AI content generation failed or returned unexpected result');
+    return NULL;
   }
 
   /**
@@ -122,6 +143,7 @@ final class AiLandingPageService {
     $prompt = "Generate an AI-driven landing page structure with content based on the following description:\n\n";
     $prompt .= "$description\n\n";
     $prompt .= "CRITICAL: The page_title is required. Create a compelling and relevant title for the landing page based on the content.\n\n";
+    $prompt .= "CRITICAL: The paragraphs field MUST be an array, not a string. Do not stringify the paragraphs array.\n\n";
     $prompt .= "Available paragraph types and their structures (in JSON format):\n\n";
 
     $prompt .= json_encode($paragraphStructures, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n\n";
@@ -139,24 +161,25 @@ final class AiLandingPageService {
     $allowedParagraphTypes = $this->mockLandingPageService->getAllowedParagraphTypes('node', 'landing', 'field_content');
     $prompt .= "IMPORTANT: Only use the following paragraph types as top-level array of paragraphs:\n";
     $prompt .= implode(", ", $allowedParagraphTypes) . "\n\n";
-    $prompt .= "CRITICAL: The 'bullet' paragraph is never in the top level array of paragraphs.\n\n";
-    $prompt .= "CRITICAL: Use a variety of paragraph types, do not overuse the same types over and over.\n\n";
-    $prompt .= "CRITICAL: For fields named 'field_icon', you MUST only use valid Lucide icon names (e.g. -arrow-right').\n\n";
-    $prompt .= "CRITICAL: When generating the landing page structure, ensure that ONLY the allowed paragraph types listed above are used as top-level paragraphs. Other paragraph types can be used as nested paragraphs within these allowed types if the structure permits.\n\n";
 
-    $prompt .= "Please generate a landing page structure using these paragraph types. Fill in realistic content for each field. Use a variety of paragraph types to create an engaging and diverse landing page, while adhering to the allowed top-level paragraph types. When you're done, call the generate_ai_landing_page function with the generated structure.\n\n";
+    $prompt .= "CRITICAL REQUIREMENTS:\n";
+    $prompt .= "1. The 'bullet' paragraph is never in the top level array of paragraphs.\n";
+    $prompt .= "2. Use a variety of paragraph types, do not overuse the same types over and over.\n";
+    $prompt .= "3. For fields named 'field_icon', you MUST only use valid Lucide icon names (e.g. 'arrow-right').\n";
+    $prompt .= "4. When generating the landing page structure, ensure that ONLY the allowed paragraph types listed above are used as top-level paragraphs.\n";
+    $prompt .= "5. Other paragraph types can be used as nested paragraphs within these allowed types if the structure permits.\n";
+    $prompt .= "6. Every paragraph, including sub-paragraphs (such as accordion items or pricing cards), must have a 'type' property.\n";
+    $prompt .= "7. For entity reference fields, use appropriate existing entity names or IDs.\n";
+    $prompt .= "8. For viewsreference fields, use existing view names and display IDs.\n";
+    $prompt .= "9. For list_string fields, choose only from the provided options in the 'o' array.\n";
+    $prompt .= "10. In field_features_text do not include any characters for bullets, only plain text separated by new lines.\n";
+    $prompt .= "11. Stat items should always have a title value.\n";
+    $prompt .= "12. The text paragraph does not have a field_summary field.\n";
+    $prompt .= "13. For logo collection limit max to 7 media items.\n\n";
 
-    $prompt .= "The structure should be an array of paragraphs, where each paragraph is an object with 'type' and 'fields' properties. The 'fields' property should be an object where keys are field names and values are the content for those fields.\n\n";
-    $prompt .= "CRITICAL: Ensure that EVERY paragraph, including sub-paragraphs (such as accordion items or pricing cards), has a 'type' property. Do not omit the 'type' for any paragraph at any level.\n\n";
-    $prompt .= "For entity reference fields, use appropriate existing entity names or IDs. For viewsreference fields, use existing view names and display IDs.\n\n";
-    $prompt .= "For list_string fields, make sure to choose a key from the provided options in the 'o' array.\n\n";
-    $prompt .= "In field field_features_text do not include any characters for bullets, only plain text separated by new lines.\n\n";
-    $prompt .= "Stat items should always have a title value.\n\n";
-    $prompt .= "The text paragraph does not have a field_summary field.\n\n";
-    $prompt .= "For logo collection limit max to 7 media items.\n\n";
-
-    $prompt .= "Example structure:\n";
+    $prompt .= "Example structure (note that paragraphs is an array, not a string):\n";
     $prompt .= "{\n";
+    $prompt .= "  \"page_title\": \"Our Amazing Service\",\n";
     $prompt .= "  \"paragraphs\": [\n";
     $prompt .= "    {\n";
     $prompt .= "      \"type\": \"hero\",\n";
@@ -183,7 +206,9 @@ final class AiLandingPageService {
     $prompt .= "      }\n";
     $prompt .= "    }\n";
     $prompt .= "  ]\n";
-    $prompt .= "}\n";
+    $prompt .= "}\n\n";
+
+    $prompt .= "Please generate a landing page structure using these paragraph types. Fill in realistic content for each field. Use a variety of paragraph types to create an engaging and diverse landing page, while adhering to the allowed top-level paragraph types. When you're done, call the generate_ai_landing_page function with the generated structure.\n";
 
     return $prompt;
   }
@@ -244,7 +269,8 @@ final class AiLandingPageService {
         unset($paragraphData['{']);
       }
 
-      // If parent is 'pricing' and child type is missing, assume 'pricing_card'.
+      // If parent is 'pricing' and child type is missing, assume
+      // 'pricing_card'.
       if ($parentType === 'pricing' && !isset($paragraphData['type'])) {
         $paragraphData['type'] = 'pricing_card';
       }
@@ -291,7 +317,8 @@ final class AiLandingPageService {
           // This is likely a nested paragraph field.
           $nestedParagraphs = [];
           foreach ($fieldValue as $nestedParagraphData) {
-            // Pass the current paragraph type as the parent type for nested paragraphs
+            // Pass the current paragraph type as the parent type for nested
+            // paragraphs.
             $nestedParagraph = $this->createParagraphFromGeneratedContent($nestedParagraphData, $paragraphData['type']);
             if ($nestedParagraph) {
               $nestedParagraphs[] = $nestedParagraph;
@@ -318,9 +345,29 @@ final class AiLandingPageService {
         }
         else {
           if ($fieldDefinition && in_array($fieldDefinition->getType(), ['text', 'text_long', 'text_with_summary'])) {
-            $fieldValue = $this->convertRichTextFormat($fieldValue);
+            // Handle text fields that can come in either as string or array
+            // format.
+            if (is_array($fieldValue) && isset($fieldValue['value'])) {
+              // If it's an array with 'value' key, use that value.
+              $textValue = $fieldValue['value'];
+              // Get the format if provided, default to 'basic_html'.
+              $format = $fieldValue['format'] ?? 'basic_html';
+              $paragraph->set($fieldName, [
+                'value' => $this->convertRichTextFormat($textValue),
+                'format' => $format,
+              ]);
+            } else {
+              // If it's a string or any other format, convert it directly.
+              $paragraph->set($fieldName, [
+                'value' => $this->convertRichTextFormat((string) $fieldValue),
+                'format' => 'basic_html',
+              ]);
+            }
           }
-          $paragraph->set($fieldName, $fieldValue);
+          else {
+            // For non-text fields, set the value directly.
+            $paragraph->set($fieldName, $fieldValue);
+          }
         }
       }
 

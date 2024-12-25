@@ -91,6 +91,9 @@ class AiModelApiService {
       case 'fireworks':
         return $this->callFireworksApi($prompt, $tools, $expectedFunctionName, $maxRetries, $initialRetryDelay);
 
+      case 'nebius':
+        return $this->callNebiusApi($prompt, $tools, $expectedFunctionName, $maxRetries, $initialRetryDelay);
+
       default:
         $this->loggerFactory->get('drupalx_ai')->error('Invalid AI provider selected. Defaulting to Anthropic.');
         return $this->callAnthropicApi($prompt, $tools, $expectedFunctionName, $maxRetries, $initialRetryDelay);
@@ -295,6 +298,54 @@ class AiModelApiService {
   }
 
   /**
+   * Makes an API call to Nebius' completion endpoint with retry functionality.
+   *
+   * @param string $prompt
+   *   The user prompt/question to send to the Nebius API.
+   * @param array $tools
+   *   Array of tools/functions that the model can use to respond.
+   * @param string $expectedFunctionName
+   *   The name of the function that is expected to be called by the model.
+   * @param int $maxRetries
+   *   Maximum number of retry attempts for failed API calls.
+   * @param int $initialRetryDelay
+   *   Initial delay in seconds between retry attempts. May increase with backoff.
+   *
+   * @return array
+   *   The decoded JSON response from the Nebius API.
+   */
+  protected function callNebiusApi($prompt, array $tools, $expectedFunctionName, $maxRetries, $initialRetryDelay) {
+    $config = $this->configFactory->get('drupalx_ai.settings');
+    $nebius_model = $config->get('nebius_model') ?: 'meta-llama/Llama-3.3-70B-Instruct-fast';
+    $api_key = $config->get('api_key');
+
+    $url = 'https://api.studio.nebius.ai/v1/chat/completions';
+    $data = [
+      'model' => $nebius_model,
+      'messages' => [
+        [
+          'role' => 'system',
+          'content' => 'You are a helpful assistant. Use the supplied tools to assist the user.',
+        ],
+        [
+          'role' => 'user',
+          'content' => $prompt,
+        ],
+      ],
+      'tools' => $this->convertToolsToOpenAiFormat($tools),
+    ];
+
+    $headers = [
+      'Content-Type' => 'application/json',
+      'Authorization' => 'Bearer ' . $api_key,
+    ];
+
+    $this->loggerFactory->get('drupalx_ai')->notice('Calling Nebius API with model: @model', ['@model' => $nebius_model]);
+
+    return $this->makeApiCallWithRetry($url, $data, $headers, $expectedFunctionName, $maxRetries, $initialRetryDelay);
+  }
+
+  /**
    * Convert Anthropic-style tools to OpenAI-style functions.
    *
    * @param array $tools
@@ -430,6 +481,7 @@ class AiModelApiService {
       case 'openai':
       case 'groq':
       case 'fireworks':
+      case 'nebius':
         return $this->parseOpenAiResponse($responseData, $expectedFunctionName);
 
       default:
@@ -467,7 +519,7 @@ class AiModelApiService {
   }
 
   /**
-   * Parse OpenAI API response.
+   * Parse OpenAI API response with better handling of escaped content.
    *
    * @param mixed $responseData
    *   The API response data.
@@ -478,31 +530,79 @@ class AiModelApiService {
    *   The parsed function call arguments or FALSE on failure.
    */
   protected function parseOpenAiResponse($responseData, $expectedFunctionName) {
-    if (isset($responseData['choices'][0]['message']['tool_calls'])) {
-      foreach ($responseData['choices'][0]['message']['tool_calls'] as $toolCall) {
-        if ($toolCall['function']['name'] === $expectedFunctionName) {
-          $arguments = json_decode($toolCall['function']['arguments'], TRUE);
+    try {
+      // Case 1: Standard tool_calls format.
+      if (isset($responseData['choices'][0]['message']['tool_calls'])) {
+        foreach ($responseData['choices'][0]['message']['tool_calls'] as $toolCall) {
+          if ($toolCall['function']['name'] === $expectedFunctionName) {
+            $arguments = json_decode($toolCall['function']['arguments'], TRUE);
+            if (is_array($arguments)) {
+              $this->loggerFactory->get('drupalx_ai')->notice('Successfully parsed function call arguments from tool_calls');
+              return $arguments;
+            }
+          }
+        }
+      }
+
+      // Case 2: Content field with embedded function call.
+      if (isset($responseData['choices'][0]['message']['content'])) {
+        $content = $responseData['choices'][0]['message']['content'];
+
+        // Try to decode the content if it's a JSON string.
+        if (is_string($content)) {
+          $decodedContent = json_decode($content, TRUE);
+
+          // Check if it's a function call structure.
+          if (is_array($decodedContent) &&
+              isset($decodedContent['type']) &&
+              $decodedContent['type'] === 'function' &&
+              isset($decodedContent['name']) &&
+              $decodedContent['name'] === $expectedFunctionName &&
+              isset($decodedContent['parameters'])) {
+
+            // If parameters contains escaped JSON strings, decode them.
+            $parameters = $decodedContent['parameters'];
+            foreach ($parameters as $key => $value) {
+              if (is_string($value) && strpos($value, '\\\"') !== FALSE) {
+                $parameters[$key] = json_decode($value, TRUE);
+              }
+            }
+
+            $this->loggerFactory->get('drupalx_ai')->notice('Successfully parsed function call arguments from content');
+            return $parameters;
+          }
+        }
+      }
+
+      // Case 3: Old format function_call.
+      if (isset($responseData['choices'][0]['message']['function_call'])) {
+        $functionCall = $responseData['choices'][0]['message']['function_call'];
+        if ($functionCall['name'] === $expectedFunctionName) {
+          $arguments = json_decode($functionCall['arguments'], TRUE);
           if (is_array($arguments)) {
-            $this->loggerFactory->get('drupalx_ai')->notice('Successfully parsed function call arguments');
+            $this->loggerFactory->get('drupalx_ai')->notice('Successfully parsed function call arguments from function_call');
             return $arguments;
           }
         }
       }
-    }
 
-    // Fallback to the old format for backward compatibility.
-    if (isset($responseData['choices'][0]['message']['function_call'])) {
-      $functionCall = $responseData['choices'][0]['message']['function_call'];
-      if ($functionCall['name'] === $expectedFunctionName) {
-        $arguments = json_decode($functionCall['arguments'], TRUE);
-        if (is_array($arguments)) {
-          $this->loggerFactory->get('drupalx_ai')->notice('Successfully parsed function call arguments (old format)');
-          return $arguments;
-        }
+      // Log the structure if we couldn't parse it.
+      if (isset($responseData['choices'][0]['message'])) {
+        $this->loggerFactory->get('drupalx_ai')->warning(
+          'Could not parse response structure: @structure',
+          ['@structure' => json_encode($responseData['choices'][0]['message'])]
+        );
       }
-    }
 
-    return FALSE;
+      return FALSE;
+    }
+    catch (\Exception $e) {
+      $this->loggerFactory->get('drupalx_ai')->error(
+        'Error parsing response: @message',
+        ['@message' => $e->getMessage()]
+      );
+      return FALSE;
+    }
   }
 
   /**
