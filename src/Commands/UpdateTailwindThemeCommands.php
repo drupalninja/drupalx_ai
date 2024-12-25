@@ -9,6 +9,7 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Question\Question;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Process\Process;
 
 /**
  * Provides Drush commands for updating Tailwind theme using AI.
@@ -89,7 +90,8 @@ final class UpdateTailwindThemeCommands extends DrushCommands {
         throw new \RuntimeException("AI failed to generate an updated Tailwind theme or returned unexpected result");
       }
 
-      $this->writeGlobalsCss($globalsPath, $result['updated_css']);
+      $formattedCss = $this->formatCss($result['updated_css']);
+      $this->writeGlobalsCss($globalsPath, $formattedCss);
 
       $this->io()->success("Tailwind theme has been updated successfully in globals.css.");
       $output->writeln("Summary of changes:");
@@ -185,6 +187,26 @@ EOT;
     if (file_put_contents($path, $content) === FALSE) {
       throw new \RuntimeException("Failed to write the updated Tailwind theme to {$path}");
     }
+  }
+
+  /**
+   * Formats the CSS content.
+   *
+   * @param string $css
+   *   The CSS content to format.
+   *
+   * @return string
+   *   The formatted CSS content.
+   */
+  private function formatCss(string $css): string {
+    $process = new Process(['npx', 'prettier', '--parser', 'css'], NULL, NULL, $css);
+    $process->run();
+
+    if (!$process->isSuccessful()) {
+      throw new \RuntimeException('Failed to format CSS: ' . $process->getErrorOutput());
+    }
+
+    return $process->getOutput();
   }
 
 }
