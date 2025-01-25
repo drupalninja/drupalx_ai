@@ -225,6 +225,8 @@ final class AiLandingPageService {
    *   The URL of the created node, or null if creation failed.
    */
   public function createLandingNodeWithAiContent(string $page_title, array $paragraphs): ?string {
+    $this->loggerFactory->get('drupalx_ai')->info('Starting to create landing page with title: @title', ['@title' => $page_title]);
+
     $node = Node::create([
       'type' => 'landing',
       'title' => $page_title ?? 'AI Generated Landing Page',
@@ -232,20 +234,27 @@ final class AiLandingPageService {
       'status' => 1,
     ]);
 
+    $this->loggerFactory->get('drupalx_ai')->info('Created node entity, adding @count paragraphs', ['@count' => count($paragraphs)]);
+
     foreach ($paragraphs as $paragraphData) {
       $paragraph = $this->createParagraphFromGeneratedContent($paragraphData);
       if ($paragraph) {
         $node->get('field_content')->appendItem($paragraph);
+      } else {
+        $this->loggerFactory->get('drupalx_ai')->warning('Failed to create paragraph from data: @data', ['@data' => json_encode($paragraphData)]);
       }
     }
 
     try {
+      $this->loggerFactory->get('drupalx_ai')->info('Attempting to save node');
       $node->save();
+      $this->loggerFactory->get('drupalx_ai')->info('Successfully saved node with ID: @id', ['@id' => $node->id()]);
       $url = Url::fromRoute('entity.node.edit_form', ['node' => $node->id()]);
       return $url->setAbsolute()->toString();
     }
     catch (\Exception $e) {
       $this->loggerFactory->get('drupalx_ai')->error('Failed to create landing page: @message', ['@message' => $e->getMessage()]);
+      $this->loggerFactory->get('drupalx_ai')->error('Exception trace: @trace', ['@trace' => $e->getTraceAsString()]);
       return NULL;
     }
   }
