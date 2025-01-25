@@ -14,7 +14,7 @@ use Drupal\drupalx_ai\Service\AiLandingPageService;
 use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
 
 /**
- * Provides a landing page generator agent.
+ * Landing page generator AI agent plugin.
  *
  * This agent uses AI to generate complete landing pages with structured content,
  * including various paragraph types and automatically generated media content.
@@ -118,11 +118,34 @@ class LandingPageGenerator extends AiAgentBase implements ContainerFactoryPlugin
         'description' => "This agent generates complete landing pages using AI. It creates structured content with various paragraph types and automatically generates appropriate media content.",
         'usage_instructions' => "Provide a description of the landing page you want to create, including its purpose and target audience.",
         'inputs' => [
-          'free_text' => [
+          'description' => [
             'name' => 'Description',
-            'type' => 'string',
-            'description' => 'A description of the landing page you want to generate, including purpose, target audience, and key content areas.',
-            'default_value' => '',
+            'type' => 'object',
+            'properties' => [
+              'page_title' => [
+                'type' => 'string',
+                'description' => 'Title for the landing page',
+              ],
+              'paragraphs' => [
+                'type' => 'array',
+                'items' => [
+                  'type' => 'object',
+                  'properties' => [
+                    'type' => [
+                      'type' => 'string',
+                      'description' => 'The type of the paragraph',
+                    ],
+                    'fields' => [
+                      'type' => 'object',
+                      'additionalProperties' => TRUE,
+                      'description' => 'The fields of the paragraph with their values',
+                    ],
+                  ],
+                  'required' => ['type', 'fields'],
+                ],
+              ],
+            ],
+            'required' => ['paragraphs', 'page_title'],
           ],
         ],
         'outputs' => [
@@ -139,16 +162,47 @@ class LandingPageGenerator extends AiAgentBase implements ContainerFactoryPlugin
    * {@inheritdoc}
    */
   public function setData($data) {
+    // If we get a string, treat it as a description for backward compatibility.
     if (is_string($data)) {
-      $this->data = [['description' => $data]];
+      $this->data = [
+        'description' => [
+          'page_title' => 'AI Generated Landing Page',
+          'paragraphs' => [],
+          'raw_description' => $data ?: 'Please provide a description of the landing page you want to create.',
+        ],
+      ];
     }
+    // If we get an array without a description key, treat first value as description.
     elseif (is_array($data) && !isset($data['description']) && !empty($data)) {
-      // If we receive a non-empty array without a description key,
-      // treat the first value as the description
-      $this->data = [['description' => reset($data)]];
+      $firstValue = reset($data);
+      $this->data = [
+        'description' => [
+          'page_title' => 'AI Generated Landing Page',
+          'paragraphs' => [],
+          'raw_description' => is_string($firstValue) ? $firstValue : 'Please provide a description of the landing page you want to create.',
+        ],
+      ];
     }
+    // Otherwise, use the data as is but ensure it's in the correct format.
     else {
-      $this->data = [$data];
+      $formattedData = is_array($data) ? $data : ['description' => $data];
+      if (!isset($formattedData['description']['page_title'])) {
+        $formattedData['description']['page_title'] = 'AI Generated Landing Page';
+      }
+      if (!isset($formattedData['description']['paragraphs'])) {
+        $formattedData['description']['paragraphs'] = [];
+      }
+      if (isset($formattedData['description']) && is_string($formattedData['description'])) {
+        $formattedData['description'] = [
+          'page_title' => 'AI Generated Landing Page',
+          'paragraphs' => [],
+          'raw_description' => $formattedData['description'] ?: 'Please provide a description of the landing page you want to create.',
+        ];
+      }
+      if (empty($formattedData['description']['raw_description'])) {
+        $formattedData['description']['raw_description'] = 'Please provide a description of the landing page you want to create.';
+      }
+      $this->data = $formattedData;
     }
   }
 
@@ -157,7 +211,13 @@ class LandingPageGenerator extends AiAgentBase implements ContainerFactoryPlugin
    */
   public function getData() {
     if (empty($this->data)) {
-      return [['description' => '']];
+      return [
+        'description' => [
+          'page_title' => 'AI Generated Landing Page',
+          'paragraphs' => [],
+          'raw_description' => '',
+        ],
+      ];
     }
     return $this->data;
   }
@@ -221,17 +281,42 @@ class LandingPageGenerator extends AiAgentBase implements ContainerFactoryPlugin
    * {@inheritdoc}
    */
   public function solve() {
+    // Log the task type and data at the start of solve.
+    \Drupal::logger('drupalx_ai')->debug('Starting solve() method. Task type: @type, Data: @data', [
+      '@type' => $this->taskType,
+      '@data' => print_r($this->data, TRUE),
+    ]);
+
     parent::solve();
     $messages = [];
 
-    foreach ($this->data as $data) {
+    try {
       switch ($this->taskType) {
         case 'generate':
-          try {
-            $this->generateLandingPage($data);
+          // Get the sub-agent's response data.
+          $response = $this->agentHelper->runSubAgent('determineLandingPageTask', [
+            'description' => 'Create a landing page for a new eco-friendly water bottle.',
+          ]);
+
+          if (!empty($response[0]['description'])) {
+            // Update the data with the sub-agent's response.
+            $this->data = [
+              'description' => [
+                'page_title' => $response[0]['page_title'] ?? 'Eco-Friendly Water Bottle Landing Page',
+                'paragraphs' => [],
+                'raw_description' => $response[0]['description'],
+              ],
+            ];
+
+            // Log the updated data.
+            \Drupal::logger('drupalx_ai')->debug('Updated data before generating landing page: @data', [
+              '@data' => print_r($this->data, TRUE),
+            ]);
+
+            $this->generateLandingPage($this->data);
           }
-          catch (\Exception $e) {
-            $messages[] = 'There was an error generating the landing page: ' . $e->getMessage();
+          else {
+            throw new AgentProcessingException('No description provided by the sub-agent.');
           }
           break;
 
@@ -246,6 +331,14 @@ class LandingPageGenerator extends AiAgentBase implements ContainerFactoryPlugin
           $this->result[] = $this->t('We could not figure out what you wanted to do.');
       }
     }
+    catch (\Exception $e) {
+      $messages[] = 'There was an error generating the landing page: ' . $e->getMessage();
+    }
+
+    // Ensure result is always an array.
+    if (!is_array($this->result)) {
+      $this->result = [$this->result];
+    }
 
     $parts = [];
 
@@ -254,8 +347,7 @@ class LandingPageGenerator extends AiAgentBase implements ContainerFactoryPlugin
     }
 
     if (!empty($this->result)) {
-      $resultArray = is_array($this->result) ? $this->result : [$this->result];
-      $parts[] = "The following are results:\n" . implode("\n", $resultArray);
+      $parts[] = "The following are results:\n" . implode("\n", array_filter($this->result));
     }
 
     if (!empty($this->createdPages)) {
@@ -266,7 +358,7 @@ class LandingPageGenerator extends AiAgentBase implements ContainerFactoryPlugin
       $parts[] = "The following landing pages were created:\n" . implode("\n", $pageLines);
     }
 
-    return implode("\n\n", $parts);
+    return empty($parts) ? 'No results to display.' : implode("\n\n", $parts);
   }
 
   /**
@@ -300,11 +392,16 @@ class LandingPageGenerator extends AiAgentBase implements ContainerFactoryPlugin
    *   The data containing the landing page description.
    */
   protected function generateLandingPage(array $data) {
-    if (empty($data['description'])) {
+    // Log the incoming data for debugging.
+    \Drupal::logger('drupalx_ai')->debug('Landing page generation data: @data', [
+      '@data' => print_r($data, TRUE),
+    ]);
+
+    if (empty($data['description']) || empty($data['description']['raw_description'])) {
       throw new AgentProcessingException('No description provided for the landing page.');
     }
 
-    $aiContent = $this->aiLandingPageService->generateAiContent($data['description']);
+    $aiContent = $this->aiLandingPageService->generateAiContent($data['description']['raw_description']);
     if (!$aiContent) {
       throw new AgentProcessingException('Failed to generate AI content for the landing page.');
     }
@@ -318,9 +415,13 @@ class LandingPageGenerator extends AiAgentBase implements ContainerFactoryPlugin
       throw new AgentProcessingException('Failed to create landing page node.');
     }
 
-    // Store the result as an array instead of a string
-    $this->result = [
-      sprintf('Successfully created landing page: %s', $url)
+    // Add to the result array instead of replacing it.
+    $this->result[] = sprintf('Successfully created landing page: %s', $url);
+
+    // Store the page info for later use.
+    $this->createdPages[] = [
+      'title' => $aiContent['page_title'],
+      'url' => $url,
     ];
   }
 
@@ -335,12 +436,12 @@ class LandingPageGenerator extends AiAgentBase implements ContainerFactoryPlugin
    * {@inheritdoc}
    */
   public function answerQuestion() {
-    // Check permissions first
+    // Check permissions first.
     if (!$this->currentUser->hasPermission('create landing content')) {
       return $this->t('You do not have permission to do this.');
     }
 
-    // Build context for the answer
+    // Build context for the answer.
     $context = [];
     $description = $this->data[0]['description'] ?? '';
     if (!empty($description)) {
@@ -389,17 +490,54 @@ class LandingPageGenerator extends AiAgentBase implements ContainerFactoryPlugin
    *   The determined task type.
    */
   protected function determineTypeOfTask() {
+    // Log the raw data for debugging.
+    \Drupal::logger('drupalx_ai')->debug('Raw data in determineTypeOfTask: @data', [
+      '@data' => print_r($this->data, TRUE),
+    ]);
+
     $data = $this->getData();
     $description = '';
-    if (!empty($data[0]['description'])) {
-      $description = $data[0]['description'];
+
+    // Handle the case where data is directly a string.
+    if (is_string($data)) {
+      $description = $data;
     }
-    elseif (!empty($data[0]) && is_string($data[0])) {
-      $description = $data[0];
+    // Handle the case where data is an array with description.
+    elseif (isset($data['description'])) {
+      if (is_string($data['description'])) {
+        $description = $data['description'];
+      }
+      elseif (isset($data['description']['raw_description'])) {
+        $description = $data['description']['raw_description'];
+      }
     }
+    // Handle legacy array format.
+    elseif (!empty($data[0])) {
+      if (is_string($data[0])) {
+        $description = $data[0];
+      }
+      elseif (isset($data[0]['description'])) {
+        if (is_string($data[0]['description'])) {
+          $description = $data[0]['description'];
+        }
+        elseif (isset($data[0]['description']['raw_description'])) {
+          $description = $data[0]['description']['raw_description'];
+        }
+      }
+    }
+
+    // Log the extracted description.
+    \Drupal::logger('drupalx_ai')->debug('Extracted description: @description', [
+      '@description' => $description,
+    ]);
 
     $response = $this->agentHelper->runSubAgent('determineLandingPageTask', [
       'description' => $description,
+    ]);
+
+    // Log the response from the sub-agent.
+    \Drupal::logger('drupalx_ai')->debug('Sub-agent response: @response', [
+      '@response' => print_r($response, TRUE),
     ]);
 
     // Return error early if no action is set.

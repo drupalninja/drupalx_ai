@@ -227,30 +227,134 @@ final class AiLandingPageService {
   public function createLandingNodeWithAiContent(string $page_title, array $paragraphs): ?string {
     $this->loggerFactory->get('drupalx_ai')->info('Starting to create landing page with title: @title', ['@title' => $page_title]);
 
-    $node = Node::create([
-      'type' => 'landing',
-      'title' => $page_title ?? 'AI Generated Landing Page',
-      'field_hide_page_title' => 1,
-      'status' => 1,
-    ]);
-
-    $this->loggerFactory->get('drupalx_ai')->info('Created node entity, adding @count paragraphs', ['@count' => count($paragraphs)]);
-
-    foreach ($paragraphs as $paragraphData) {
-      $paragraph = $this->createParagraphFromGeneratedContent($paragraphData);
-      if ($paragraph) {
-        $node->get('field_content')->appendItem($paragraph);
-      } else {
-        $this->loggerFactory->get('drupalx_ai')->warning('Failed to create paragraph from data: @data', ['@data' => json_encode($paragraphData)]);
-      }
-    }
-
     try {
-      $this->loggerFactory->get('drupalx_ai')->info('Attempting to save node');
+      // Log the node creation data
+      $this->loggerFactory->get('drupalx_ai')->debug('Creating node with data: @data', [
+        '@data' => json_encode([
+          'type' => 'landing',
+          'title' => $page_title,
+          'field_hide_page_title' => 1,
+          'status' => 1,
+        ])
+      ]);
+
+      $node = Node::create([
+        'type' => 'landing',
+        'title' => $page_title ?? 'AI Generated Landing Page',
+        'field_hide_page_title' => 1,
+        'status' => 1,
+      ]);
+
+      // Log node initial state
+      $this->loggerFactory->get('drupalx_ai')->debug('Initial node state - UUID: @uuid, EntityId: @id', [
+        '@uuid' => $node->uuid(),
+        '@id' => $node->id(),
+      ]);
+
+      $this->loggerFactory->get('drupalx_ai')->info('Created node entity, adding @count paragraphs', ['@count' => count($paragraphs)]);
+
+      // Log paragraph data before processing
+      $this->loggerFactory->get('drupalx_ai')->debug('Paragraph data to process: @data', [
+        '@data' => json_encode($paragraphs),
+      ]);
+
+      foreach ($paragraphs as $index => $paragraphData) {
+        $this->loggerFactory->get('drupalx_ai')->debug('Processing paragraph @index of type @type', [
+          '@index' => $index,
+          '@type' => $paragraphData['type'] ?? 'unknown',
+        ]);
+
+        $paragraph = $this->createParagraphFromGeneratedContent($paragraphData);
+        if ($paragraph) {
+          // Log paragraph creation success
+          $this->loggerFactory->get('drupalx_ai')->debug('Created paragraph of type @type with ID @id', [
+            '@type' => $paragraph->bundle(),
+            '@id' => $paragraph->id(),
+          ]);
+
+          $node->get('field_content')->appendItem($paragraph);
+          $this->loggerFactory->get('drupalx_ai')->debug('Successfully added paragraph @index to node', ['@index' => $index]);
+        } else {
+          $this->loggerFactory->get('drupalx_ai')->warning('Failed to create paragraph @index from data: @data', [
+            '@index' => $index,
+            '@data' => json_encode($paragraphData),
+          ]);
+        }
+      }
+
+      // Log field content state
+      $this->loggerFactory->get('drupalx_ai')->debug('Node field_content state: @state', [
+        '@state' => json_encode($node->get('field_content')->getValue()),
+      ]);
+
+      $violations = $node->validate();
+      if (count($violations) > 0) {
+        $violationMessages = [];
+        foreach ($violations as $violation) {
+          $violationMessages[] = $violation->getMessage();
+        }
+        $this->loggerFactory->get('drupalx_ai')->error('Node validation failed: @messages', [
+          '@messages' => implode(', ', $violationMessages),
+        ]);
+        return NULL;
+      }
+
+      $this->loggerFactory->get('drupalx_ai')->info('Node validation passed, attempting to save');
+
+      // Log pre-save node state
+      $this->loggerFactory->get('drupalx_ai')->debug('Pre-save node state: @state', [
+        '@state' => json_encode([
+          'uuid' => $node->uuid(),
+          'id' => $node->id(),
+          'title' => $node->getTitle(),
+          'type' => $node->bundle(),
+          'status' => $node->isPublished(),
+        ]),
+      ]);
+
       $node->save();
+
+      // Log post-save node state
+      $this->loggerFactory->get('drupalx_ai')->debug('Post-save node state: @state', [
+        '@state' => json_encode([
+          'uuid' => $node->uuid(),
+          'id' => $node->id(),
+          'title' => $node->getTitle(),
+          'type' => $node->bundle(),
+          'status' => $node->isPublished(),
+          'revision_id' => $node->getRevisionId(),
+        ]),
+      ]);
+
       $this->loggerFactory->get('drupalx_ai')->info('Successfully saved node with ID: @id', ['@id' => $node->id()]);
+
+      // Verify the node exists after save
+      $loadedNode = Node::load($node->id());
+      if (!$loadedNode) {
+        $this->loggerFactory->get('drupalx_ai')->error('Node could not be loaded after save with ID: @id', ['@id' => $node->id()]);
+        return NULL;
+      }
+
+      // Log loaded node state
+      $this->loggerFactory->get('drupalx_ai')->debug('Loaded node state: @state', [
+        '@state' => json_encode([
+          'uuid' => $loadedNode->uuid(),
+          'id' => $loadedNode->id(),
+          'title' => $loadedNode->getTitle(),
+          'type' => $loadedNode->bundle(),
+          'status' => $loadedNode->isPublished(),
+          'revision_id' => $loadedNode->getRevisionId(),
+        ]),
+      ]);
+
+      $this->loggerFactory->get('drupalx_ai')->info('Successfully verified node exists with ID: @id', ['@id' => $node->id()]);
+
       $url = Url::fromRoute('entity.node.edit_form', ['node' => $node->id()]);
-      return $url->setAbsolute()->toString();
+      $absoluteUrl = $url->setAbsolute()->toString();
+
+      $this->loggerFactory->get('drupalx_ai')->info('Generated URL for node: @url', ['@url' => $absoluteUrl]);
+
+      return $absoluteUrl;
     }
     catch (\Exception $e) {
       $this->loggerFactory->get('drupalx_ai')->error('Failed to create landing page: @message', ['@message' => $e->getMessage()]);
