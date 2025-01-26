@@ -168,14 +168,21 @@ final class AiLandingPageService {
     $prompt .= "3. For fields named 'field_icon', you MUST only use valid Lucide icon names (e.g. 'arrow-right').\n";
     $prompt .= "4. When generating the landing page structure, ensure that ONLY the allowed paragraph types listed above are used as top-level paragraphs.\n";
     $prompt .= "5. Other paragraph types can be used as nested paragraphs within these allowed types if the structure permits.\n";
-    $prompt .= "6. Every paragraph, including sub-paragraphs (such as accordion items or pricing cards), must have a 'type' property.\n";
+    $prompt .= "6. CRITICAL: Every paragraph MUST have a 'type' property that matches its intended type. This includes:\n";
+    $prompt .= "    - Top-level paragraphs (hero, carousel, card_group, accordion, pricing, etc.)\n";
+    $prompt .= "    - Nested paragraphs:\n";
+    $prompt .= "      * Accordion items must have type: 'accordion_item'\n";
+    $prompt .= "      * Cards must have type: 'card'\n";
+    $prompt .= "      * Carousel items must have type: 'carousel_item'\n";
+    $prompt .= "      * Pricing cards must have type: 'pricing_card'\n";
     $prompt .= "7. For entity reference fields, use appropriate existing entity names or IDs.\n";
     $prompt .= "8. For viewsreference fields, use existing view names and display IDs.\n";
-    $prompt .= "9. For list_string fields, choose only from the provided options in the 'o' array.\n";
+    $prompt .= "9. For list_string fields, choose only from the provided options in the 'o' array. Use the machine names (keys), not the human-readable labels.\n";
     $prompt .= "10. In field_features_text do not include any characters for bullets, only plain text separated by new lines.\n";
     $prompt .= "11. Stat items should always have a title value.\n";
     $prompt .= "12. The text paragraph does not have a field_summary field.\n";
-    $prompt .= "13. For logo collection limit max to 7 media items.\n\n";
+    $prompt .= "13. For logo collection limit max to 7 media items.\n";
+    $prompt .= "14. For layout fields (field_hero_layout, field_text_layout, field_sidebyside_layout), use machine names like 'image_top' not 'Image Top'.\n\n";
 
     $prompt .= "Example structure (note that paragraphs is an array, not a string):\n";
     $prompt .= "{\n";
@@ -188,6 +195,84 @@ final class AiLandingPageService {
     $prompt .= "        \"field_hero_layout\": \"image_bottom\",\n";
     $prompt .= "        \"field_summary\": \"We provide top-notch solutions for your needs.\",\n";
     $prompt .= "        \"field_media\": \"Technology\"\n";
+    $prompt .= "      }\n";
+    $prompt .= "    },\n";
+    $prompt .= "    {\n";
+    $prompt .= "      \"type\": \"pricing\",\n";
+    $prompt .= "      \"fields\": {\n";
+    $prompt .= "        \"field_title\": \"Our Pricing Plans\",\n";
+    $prompt .= "        \"field_summary\": \"Choose the plan that works best for you\",\n";
+    $prompt .= "        \"field_pricing_cards\": [\n";
+    $prompt .= "          {\n";
+    $prompt .= "            \"type\": \"pricing_card\",\n";
+    $prompt .= "            \"fields\": {\n";
+    $prompt .= "              \"field_title\": \"Basic Plan\",\n";
+    $prompt .= "              \"field_eyebrow\": \"Most Popular\",\n";
+    $prompt .= "              \"field_features_text\": \"Feature 1\\nFeature 2\\nFeature 3\",\n";
+    $prompt .= "              \"field_suffix\": \"Starting at\",\n";
+    $prompt .= "              \"field_link\": {\"url\": \"/basic-plan\", \"text\": \"Get Started\"}\n";
+    $prompt .= "            }\n";
+    $prompt .= "          },\n";
+    $prompt .= "          {\n";
+    $prompt .= "            \"type\": \"pricing_card\",\n";
+    $prompt .= "            \"fields\": {\n";
+    $prompt .= "              \"field_title\": \"Pro Plan\",\n";
+    $prompt .= "              \"field_eyebrow\": \"Best Value\",\n";
+    $prompt .= "              \"field_features_text\": \"All Basic Features\\nPro Feature 1\\nPro Feature 2\",\n";
+    $prompt .= "              \"field_suffix\": \"Only\",\n";
+    $prompt .= "              \"field_link\": {\"url\": \"/pro-plan\", \"text\": \"Upgrade Now\"}\n";
+    $prompt .= "            }\n";
+    $prompt .= "          }\n";
+    $prompt .= "        ]\n";
+    $prompt .= "      }\n";
+    $prompt .= "    },\n";
+    $prompt .= "    {\n";
+    $prompt .= "      \"type\": \"carousel\",\n";
+    $prompt .= "      \"fields\": {\n";
+    $prompt .= "        \"field_carousel_item\": [\n";
+    $prompt .= "          {\n";
+    $prompt .= "            \"type\": \"carousel_item\",\n";
+    $prompt .= "            \"fields\": {\n";
+    $prompt .= "              \"field_title\": \"Happy Customer\",\n";
+    $prompt .= "              \"field_summary\": \"This service has been amazing!\",\n";
+    $prompt .= "              \"field_media\": \"Customer Photo\"\n";
+    $prompt .= "            }\n";
+    $prompt .= "          },\n";
+    $prompt .= "          {\n";
+    $prompt .= "            \"type\": \"carousel_item\",\n";
+    $prompt .= "            \"fields\": {\n";
+    $prompt .= "              \"field_title\": \"Another Customer\",\n";
+    $prompt .= "              \"field_summary\": \"Best service ever!\",\n";
+    $prompt .= "              \"field_media\": \"Customer Photo\"\n";
+    $prompt .= "            }\n";
+    $prompt .= "          }\n";
+    $prompt .= "        ]\n";
+    $prompt .= "      }\n";
+    $prompt .= "    },\n";
+    $prompt .= "    {\n";
+    $prompt .= "      \"type\": \"card_group\",\n";
+    $prompt .= "      \"fields\": {\n";
+    $prompt .= "        \"field_title\": \"Our Services\",\n";
+    $prompt .= "        \"field_card\": [\n";
+    $prompt .= "          {\n";
+    $prompt .= "            \"type\": \"card\",\n";
+    $prompt .= "            \"fields\": {\n";
+    $prompt .= "              \"field_title\": \"Service One\",\n";
+    $prompt .= "              \"field_summary\": \"Description of service one\",\n";
+    $prompt .= "              \"field_media\": \"Service Image\",\n";
+    $prompt .= "              \"field_link\": {\"url\": \"/service-one\", \"text\": \"Learn More\"}\n";
+    $prompt .= "            }\n";
+    $prompt .= "          },\n";
+    $prompt .= "          {\n";
+    $prompt .= "            \"type\": \"card\",\n";
+    $prompt .= "            \"fields\": {\n";
+    $prompt .= "              \"field_title\": \"Service Two\",\n";
+    $prompt .= "              \"field_summary\": \"Description of service two\",\n";
+    $prompt .= "              \"field_media\": \"Service Image\",\n";
+    $prompt .= "              \"field_link\": {\"url\": \"/service-two\", \"text\": \"Learn More\"}\n";
+    $prompt .= "            }\n";
+    $prompt .= "          }\n";
+    $prompt .= "        ]\n";
     $prompt .= "      }\n";
     $prompt .= "    },\n";
     $prompt .= "    {\n";
@@ -382,16 +467,33 @@ final class AiLandingPageService {
         unset($paragraphData['{']);
       }
 
-      // If parent is 'pricing' and child type is missing, assume
-      // 'pricing_card'.
-      if ($parentType === 'pricing' && !isset($paragraphData['type'])) {
-        $paragraphData['type'] = 'pricing_card';
+      // Infer type based on parent type and field name
+      if (!isset($paragraphData['type'])) {
+        if ($parentType === 'pricing' || str_contains($parentType, 'pricing')) {
+          $paragraphData['type'] = 'pricing_card';
+        }
+        elseif ($parentType === 'card_group' || str_contains($parentType, 'card')) {
+          $paragraphData['type'] = 'card';
+        }
+        elseif ($parentType === 'carousel' || str_contains($parentType, 'carousel')) {
+          $paragraphData['type'] = 'carousel_item';
+        }
+        elseif ($parentType === 'accordion' || str_contains($parentType, 'accordion')) {
+          $paragraphData['type'] = 'accordion_item';
+        }
       }
 
       if (!isset($paragraphData['type'])) {
-        $this->loggerFactory->get('drupalx_ai')->warning('Paragraph type is missing. Skipping this paragraph.');
+        $this->loggerFactory->get('drupalx_ai')->warning('Paragraph type is missing and could not be inferred from parent type @parent. Skipping this paragraph.', [
+          '@parent' => $parentType,
+        ]);
         return NULL;
       }
+
+      $this->loggerFactory->get('drupalx_ai')->debug('Creating paragraph of type @type with parent type @parent', [
+        '@type' => $paragraphData['type'],
+        '@parent' => $parentType ?: 'none',
+      ]);
 
       $paragraph = Paragraph::create([
         'type' => $paragraphData['type'],
@@ -401,6 +503,20 @@ final class AiLandingPageService {
 
       foreach ($paragraphData['fields'] as $fieldName => $fieldValue) {
         $fieldDefinition = $fieldDefinitions[$fieldName] ?? NULL;
+
+        if (!$fieldDefinition) {
+          $this->loggerFactory->get('drupalx_ai')->warning('Field @field does not exist for paragraph type @type', [
+            '@field' => $fieldName,
+            '@type' => $paragraphData['type'],
+          ]);
+          continue;
+        }
+
+        $this->loggerFactory->get('drupalx_ai')->debug('Processing field @field of type @type with value: @value', [
+          '@field' => $fieldName,
+          '@type' => $fieldDefinition->getType(),
+          '@value' => is_array($fieldValue) ? json_encode($fieldValue) : $fieldValue,
+        ]);
 
         // Skip this svg field.
         if ($fieldName === 'field_logo') {
@@ -428,16 +544,59 @@ final class AiLandingPageService {
         }
         elseif (is_array($fieldValue) && (isset($fieldValue[0]['type']) || isset($fieldValue[0]['{']))) {
           // This is likely a nested paragraph field.
+          $this->loggerFactory->get('drupalx_ai')->debug('Processing nested paragraphs for field @field in @type paragraph', [
+            '@field' => $fieldName,
+            '@type' => $paragraphData['type'],
+          ]);
+
           $nestedParagraphs = [];
-          foreach ($fieldValue as $nestedParagraphData) {
-            // Pass the current paragraph type as the parent type for nested
-            // paragraphs.
+          foreach ($fieldValue as $index => $nestedParagraphData) {
+            $this->loggerFactory->get('drupalx_ai')->debug('Processing nested paragraph @index with data: @data', [
+              '@index' => $index,
+              '@data' => json_encode($nestedParagraphData),
+            ]);
+
+            // Pass the current paragraph type as the parent type for nested paragraphs.
             $nestedParagraph = $this->createParagraphFromGeneratedContent($nestedParagraphData, $paragraphData['type']);
             if ($nestedParagraph) {
               $nestedParagraphs[] = $nestedParagraph;
+              $this->loggerFactory->get('drupalx_ai')->debug('Successfully created nested paragraph @index of type @type', [
+                '@index' => $index,
+                '@type' => $nestedParagraph->bundle(),
+              ]);
+            } else {
+              $this->loggerFactory->get('drupalx_ai')->error('Failed to create nested paragraph @index', [
+                '@index' => $index,
+              ]);
             }
           }
-          $paragraph->set($fieldName, $nestedParagraphs);
+
+          // Check if this is a required field
+          $isRequired = $fieldDefinition->isRequired();
+
+          // If the field is required and we have no valid nested paragraphs, return NULL
+          if ($isRequired && empty($nestedParagraphs)) {
+            $this->loggerFactory->get('drupalx_ai')->error('Required nested paragraph field @field has no valid paragraphs', [
+              '@field' => $fieldName,
+            ]);
+            return NULL;
+          }
+
+          // Only set the field if we have valid nested paragraphs
+          if (!empty($nestedParagraphs)) {
+            $this->loggerFactory->get('drupalx_ai')->debug('Setting @count nested paragraphs to field @field', [
+              '@count' => count($nestedParagraphs),
+              '@field' => $fieldName,
+            ]);
+
+            $paragraph->set($fieldName, $nestedParagraphs);
+
+            // Log the field value after setting
+            $this->loggerFactory->get('drupalx_ai')->debug('Field @field value after setting nested paragraphs: @value', [
+              '@field' => $fieldName,
+              '@value' => json_encode($paragraph->get($fieldName)->getValue()),
+            ]);
+          }
         }
         elseif ($fieldName === 'field_icon') {
           $iconName = $this->paragraphStructureService->getBestIconMatch($fieldValue);
@@ -448,12 +607,39 @@ final class AiLandingPageService {
           $paragraph->set($fieldName, $cleanedFieldValue);
         }
         elseif ($fieldName === 'field_hero_layout') {
+          // Check if the value is in the allowed list
+          $allowedValues = $fieldDefinition->getSetting('allowed_values');
+          if ($allowedValues && !isset($allowedValues[$fieldValue])) {
+            $this->loggerFactory->get('drupalx_ai')->warning('Invalid hero layout value: @value. Allowed values: @allowed', [
+              '@value' => $fieldValue,
+              '@allowed' => implode(', ', array_keys($allowedValues)),
+            ]);
+            $fieldValue = 'image_top';
+          }
           $paragraph->set($fieldName, !empty($fieldValue) ? $fieldValue : 'image_top');
         }
         elseif ($fieldName === 'field_text_layout') {
+          // Check if the value is in the allowed list
+          $allowedValues = $fieldDefinition->getSetting('allowed_values');
+          if ($allowedValues && !isset($allowedValues[$fieldValue])) {
+            $this->loggerFactory->get('drupalx_ai')->warning('Invalid text layout value: @value. Allowed values: @allowed', [
+              '@value' => $fieldValue,
+              '@allowed' => implode(', ', array_keys($allowedValues)),
+            ]);
+            $fieldValue = 'left';
+          }
           $paragraph->set($fieldName, !empty($fieldValue) ? $fieldValue : 'left');
         }
         elseif ($fieldName === 'field_sidebyside_layout') {
+          // Check if the value is in the allowed list
+          $allowedValues = $fieldDefinition->getSetting('allowed_values');
+          if ($allowedValues && !isset($allowedValues[$fieldValue])) {
+            $this->loggerFactory->get('drupalx_ai')->warning('Invalid sidebyside layout value: @value. Allowed values: @allowed', [
+              '@value' => $fieldValue,
+              '@allowed' => implode(', ', array_keys($allowedValues)),
+            ]);
+            $fieldValue = 'left';
+          }
           $paragraph->set($fieldName, !empty($fieldValue) ? $fieldValue : 'left');
         }
         else {
@@ -477,18 +663,72 @@ final class AiLandingPageService {
               ]);
             }
           }
+          elseif ($fieldDefinition->getType() === 'list_string') {
+            // For list_string fields, verify the value is in the allowed list
+            $allowedValues = $fieldDefinition->getSetting('allowed_values');
+            if ($allowedValues && !isset($allowedValues[$fieldValue])) {
+              $this->loggerFactory->get('drupalx_ai')->warning('Invalid value for list field @field: @value. Allowed values: @allowed', [
+                '@field' => $fieldName,
+                '@value' => $fieldValue,
+                '@allowed' => implode(', ', array_keys($allowedValues)),
+              ]);
+              continue;
+            }
+            $paragraph->set($fieldName, $fieldValue);
+          }
           else {
             // For non-text fields, set the value directly.
             $paragraph->set($fieldName, $fieldValue);
           }
         }
+
+        // Validate the field after setting
+        $violations = $paragraph->validate()->getByField($fieldName);
+        if (count($violations) > 0) {
+          $messages = [];
+          foreach ($violations as $violation) {
+            $messages[] = $violation->getMessage();
+          }
+          $this->loggerFactory->get('drupalx_ai')->error('Field @field validation failed for paragraph type @type: @messages', [
+            '@field' => $fieldName,
+            '@type' => $paragraphData['type'],
+            '@messages' => implode(', ', $messages),
+          ]);
+        }
       }
 
+      $violations = $paragraph->validate();
+      if (count($violations) > 0) {
+        $violationMessages = [];
+        foreach ($violations as $violation) {
+          $violationMessages[] = $violation->getMessage();
+          $this->loggerFactory->get('drupalx_ai')->error('Validation error for field @field: @message', [
+            '@field' => $violation->getPropertyPath(),
+            '@message' => $violation->getMessage(),
+          ]);
+        }
+        $this->loggerFactory->get('drupalx_ai')->error('Paragraph validation failed: @messages', [
+          '@messages' => implode(', ', $violationMessages),
+        ]);
+        return NULL;
+      }
+
+      $this->loggerFactory->get('drupalx_ai')->debug('Saving paragraph of type @type', [
+        '@type' => $paragraph->bundle(),
+      ]);
+
       $paragraph->save();
+
+      $this->loggerFactory->get('drupalx_ai')->debug('Successfully saved paragraph of type @type with ID @id', [
+        '@type' => $paragraph->bundle(),
+        '@id' => $paragraph->id(),
+      ]);
+
       return $paragraph;
     }
     catch (\Exception $e) {
       $this->loggerFactory->get('drupalx_ai')->error('Failed to create paragraph: @message', ['@message' => $e->getMessage()]);
+      $this->loggerFactory->get('drupalx_ai')->error('Exception trace: @trace', ['@trace' => $e->getTraceAsString()]);
       return NULL;
     }
   }
