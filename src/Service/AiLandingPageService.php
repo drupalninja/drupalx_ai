@@ -105,11 +105,13 @@ final class AiLandingPageService {
           $decodedParagraphs = json_decode($result['paragraphs'], TRUE, 512, JSON_THROW_ON_ERROR);
           if (is_array($decodedParagraphs)) {
             $result['paragraphs'] = $decodedParagraphs;
-          } else {
+          }
+          else {
             $this->loggerFactory->get('drupalx_ai')->error('Failed to decode paragraphs data: not an array after decoding');
             return NULL;
           }
-        } catch (\JsonException $e) {
+        }
+        catch (\JsonException $e) {
           $this->loggerFactory->get('drupalx_ai')->error('Failed to decode paragraphs JSON: @message', ['@message' => $e->getMessage()]);
           return NULL;
         }
@@ -312,8 +314,6 @@ final class AiLandingPageService {
    *   The URL of the created node, or null if creation failed.
    */
   public function createLandingNodeWithAiContent(string $page_title, array $paragraphs, ?array $allowedParagraphTypes = NULL): ?string {
-    $this->loggerFactory->get('drupalx_ai')->info('Starting to create landing page with title: @title', ['@title' => $page_title]);
-
     try {
       // Get allowed paragraph types if not provided.
       if ($allowedParagraphTypes === NULL) {
@@ -324,14 +324,14 @@ final class AiLandingPageService {
       $validParagraphs = [];
       foreach ($paragraphs as $index => $paragraphData) {
         if (!isset($paragraphData['type'])) {
-          $this->loggerFactory->get('drupalx_ai')->warning('Paragraph at index @index missing type, skipping', [
+          $this->loggerFactory->get('drupalx_ai')->error('Paragraph at index @index missing type, skipping', [
             '@index' => $index,
           ]);
           continue;
         }
 
         if (!in_array($paragraphData['type'], $allowedParagraphTypes)) {
-          $this->loggerFactory->get('drupalx_ai')->warning('Skipping paragraph of type @type as it is not in allowed types: @allowed', [
+          $this->loggerFactory->get('drupalx_ai')->error('Skipping paragraph of type @type as it is not in allowed types: @allowed', [
             '@type' => $paragraphData['type'],
             '@allowed' => implode(', ', $allowedParagraphTypes),
           ]);
@@ -348,16 +348,6 @@ final class AiLandingPageService {
         return NULL;
       }
 
-      // Log the node creation data.
-      $this->loggerFactory->get('drupalx_ai')->debug('Creating node with data: @data', [
-        '@data' => json_encode([
-          'type' => 'landing',
-          'title' => $page_title,
-          'field_hide_page_title' => 1,
-          'status' => 1,
-        ])
-      ]);
-
       $node = Node::create([
         'type' => 'landing',
         'title' => $page_title ?? 'AI Generated Landing Page',
@@ -365,47 +355,18 @@ final class AiLandingPageService {
         'status' => 1,
       ]);
 
-      // Log node initial state.
-      $this->loggerFactory->get('drupalx_ai')->debug('Initial node state - UUID: @uuid, EntityId: @id', [
-        '@uuid' => $node->uuid(),
-        '@id' => $node->id(),
-      ]);
-
-      $this->loggerFactory->get('drupalx_ai')->info('Created node entity, adding @count paragraphs', ['@count' => count($validParagraphs)]);
-
-      // Log paragraph data before processing.
-      $this->loggerFactory->get('drupalx_ai')->debug('Paragraph data to process: @data', [
-        '@data' => json_encode($validParagraphs),
-      ]);
-
       foreach ($validParagraphs as $index => $paragraphData) {
-        $this->loggerFactory->get('drupalx_ai')->debug('Processing paragraph @index of type @type', [
-          '@index' => $index,
-          '@type' => $paragraphData['type'] ?? 'unknown',
-        ]);
-
         $paragraph = $this->createParagraphFromGeneratedContent($paragraphData);
         if ($paragraph) {
-          // Log paragraph creation success
-          $this->loggerFactory->get('drupalx_ai')->debug('Created paragraph of type @type with ID @id', [
-            '@type' => $paragraph->bundle(),
-            '@id' => $paragraph->id(),
-          ]);
-
           $node->get('field_content')->appendItem($paragraph);
-          $this->loggerFactory->get('drupalx_ai')->debug('Successfully added paragraph @index to node', ['@index' => $index]);
-        } else {
-          $this->loggerFactory->get('drupalx_ai')->warning('Failed to create paragraph @index from data: @data', [
+        }
+        else {
+          $this->loggerFactory->get('drupalx_ai')->error('Failed to create paragraph @index from data: @data', [
             '@index' => $index,
             '@data' => json_encode($paragraphData),
           ]);
         }
       }
-
-      // Log field content state
-      $this->loggerFactory->get('drupalx_ai')->debug('Node field_content state: @state', [
-        '@state' => json_encode($node->get('field_content')->getValue()),
-      ]);
 
       $violations = $node->validate();
       if (count($violations) > 0) {
@@ -419,62 +380,16 @@ final class AiLandingPageService {
         return NULL;
       }
 
-      $this->loggerFactory->get('drupalx_ai')->info('Node validation passed, attempting to save');
-
-      // Log pre-save node state
-      $this->loggerFactory->get('drupalx_ai')->debug('Pre-save node state: @state', [
-        '@state' => json_encode([
-          'uuid' => $node->uuid(),
-          'id' => $node->id(),
-          'title' => $node->getTitle(),
-          'type' => $node->bundle(),
-          'status' => $node->isPublished(),
-        ]),
-      ]);
-
       $node->save();
 
-      // Log post-save node state
-      $this->loggerFactory->get('drupalx_ai')->debug('Post-save node state: @state', [
-        '@state' => json_encode([
-          'uuid' => $node->uuid(),
-          'id' => $node->id(),
-          'title' => $node->getTitle(),
-          'type' => $node->bundle(),
-          'status' => $node->isPublished(),
-          'revision_id' => $node->getRevisionId(),
-        ]),
-      ]);
-
-      $this->loggerFactory->get('drupalx_ai')->info('Successfully saved node with ID: @id', ['@id' => $node->id()]);
-
-      // Verify the node exists after save
       $loadedNode = Node::load($node->id());
       if (!$loadedNode) {
         $this->loggerFactory->get('drupalx_ai')->error('Node could not be loaded after save with ID: @id', ['@id' => $node->id()]);
         return NULL;
       }
 
-      // Log loaded node state
-      $this->loggerFactory->get('drupalx_ai')->debug('Loaded node state: @state', [
-        '@state' => json_encode([
-          'uuid' => $loadedNode->uuid(),
-          'id' => $loadedNode->id(),
-          'title' => $loadedNode->getTitle(),
-          'type' => $loadedNode->bundle(),
-          'status' => $loadedNode->isPublished(),
-          'revision_id' => $loadedNode->getRevisionId(),
-        ]),
-      ]);
-
-      $this->loggerFactory->get('drupalx_ai')->info('Successfully verified node exists with ID: @id', ['@id' => $node->id()]);
-
       $url = Url::fromRoute('entity.node.edit_form', ['node' => $node->id()]);
-      $absoluteUrl = $url->setAbsolute()->toString();
-
-      $this->loggerFactory->get('drupalx_ai')->info('Generated URL for node: @url', ['@url' => $absoluteUrl]);
-
-      return $absoluteUrl;
+      return $url->setAbsolute()->toString();
     }
     catch (\Exception $e) {
       $this->loggerFactory->get('drupalx_ai')->error('Failed to create landing page: @message', ['@message' => $e->getMessage()]);
@@ -519,16 +434,11 @@ final class AiLandingPageService {
       }
 
       if (!isset($paragraphData['type'])) {
-        $this->loggerFactory->get('drupalx_ai')->warning('Paragraph type is missing and could not be inferred from parent type @parent. Skipping this paragraph.', [
+        $this->loggerFactory->get('drupalx_ai')->error('Paragraph type is missing and could not be inferred from parent type @parent. Skipping this paragraph.', [
           '@parent' => $parentType,
         ]);
         return NULL;
       }
-
-      $this->loggerFactory->get('drupalx_ai')->debug('Creating paragraph of type @type with parent type @parent', [
-        '@type' => $paragraphData['type'],
-        '@parent' => $parentType ?: 'none',
-      ]);
 
       $paragraph = Paragraph::create([
         'type' => $paragraphData['type'],
@@ -540,18 +450,12 @@ final class AiLandingPageService {
         $fieldDefinition = $fieldDefinitions[$fieldName] ?? NULL;
 
         if (!$fieldDefinition) {
-          $this->loggerFactory->get('drupalx_ai')->warning('Field @field does not exist for paragraph type @type', [
+          $this->loggerFactory->get('drupalx_ai')->error('Field @field does not exist for paragraph type @type', [
             '@field' => $fieldName,
             '@type' => $paragraphData['type'],
           ]);
           continue;
         }
-
-        $this->loggerFactory->get('drupalx_ai')->debug('Processing field @field of type @type with value: @value', [
-          '@field' => $fieldName,
-          '@type' => $fieldDefinition->getType(),
-          '@value' => is_array($fieldValue) ? json_encode($fieldValue) : $fieldValue,
-        ]);
 
         // Skip this svg field.
         if ($fieldName === 'field_logo') {
@@ -579,27 +483,14 @@ final class AiLandingPageService {
         }
         elseif (is_array($fieldValue) && (isset($fieldValue[0]['type']) || isset($fieldValue[0]['{']))) {
           // This is likely a nested paragraph field.
-          $this->loggerFactory->get('drupalx_ai')->debug('Processing nested paragraphs for field @field in @type paragraph', [
-            '@field' => $fieldName,
-            '@type' => $paragraphData['type'],
-          ]);
-
           $nestedParagraphs = [];
           foreach ($fieldValue as $index => $nestedParagraphData) {
-            $this->loggerFactory->get('drupalx_ai')->debug('Processing nested paragraph @index with data: @data', [
-              '@index' => $index,
-              '@data' => json_encode($nestedParagraphData),
-            ]);
-
             // Pass the current paragraph type as the parent type for nested paragraphs.
             $nestedParagraph = $this->createParagraphFromGeneratedContent($nestedParagraphData, $paragraphData['type']);
             if ($nestedParagraph) {
               $nestedParagraphs[] = $nestedParagraph;
-              $this->loggerFactory->get('drupalx_ai')->debug('Successfully created nested paragraph @index of type @type', [
-                '@index' => $index,
-                '@type' => $nestedParagraph->bundle(),
-              ]);
-            } else {
+            }
+            else {
               $this->loggerFactory->get('drupalx_ai')->error('Failed to create nested paragraph @index', [
                 '@index' => $index,
               ]);
@@ -619,18 +510,7 @@ final class AiLandingPageService {
 
           // Only set the field if we have valid nested paragraphs
           if (!empty($nestedParagraphs)) {
-            $this->loggerFactory->get('drupalx_ai')->debug('Setting @count nested paragraphs to field @field', [
-              '@count' => count($nestedParagraphs),
-              '@field' => $fieldName,
-            ]);
-
             $paragraph->set($fieldName, $nestedParagraphs);
-
-            // Log the field value after setting
-            $this->loggerFactory->get('drupalx_ai')->debug('Field @field value after setting nested paragraphs: @value', [
-              '@field' => $fieldName,
-              '@value' => json_encode($paragraph->get($fieldName)->getValue()),
-            ]);
           }
         }
         elseif ($fieldName === 'field_icon') {
@@ -645,7 +525,7 @@ final class AiLandingPageService {
           // Check if the value is in the allowed list
           $allowedValues = $fieldDefinition->getSetting('allowed_values');
           if ($allowedValues && !isset($allowedValues[$fieldValue])) {
-            $this->loggerFactory->get('drupalx_ai')->warning('Invalid hero layout value: @value. Allowed values: @allowed', [
+            $this->loggerFactory->get('drupalx_ai')->error('Invalid hero layout value: @value. Allowed values: @allowed', [
               '@value' => $fieldValue,
               '@allowed' => implode(', ', array_keys($allowedValues)),
             ]);
@@ -657,7 +537,7 @@ final class AiLandingPageService {
           // Check if the value is in the allowed list
           $allowedValues = $fieldDefinition->getSetting('allowed_values');
           if ($allowedValues && !isset($allowedValues[$fieldValue])) {
-            $this->loggerFactory->get('drupalx_ai')->warning('Invalid text layout value: @value. Allowed values: @allowed', [
+            $this->loggerFactory->get('drupalx_ai')->error('Invalid text layout value: @value. Allowed values: @allowed', [
               '@value' => $fieldValue,
               '@allowed' => implode(', ', array_keys($allowedValues)),
             ]);
@@ -669,7 +549,7 @@ final class AiLandingPageService {
           // Check if the value is in the allowed list
           $allowedValues = $fieldDefinition->getSetting('allowed_values');
           if ($allowedValues && !isset($allowedValues[$fieldValue])) {
-            $this->loggerFactory->get('drupalx_ai')->warning('Invalid sidebyside layout value: @value. Allowed values: @allowed', [
+            $this->loggerFactory->get('drupalx_ai')->error('Invalid sidebyside layout value: @value. Allowed values: @allowed', [
               '@value' => $fieldValue,
               '@allowed' => implode(', ', array_keys($allowedValues)),
             ]);
@@ -690,7 +570,8 @@ final class AiLandingPageService {
                 'value' => $this->convertRichTextFormat($textValue),
                 'format' => $format,
               ]);
-            } else {
+            }
+            else {
               // If it's a string or any other format, convert it directly.
               $paragraph->set($fieldName, [
                 'value' => $this->convertRichTextFormat((string) $fieldValue),
@@ -702,7 +583,7 @@ final class AiLandingPageService {
             // For list_string fields, verify the value is in the allowed list
             $allowedValues = $fieldDefinition->getSetting('allowed_values');
             if ($allowedValues && !isset($allowedValues[$fieldValue])) {
-              $this->loggerFactory->get('drupalx_ai')->warning('Invalid value for list field @field: @value. Allowed values: @allowed', [
+              $this->loggerFactory->get('drupalx_ai')->error('Invalid value for list field @field: @value. Allowed values: @allowed', [
                 '@field' => $fieldName,
                 '@value' => $fieldValue,
                 '@allowed' => implode(', ', array_keys($allowedValues)),
@@ -748,16 +629,7 @@ final class AiLandingPageService {
         return NULL;
       }
 
-      $this->loggerFactory->get('drupalx_ai')->debug('Saving paragraph of type @type', [
-        '@type' => $paragraph->bundle(),
-      ]);
-
       $paragraph->save();
-
-      $this->loggerFactory->get('drupalx_ai')->debug('Successfully saved paragraph of type @type with ID @id', [
-        '@type' => $paragraph->bundle(),
-        '@id' => $paragraph->id(),
-      ]);
 
       return $paragraph;
     }

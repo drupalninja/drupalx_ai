@@ -226,13 +226,13 @@ class LandingPageGenerator extends AiAgentBase implements ContainerFactoryPlugin
     try {
       switch ($this->taskType) {
         case 'generate':
-          if (!isset($this->data[0]['description'])) {
-            throw new AgentProcessingException('No description provided by the sub-agent.');
+          if (!isset($this->data[0]['page_title']) || !isset($this->data[0]['paragraphs'])) {
+            throw new AgentProcessingException('Missing required fields in content.');
           }
 
           $this->generateLandingPage([
-            'page_title' => $this->data[0]['page_title'] ?? 'AI Generated Landing Page',
-            'description' => $this->data[0]['description'],
+            'page_title' => $this->data[0]['page_title'],
+            'paragraphs' => $this->data[0]['paragraphs'],
           ]);
           break;
 
@@ -294,110 +294,16 @@ class LandingPageGenerator extends AiAgentBase implements ContainerFactoryPlugin
       '@data' => print_r($data, TRUE),
     ]);
 
-    if (empty($data['description'])) {
-      throw new AgentProcessingException('No description provided for the landing page.');
-    }
-
-    // Get the paragraph structures and allowed types.
-    $paragraphStructures = $this->paragraphStructureService->getParagraphStructures(TRUE);
-    $allowedParagraphTypes = $this->mockLandingPageService->getAllowedParagraphTypes('node', 'landing', 'field_content');
-
-    \Drupal::logger('drupalx_ai')->debug('Allowed paragraph types: @types', [
-      '@types' => implode(', ', $allowedParagraphTypes),
-    ]);
-
-    // Run the generateLandingPage sub-agent to get structured content.
-    $response = $this->agentHelper->runSubAgent('generateLandingPage', [
-      'description' => $data['description'],
-      'allowed_paragraph_types' => implode(',', $allowedParagraphTypes),
-      'paragraph_structures' => json_encode($paragraphStructures, JSON_PRETTY_PRINT),
-    ]);
-
-    if (empty($response)) {
-      \Drupal::logger('drupalx_ai')->error('Empty response from sub-agent.');
-      throw new AgentProcessingException('Failed to generate landing page content structure.');
-    }
-
-    \Drupal::logger('drupalx_ai')->debug('Response type: @type', [
-      '@type' => is_array($response) ? 'array' : get_class($response),
-    ]);
-
-    // Handle both ChatMessage and array responses.
-    if (!is_array($response)) {
-      // If it's a ChatMessage, get the JSON string and decode it.
-      $text = $response->getText();
-      \Drupal::logger('drupalx_ai')->debug('Raw ChatMessage text before JSON decode: @text', [
-        '@text' => $text,
-      ]);
-
-      // More thorough cleaning of the text.
-      $text = preg_replace('/[\x00-\x1F\x7F-\xFF]/', '', $text);
-      $text = preg_replace('/\s+/', ' ', $text);
-      $text = trim($text);
-
-      // Validate JSON structure.
-      if (!preg_match('/^\[.*\]$/', $text)) {
-        \Drupal::logger('drupalx_ai')->error('Invalid JSON structure: @text', [
-          '@text' => $text,
-        ]);
-        throw new AgentProcessingException('Invalid JSON structure: Expected array');
-      }
-
-      \Drupal::logger('drupalx_ai')->debug('Cleaned text before JSON decode: @text', [
-        '@text' => $text,
-      ]);
-
-      // Try to decode with error checking.
-      $content = json_decode($text, TRUE);
-      if (json_last_error() !== JSON_ERROR_NONE) {
-        // Try to clean any potential UTF-8 issues.
-        $text = mb_convert_encoding($text, 'UTF-8', 'UTF-8');
-        $content = json_decode($text, TRUE);
-
-        if (json_last_error() !== JSON_ERROR_NONE) {
-          \Drupal::logger('drupalx_ai')->error('JSON decode error: @error, Text: @text', [
-            '@error' => json_last_error_msg(),
-            '@text' => $text,
-          ]);
-          throw new AgentProcessingException('Failed to decode JSON response: ' . json_last_error_msg());
-        }
-      }
-    }
-    else {
-      // If it's already an array, use the first item if it exists.
-      if (!empty($response[0]) && is_array($response[0])) {
-        $content = $response[0];
-        \Drupal::logger('drupalx_ai')->debug('Using first item from array response.');
-      }
-      else {
-        $content = $response;
-        \Drupal::logger('drupalx_ai')->debug('Using full array response.');
-      }
-    }
-
-    \Drupal::logger('drupalx_ai')->debug('Landing page generation content: @content', [
-      '@content' => print_r($content, TRUE),
-    ]);
-
-    // Check if content is still nested in [0].
-    if (empty($content['page_title']) && !empty($content[0]['page_title'])) {
-      $content = $content[0];
-      \Drupal::logger('drupalx_ai')->debug('Extracted content from nested array.');
-    }
-
-    if (empty($content['page_title']) || empty($content['paragraphs'])) {
-      \Drupal::logger('drupalx_ai')->error('Missing required fields in content: @content', [
-        '@content' => print_r($content, TRUE),
-      ]);
-      throw new AgentProcessingException('Generated content is missing required fields.');
+    if (empty($data['page_title']) || empty($data['paragraphs'])) {
+      throw new AgentProcessingException('Missing required fields for landing page generation.');
     }
 
     try {
       // Create the landing page node with the generated content.
       $url = $this->aiLandingPageService->createLandingNodeWithAiContent(
-        $content['page_title'],
-        $content['paragraphs'],
-        $allowedParagraphTypes
+        $data['page_title'],
+        $data['paragraphs'],
+        $this->mockLandingPageService->getAllowedParagraphTypes('node', 'landing', 'field_content')
       );
 
       if (!$url) {
@@ -410,7 +316,7 @@ class LandingPageGenerator extends AiAgentBase implements ContainerFactoryPlugin
 
       // Store the page info for later use.
       $this->createdPages[] = [
-        'title' => $content['page_title'],
+        'title' => $data['page_title'],
         'url' => $url,
       ];
 
@@ -441,24 +347,9 @@ class LandingPageGenerator extends AiAgentBase implements ContainerFactoryPlugin
       return $this->t('You do not have permission to do this.');
     }
 
-    // Get paragraph structures and allowed types for context.
-    $paragraphStructures = $this->paragraphStructureService->getParagraphStructures(TRUE);
-    $allowedParagraphTypes = $this->mockLandingPageService->getAllowedParagraphTypes('node', 'landing', 'field_content');
-
-    // Run the sub-agent with context.
-    $response = $this->agentHelper->runSubAgent('answerQuestion', [
-      'description' => $this->data['free_text'] ?? '',
-      'task_type' => $this->taskType,
-      'paragraph_structures' => json_encode($paragraphStructures, JSON_PRETTY_PRINT),
-      'allowed_paragraph_types' => implode(', ', $allowedParagraphTypes),
-    ]);
-
-    $answer = '';
-    if (isset($response[0]['answer'])) {
-      foreach ($response as $dataPoint) {
-        $answer .= $dataPoint['answer'] . "\n";
-      }
-      return rtrim($answer);
+    // The answer should already be in $this->data from determineTypeOfTask.
+    if (!empty($this->data[0]['answer'])) {
+      return $this->data[0]['answer'];
     }
 
     return $this->t("Sorry, I got no answers for you.");
@@ -471,31 +362,31 @@ class LandingPageGenerator extends AiAgentBase implements ContainerFactoryPlugin
    *   The determined task type.
    */
   protected function determineTypeOfTask() {
+
     try {
-      $response = $this->agentHelper->runSubAgent('determineLandingPageTask', [
+      // Get paragraph structures and allowed types for context.
+      $paragraphStructures = $this->paragraphStructureService->getParagraphStructures(TRUE);
+      $allowedParagraphTypes = $this->mockLandingPageService->getAllowedParagraphTypes('node', 'landing', 'field_content');
+
+      $response = $this->agentHelper->runSubAgent('processLandingPage', [
         'description' => $this->data['free_text'] ?? '',
+        'allowed_paragraph_types' => implode(',', $allowedParagraphTypes),
+        'paragraph_structures' => json_encode($paragraphStructures, JSON_PRETTY_PRINT),
       ]);
 
       if (!is_array($response)) {
-        $text = $response->getText();
-        $text = preg_replace('/[\x00-\x1F\x7F]/', '', $text);
-        $data = json_decode($text, TRUE);
-
-        if (json_last_error() !== JSON_ERROR_NONE) {
-          throw new AgentProcessingException('Invalid JSON response: ' . json_last_error_msg());
-        }
-      }
-      else {
-        $data = $response;
+        \Drupal::logger('drupalx_ai')->warning('Invalid response type received (@type)', [
+          '@type' => gettype($response),
+        ]);
+        return 'fail';
       }
 
-      // Check if we got landing page content directly.
-      if (!empty($data[0]['page_title']) && !empty($data[0]['paragraphs'])) {
-        $this->data = $data;
-        return 'generate';
-      }
+      \Drupal::logger('drupalx_ai')->debug('Response from processLandingPage: @response', [
+        '@response' => print_r($response, TRUE),
+      ]);
+      $data = $response;
 
-      // Otherwise check for action field.
+      // Check if we got a valid response.
       if (empty($data[0]['action'])) {
         return 'fail';
       }
@@ -505,7 +396,11 @@ class LandingPageGenerator extends AiAgentBase implements ContainerFactoryPlugin
         throw new AgentProcessingException('Invalid action type');
       }
 
-      $this->data = $data;
+      // If this is a generate action, store the generated content.
+      if ($action === 'generate' && !empty($data[0]['page_title']) && !empty($data[0]['paragraphs'])) {
+        $this->data = $data;
+      }
+
       return $action;
     }
     catch (\Exception $e) {
