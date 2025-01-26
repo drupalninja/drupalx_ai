@@ -302,14 +302,19 @@ class LandingPageGenerator extends AiAgentBase implements ContainerFactoryPlugin
     $paragraphStructures = $this->paragraphStructureService->getParagraphStructures(TRUE);
     $allowedParagraphTypes = $this->mockLandingPageService->getAllowedParagraphTypes('node', 'landing', 'field_content');
 
+    \Drupal::logger('drupalx_ai')->debug('Allowed paragraph types: @types', [
+      '@types' => implode(', ', $allowedParagraphTypes),
+    ]);
+
     // Run the generateLandingPage sub-agent to get structured content.
     $response = $this->agentHelper->runSubAgent('generateLandingPage', [
       'description' => $data['description'],
+      'allowed_paragraph_types' => implode(',', $allowedParagraphTypes),
       'paragraph_structures' => json_encode($paragraphStructures, JSON_PRETTY_PRINT),
-      'allowed_paragraph_types' => implode(', ', $allowedParagraphTypes),
     ]);
 
     if (empty($response)) {
+      \Drupal::logger('drupalx_ai')->error('Empty response from sub-agent.');
       throw new AgentProcessingException('Failed to generate landing page content structure.');
     }
 
@@ -333,36 +338,65 @@ class LandingPageGenerator extends AiAgentBase implements ContainerFactoryPlugin
       }
     }
     else {
-      // If it's already an array, use the first item.
-      $content = $response[0];
+      // If it's already an array, use the first item if it exists
+      if (!empty($response[0]) && is_array($response[0])) {
+        $content = $response[0];
+        \Drupal::logger('drupalx_ai')->debug('Using first item from array response.');
+      } else {
+        $content = $response;
+        \Drupal::logger('drupalx_ai')->debug('Using full array response.');
+      }
     }
 
     \Drupal::logger('drupalx_ai')->debug('Landing page generation content: @content', [
       '@content' => print_r($content, TRUE),
     ]);
 
+    // Check if content is still nested in [0]
+    if (empty($content['page_title']) && !empty($content[0]['page_title'])) {
+      $content = $content[0];
+      \Drupal::logger('drupalx_ai')->debug('Extracted content from nested array.');
+    }
+
     if (empty($content['page_title']) || empty($content['paragraphs'])) {
+      \Drupal::logger('drupalx_ai')->error('Missing required fields in content: @content', [
+        '@content' => print_r($content, TRUE),
+      ]);
       throw new AgentProcessingException('Generated content is missing required fields.');
     }
 
-    // Create the landing page node with the generated content.
-    $url = $this->aiLandingPageService->createLandingNodeWithAiContent(
-      $content['page_title'],
-      $content['paragraphs']
-    );
+    try {
+      // Create the landing page node with the generated content.
+      $url = $this->aiLandingPageService->createLandingNodeWithAiContent(
+        $content['page_title'],
+        $content['paragraphs'],
+        $allowedParagraphTypes
+      );
 
-    if (!$url) {
-      throw new AgentProcessingException('Failed to create landing page node.');
+      if (!$url) {
+        \Drupal::logger('drupalx_ai')->error('Node creation failed with no URL returned.');
+        throw new AgentProcessingException('Failed to create landing page node.');
+      }
+
+      // Add to the result array instead of replacing it.
+      $this->result[] = sprintf('Successfully created landing page: %s', $url);
+
+      // Store the page info for later use.
+      $this->createdPages[] = [
+        'title' => $content['page_title'],
+        'url' => $url,
+      ];
+
+      \Drupal::logger('drupalx_ai')->info('Successfully created landing page: @url', [
+        '@url' => $url,
+      ]);
     }
-
-    // Add to the result array instead of replacing it.
-    $this->result[] = sprintf('Successfully created landing page: %s', $url);
-
-    // Store the page info for later use.
-    $this->createdPages[] = [
-      'title' => $content['page_title'],
-      'url' => $url,
-    ];
+    catch (\Exception $e) {
+      \Drupal::logger('drupalx_ai')->error('Error creating landing page node: @error', [
+        '@error' => $e->getMessage(),
+      ]);
+      throw new AgentProcessingException('Failed to create landing page node: ' . $e->getMessage());
+    }
   }
 
   /**
@@ -410,35 +444,48 @@ class LandingPageGenerator extends AiAgentBase implements ContainerFactoryPlugin
    *   The determined task type.
    */
   protected function determineTypeOfTask() {
-    $data = $this->agentHelper->runSubAgent('determineLandingPageTask', [
-      'description' => $this->data,
-    ]);
+    try {
+      $response = $this->agentHelper->runSubAgent('determineLandingPageTask', [
+        'description' => $this->data['free_text'] ?? '',
+      ]);
 
-    if (!isset($data[0]['action'])) {
-      $this->information = $this->t('Sorry, we could not understand what you wanted to do, please try again.');
+      if (!is_array($response)) {
+        $text = $response->getText();
+        $text = preg_replace('/[\x00-\x1F\x7F]/', '', $text);
+        $data = json_decode($text, TRUE);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+          throw new AgentProcessingException('Invalid JSON response: ' . json_last_error_msg());
+        }
+      } else {
+        $data = $response;
+      }
+
+      // Check if we got landing page content directly
+      if (!empty($data[0]['page_title']) && !empty($data[0]['paragraphs'])) {
+        $this->data = $data;
+        return 'generate';
+      }
+
+      // Otherwise check for action field
+      if (empty($data[0]['action'])) {
+        return 'fail';
+      }
+
+      $action = $data[0]['action'];
+      if (!in_array($action, ['generate', 'question', 'information', 'fail'])) {
+        throw new AgentProcessingException('Invalid action type');
+      }
+
+      $this->data = $data;
+      return $action;
+    }
+    catch (\Exception $e) {
+      \Drupal::logger('drupalx_ai')->error('Error in determineTypeOfTask: @error', [
+        '@error' => $e->getMessage(),
+      ]);
       return 'fail';
     }
-
-    $action = $data[0]['action'];
-    $validActions = ['generate', 'question', 'information', 'fail'];
-
-    if (!in_array($action, $validActions)) {
-      throw new AgentProcessingException('Invalid action in determining landing page task.');
-    }
-
-    // Store additional information from the response.
-    if ($action === 'fail') {
-      $this->information = $data[0]['fail_message'] ?? $this->t('Failed to determine task type.');
-    }
-    elseif ($action === 'information') {
-      $this->information = $data[0]['information'] ?? '';
-    }
-    elseif ($action === 'question') {
-      $this->questions = $data[0]['questions'] ?? [];
-    }
-
-    $this->data = $data;
-    return $action;
   }
 
   /**

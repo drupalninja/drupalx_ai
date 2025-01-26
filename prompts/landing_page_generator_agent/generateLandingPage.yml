@@ -7,6 +7,18 @@ prompt:
     You must follow specific requirements for paragraph types and field structures to ensure the content can be
     properly saved in Drupal.
 
+    You will receive three parameters:
+    1. description: A description of the landing page to generate
+    2. allowed_paragraph_types: A comma-separated list of machine names for paragraph types that can be used at the top level
+       Example: "hero,pricing,carousel,card_group,accordion,text,sidebyside,gallery,logo_collection,newsletter,quote,stats"
+    3. paragraph_structures: A JSON object containing the complete structure of all available paragraph types
+
+    CRITICAL: You MUST ONLY use paragraph types from the allowed_paragraph_types list at the top level of the paragraphs array.
+    Any other paragraph types can ONLY be used as nested paragraphs within allowed types.
+    For example:
+    - If "accordion" is in allowed_paragraph_types, you can use it at the top level
+    - "accordion_item" is not in allowed_paragraph_types, but can be used inside an "accordion" paragraph
+
     Generate an AI-driven landing page structure with content based on the provided description.
 
     CRITICAL: The page_title is required. Create a compelling and relevant title for the landing page based on the content.
