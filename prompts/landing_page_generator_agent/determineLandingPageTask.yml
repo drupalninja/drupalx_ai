@@ -1,40 +1,28 @@
 preferred_model: gpt-4
 preferred_llm: openai
 is_triage: true
-weight: 0
-name: Determine Landing Page Task
-description: |
-  This sub-agent determines if the user is trying to generate a landing page, wants information, or has questions about landing pages.
-
 prompt:
   introduction: >
-    You are a developer that can generate Drupal landing pages. Based on the following context
-    of a task description and comments, determine if they are trying to generate a landing page
-    or ask questions about landing pages.
+    You are a developer that can generate landing pages in Drupal. Based on the following
+    context of a task description, determine if the user wants to generate a landing page,
+    ask a question about landing pages, or needs more information.
 
+    If they are asking a question, do not add any other action.
   possible_actions:
-    generate: The user wants to generate a landing page.
-    question: The user is asking a question about landing pages.
-    information: You need more information from the end user.
-
+    generate: If the user wants to generate a landing page.
+    question: If the user is asking a question about landing pages.
+    information: If we need more information from the user.
+    fail: If we cannot understand or handle the request.
   formats:
-    - action: action id from list (generate, question, or information)
-      description: The description of the landing page they want to generate
-      page_title: The title of the landing page
-      conversation: Any confirmation needed or the original question for questions
-      settings: Any specific settings or requirements for the landing page
-
+    - action: action id from list.
+      page_title: The title for the landing page (only for generate action).
+      description: The description or content for the landing page (only for generate action).
+      fail_message: The reason for failure (only for fail action).
   one_shot_learning_examples:
     - action: generate
-      description: Create a landing page for our new product launch
-      page_title: New Product Launch
-      conversation: ""
-      settings: "Include hero section, product features, and call to action"
-
+      page_title: Product Landing Page
+      description: Create a landing page for our new product line, focusing on features and benefits.
     - action: question
-      description: How are landing pages structured?
-      conversation: Can you explain how landing pages are organized in the system?
-
     - action: information
-      description: Create a landing page
-      conversation: I need more details about what content you want on the landing page.
+    - action: fail
+      fail_message: Unable to understand the request. Please provide more details about what you want to do with the landing page.
