@@ -309,15 +309,17 @@ class LandingPageGenerator extends AiAgentBase implements ContainerFactoryPlugin
       'allowed_paragraph_types' => implode(', ', $allowedParagraphTypes),
     ]);
 
-    \Drupal::logger('drupalx_ai')->debug('Landing page generation response: @response', [
-      '@response' => print_r($response, TRUE),
-    ]);
-
-    if (empty($response) || !isset($response[0])) {
+    if (empty($response)) {
       throw new AgentProcessingException('Failed to generate landing page content structure.');
     }
 
-    $content = $response[0];
+    // Handle both array and ChatMessage response types.
+    $content = is_array($response) ? $response[0] : json_decode($response->getText(), TRUE);
+
+    \Drupal::logger('drupalx_ai')->debug('Landing page generation content: @content', [
+      '@content' => print_r($content, TRUE),
+    ]);
+
     if (empty($content['page_title']) || empty($content['paragraphs'])) {
       throw new AgentProcessingException('Generated content is missing required fields.');
     }

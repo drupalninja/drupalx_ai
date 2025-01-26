@@ -1,6 +1,6 @@
 preferred_model: gpt-4
 preferred_llm: openai
-weight: 1
+is_triage: false
 prompt:
   introduction: >
     You are a landing page content generator for Drupal. You create structured content using Drupal paragraphs.
