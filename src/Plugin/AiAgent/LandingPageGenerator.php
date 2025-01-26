@@ -313,8 +313,29 @@ class LandingPageGenerator extends AiAgentBase implements ContainerFactoryPlugin
       throw new AgentProcessingException('Failed to generate landing page content structure.');
     }
 
-    // Handle both array and ChatMessage response types.
-    $content = is_array($response) ? $response[0] : json_decode($response->getText(), TRUE);
+    \Drupal::logger('drupalx_ai')->debug('Response type: @type', [
+      '@type' => is_array($response) ? 'array' : get_class($response),
+    ]);
+
+    // Handle both ChatMessage and array responses.
+    if (!is_array($response)) {
+      // If it's a ChatMessage, get the JSON string and decode it.
+      $text = $response->getText();
+      \Drupal::logger('drupalx_ai')->debug('ChatMessage text: @text', [
+        '@text' => $text,
+      ]);
+      $content = json_decode($text, TRUE);
+      if (json_last_error() !== JSON_ERROR_NONE) {
+        \Drupal::logger('drupalx_ai')->error('JSON decode error: @error', [
+          '@error' => json_last_error_msg(),
+        ]);
+        throw new AgentProcessingException('Failed to decode JSON response: ' . json_last_error_msg());
+      }
+    }
+    else {
+      // If it's already an array, use the first item.
+      $content = $response[0];
+    }
 
     \Drupal::logger('drupalx_ai')->debug('Landing page generation content: @content', [
       '@content' => print_r($content, TRUE),
