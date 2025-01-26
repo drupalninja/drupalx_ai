@@ -326,23 +326,50 @@ class LandingPageGenerator extends AiAgentBase implements ContainerFactoryPlugin
     if (!is_array($response)) {
       // If it's a ChatMessage, get the JSON string and decode it.
       $text = $response->getText();
-      \Drupal::logger('drupalx_ai')->debug('ChatMessage text: @text', [
+      \Drupal::logger('drupalx_ai')->debug('Raw ChatMessage text before JSON decode: @text', [
         '@text' => $text,
       ]);
+
+      // More thorough cleaning of the text.
+      $text = preg_replace('/[\x00-\x1F\x7F-\xFF]/', '', $text);
+      $text = preg_replace('/\s+/', ' ', $text);
+      $text = trim($text);
+
+      // Validate JSON structure.
+      if (!preg_match('/^\[.*\]$/', $text)) {
+        \Drupal::logger('drupalx_ai')->error('Invalid JSON structure: @text', [
+          '@text' => $text,
+        ]);
+        throw new AgentProcessingException('Invalid JSON structure: Expected array');
+      }
+
+      \Drupal::logger('drupalx_ai')->debug('Cleaned text before JSON decode: @text', [
+        '@text' => $text,
+      ]);
+
+      // Try to decode with error checking.
       $content = json_decode($text, TRUE);
       if (json_last_error() !== JSON_ERROR_NONE) {
-        \Drupal::logger('drupalx_ai')->error('JSON decode error: @error', [
-          '@error' => json_last_error_msg(),
-        ]);
-        throw new AgentProcessingException('Failed to decode JSON response: ' . json_last_error_msg());
+        // Try to clean any potential UTF-8 issues.
+        $text = mb_convert_encoding($text, 'UTF-8', 'UTF-8');
+        $content = json_decode($text, TRUE);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+          \Drupal::logger('drupalx_ai')->error('JSON decode error: @error, Text: @text', [
+            '@error' => json_last_error_msg(),
+            '@text' => $text,
+          ]);
+          throw new AgentProcessingException('Failed to decode JSON response: ' . json_last_error_msg());
+        }
       }
     }
     else {
-      // If it's already an array, use the first item if it exists
+      // If it's already an array, use the first item if it exists.
       if (!empty($response[0]) && is_array($response[0])) {
         $content = $response[0];
         \Drupal::logger('drupalx_ai')->debug('Using first item from array response.');
-      } else {
+      }
+      else {
         $content = $response;
         \Drupal::logger('drupalx_ai')->debug('Using full array response.');
       }
@@ -352,7 +379,7 @@ class LandingPageGenerator extends AiAgentBase implements ContainerFactoryPlugin
       '@content' => print_r($content, TRUE),
     ]);
 
-    // Check if content is still nested in [0]
+    // Check if content is still nested in [0].
     if (empty($content['page_title']) && !empty($content[0]['page_title'])) {
       $content = $content[0];
       \Drupal::logger('drupalx_ai')->debug('Extracted content from nested array.');
@@ -457,17 +484,18 @@ class LandingPageGenerator extends AiAgentBase implements ContainerFactoryPlugin
         if (json_last_error() !== JSON_ERROR_NONE) {
           throw new AgentProcessingException('Invalid JSON response: ' . json_last_error_msg());
         }
-      } else {
+      }
+      else {
         $data = $response;
       }
 
-      // Check if we got landing page content directly
+      // Check if we got landing page content directly.
       if (!empty($data[0]['page_title']) && !empty($data[0]['paragraphs'])) {
         $this->data = $data;
         return 'generate';
       }
 
-      // Otherwise check for action field
+      // Otherwise check for action field.
       if (empty($data[0]['action'])) {
         return 'fail';
       }
