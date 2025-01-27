@@ -17,7 +17,7 @@ prompt:
     1. Default to 'generate' if there's any description of content or a page
     2. Only use 'question' if it's clearly a question about how landing pages work
     3. Only use 'information' if critical details are missing
-    4. Never return descriptive text about what will be created - always return structured data
+    4. Use tool calls to return structured data, never return raw JSON
 
     For generation tasks, follow these CRITICAL REQUIREMENTS:
     1. You MUST ONLY use paragraph types from the allowed_paragraph_types list at the top level

@@ -375,16 +375,32 @@ class LandingPageGenerator extends AiAgentBase implements ContainerFactoryPlugin
       ]);
 
       if (!is_array($response)) {
-        \Drupal::logger('drupalx_ai')->warning('Invalid response type received (@type)', [
-          '@type' => gettype($response),
-        ]);
-        return 'fail';
+        if (is_object($response) && method_exists($response, 'getText')) {
+          $data = json_decode($response->getText(), TRUE);
+
+          \Drupal::logger('drupalx_ai')->debug('Response from processLandingPage: @response', [
+            '@response' => print_r($data, TRUE),
+          ]);
+
+          if (!is_array($data)) {
+            \Drupal::logger('drupalx_ai')->warning('Could not decode response to array', []);
+            return 'fail';
+          }
+        }
+        else {
+          \Drupal::logger('drupalx_ai')->warning('Invalid response type received (@type)', [
+            '@type' => gettype($response),
+          ]);
+          return 'fail';
+        }
+      }
+      else {
+        $data = $response;
       }
 
       \Drupal::logger('drupalx_ai')->debug('Response from processLandingPage: @response', [
-        '@response' => print_r($response, TRUE),
+        '@response' => print_r($data, TRUE),
       ]);
-      $data = $response;
 
       // Check if we got a valid response.
       if (empty($data[0]['action'])) {
