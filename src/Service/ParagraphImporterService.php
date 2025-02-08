@@ -705,12 +705,17 @@ TWIG;
   protected function createParagraphFragment($paragraph_type_id, $parent_data = NULL) {
     $output = '';
 
+    // Helper function to convert snake_case to PascalCase:
+    $toPascalCase = function ($str) {
+      return str_replace('_', '', ucwords($str, '_'));
+    };
+
     // If this is a parent type with child types, create a single component with both fragments:
     if ($parent_data && !empty($parent_data->child_types)) {
       // First, generate fragments for child types:
       $child_fragments = [];
       foreach ($parent_data->child_types as $child_type) {
-        $child_fragment_name = ucfirst($child_type->id) . 'Fragment';
+        $child_fragment_name = $toPascalCase($child_type->id) . 'Fragment';
         $child_fields = [];
 
         // Add standard fields:
@@ -740,8 +745,9 @@ TWIG;
           }
         }
 
-        // Create the child fragment:
-        $child_fragment_content = "const {$child_fragment_name} = graphql(`fragment {$child_fragment_name} on Paragraph{$child_type->id} {\n  " . implode("\n  ", $child_fields) . "\n}`);";
+        // Create the child fragment with PascalCase type name:
+        $child_type_pascal = $toPascalCase($child_type->id);
+        $child_fragment_content = "const {$child_fragment_name} = graphql(`fragment {$child_fragment_name} on Paragraph{$child_type_pascal} {\n  " . implode("\n  ", $child_fields) . "\n}`);";
         $child_fragments[] = [
           'name' => $child_fragment_name,
           'content' => $child_fragment_content,
@@ -749,7 +755,7 @@ TWIG;
       }
 
       // Now generate the parent fragment:
-      $parent_fragment_name = 'Paragraph' . str_replace('_', '', ucwords($paragraph_type_id, '_')) . 'Fragment';
+      $parent_fragment_name = 'Paragraph' . $toPascalCase($paragraph_type_id) . 'Fragment';
       $parent_fields = ['id'];
 
       // Add parent fields:
@@ -760,23 +766,25 @@ TWIG;
         if ($field_array['type'] === 'entity_reference_revisions') {
           // Reference the child fragment:
           $child_type = $field_array['target_bundle'];
-          $child_fragment_name = ucfirst($child_type) . 'Fragment';
+          $child_fragment_name = $toPascalCase($child_type) . 'Fragment';
           $parent_fields[] = "{$field_name} {\n    ...{$child_fragment_name}\n  }";
-        } else {
+        }
+        else {
           $parent_fields[] = $field_name;
         }
       }
 
-      // Create the parent fragment:
-      $parent_fragment_content = "export const {$parent_fragment_name} = graphql(`fragment {$parent_fragment_name} on Paragraph{$parent_data->id} {\n  " . implode("\n  ", $parent_fields) . "\n}`, [" . implode(', ', array_map(fn($f) => $f['name'], $child_fragments)) . "]);";
+      // Create the parent fragment with PascalCase type name:
+      $parent_type_pascal = $toPascalCase($parent_data->id);
+      $parent_fragment_content = "export const {$parent_fragment_name} = graphql(`fragment {$parent_fragment_name} on Paragraph{$parent_type_pascal} {\n  " . implode("\n  ", $parent_fields) . "\n}`, [" . implode(', ', array_map(fn($f) => $f['name'], $child_fragments)) . "]);";
 
       // Create the component file:
-      $component_name = 'Paragraph' . str_replace('_', '', ucwords($paragraph_type_id, '_'));
+      $component_name = 'Paragraph' . $toPascalCase($paragraph_type_id);
       $new_fragment_file = "../nextjs/components/paragraphs/{$component_name}.tsx";
 
       // Generate imports:
       $imports = "import { FragmentOf, readFragment, graphql } from 'gql.tada';\n";
-      $imports .= "import { TextSummaryFragment, DateTimeFragment, LanguageFragment, LinkFragment, ImageFragment } from '@/graphql/fragments/misc';\n";
+      $imports .= "import { TextSummaryFragment, DateTimeFragment, LanguageFragment, LinkFragment } from '@/graphql/fragments/misc';\n";
 
       // Combine all fragments and generate component content:
       $component_content = $imports . "\n";
