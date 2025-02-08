@@ -705,9 +705,20 @@ TWIG;
   protected function createParagraphFragment($paragraph_type_id, $parent_data = NULL) {
     $output = '';
 
-    // Helper function to convert snake_case to PascalCase:
+    // Helper function to convert snake_case to PascalCase and remove trailing 's'.
     $toPascalCase = function ($str) {
+      // Remove trailing 's' if present.
+      $str = rtrim($str, 's');
       return str_replace('_', '', ucwords($str, '_'));
+    };
+
+    // Helper function to convert field name to camelCase.
+    $toCamelCase = function ($str) {
+      // Remove 'field_' prefix if present.
+      $str = preg_replace('/^field_/', '', $str);
+      // Convert snake_case to camelCase.
+      $str = lcfirst(str_replace('_', '', ucwords($str, '_')));
+      return $str;
     };
 
     // If this is a parent type with child types, create a single component with both fragments:
@@ -717,6 +728,7 @@ TWIG;
       foreach ($parent_data->child_types as $child_type) {
         $child_fragment_name = $toPascalCase($child_type->id) . 'Fragment';
         $child_fields = [];
+        $fragment_dependencies = [];
 
         // Add standard fields:
         $child_fields[] = 'id';
@@ -724,7 +736,7 @@ TWIG;
         // Add custom fields:
         foreach ($child_type->fields as $field) {
           $field_array = is_object($field) ? get_object_vars($field) : $field;
-          $field_name = 'field_' . $field_array['name'];
+          $field_name = $toCamelCase('field_' . $field_array['name']);
 
           switch ($field_array['type']) {
             case 'string':
@@ -736,21 +748,25 @@ TWIG;
               break;
 
             case 'link':
-              $child_fields[] = "{$field_name} {\n      url\n      title\n      target\n    }";
+              $child_fields[] = "{$field_name} {\n      ...LinkFragment\n    }";
+              $fragment_dependencies[] = 'LinkFragment';
               break;
 
             case 'image':
-              $child_fields[] = "{$field_name} {\n      url\n      alt\n      title\n      width\n      height\n    }";
+              $child_fields[] = "{$field_name} {\n      ...MediaUnionFragment\n    }";
+              $fragment_dependencies[] = 'MediaUnionFragment';
               break;
           }
         }
 
         // Create the child fragment with PascalCase type name:
         $child_type_pascal = $toPascalCase($child_type->id);
-        $child_fragment_content = "const {$child_fragment_name} = graphql(`fragment {$child_fragment_name} on Paragraph{$child_type_pascal} {\n  " . implode("\n  ", $child_fields) . "\n}`);";
+        $fragment_deps_str = empty($fragment_dependencies) ? '' : ', [' . implode(', ', $fragment_dependencies) . ']';
+        $child_fragment_content = "const {$child_fragment_name} = graphql(`fragment {$child_fragment_name} on Paragraph{$child_type_pascal} {\n  " . implode("\n  ", $child_fields) . "\n}`{$fragment_deps_str});";
         $child_fragments[] = [
           'name' => $child_fragment_name,
           'content' => $child_fragment_content,
+          'dependencies' => $fragment_dependencies
         ];
       }
 
@@ -761,7 +777,7 @@ TWIG;
       // Add parent fields:
       foreach ($parent_data->fields as $field) {
         $field_array = is_object($field) ? get_object_vars($field) : $field;
-        $field_name = 'field_' . $field_array['name'];
+        $field_name = $toCamelCase('field_' . $field_array['name']);
 
         if ($field_array['type'] === 'entity_reference_revisions') {
           // Reference the child fragment:
@@ -780,11 +796,36 @@ TWIG;
 
       // Create the component file:
       $component_name = 'Paragraph' . $toPascalCase($paragraph_type_id);
-      $new_fragment_file = "../nextjs/components/paragraphs/{$component_name}.tsx";
+      $new_fragment_file = $this->fileSystem->realpath('../nextjs/components/paragraphs') . "/{$component_name}.tsx";
 
       // Generate imports:
       $imports = "import { FragmentOf, readFragment, graphql } from 'gql.tada';\n";
-      $imports .= "import { TextSummaryFragment, DateTimeFragment, LanguageFragment, LinkFragment } from '@/graphql/fragments/misc';\n";
+
+      // Collect all unique fragment dependencies.
+      $all_fragment_deps = [];
+      foreach ($child_fragments as $fragment) {
+        $all_fragment_deps = array_merge($all_fragment_deps, $fragment['dependencies']);
+      }
+      $all_fragment_deps = array_unique($all_fragment_deps);
+
+      // Add required imports based on dependencies.
+      $misc_fragments = array_intersect(
+        [
+          'LinkFragment',
+          'TextSummaryFragment',
+          'DateTimeFragment',
+          'LanguageFragment'
+        ],
+        $all_fragment_deps
+      );
+      $media_fragments = array_intersect(['MediaUnionFragment'], $all_fragment_deps);
+
+      if (!empty($misc_fragments)) {
+        $imports .= "import { " . implode(', ', $misc_fragments) . " } from '@/graphql/fragments/misc';\n";
+      }
+      if (!empty($media_fragments)) {
+        $imports .= "import { " . implode(', ', $media_fragments) . " } from '@/graphql/fragments/media';\n";
+      }
 
       // Combine all fragments and generate component content:
       $component_content = $imports . "\n";
