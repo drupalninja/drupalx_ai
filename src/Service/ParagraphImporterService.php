@@ -109,10 +109,12 @@ class ParagraphImporterService {
         }
       }
 
-      // First create any child paragraph types if they exist
+      // First create any child paragraph types if they exist.
       $child_types_output = '';
       if (!empty($paragraph_data->child_types)) {
         foreach ($paragraph_data->child_types as $child_type) {
+          // Mark this as a child type so we don't create a test page for it.
+          $child_type->is_child_type = TRUE;
           $child_type_result = $this->importParagraphType($child_type);
           $child_types_output .= $child_type_result . "\n";
         }
@@ -160,8 +162,11 @@ class ParagraphImporterService {
         $field_count++;
       }
 
-      // Create a test paragraph on a test landing page.
-      $result = $this->createParagraph($paragraph_data);
+      // Create a test paragraph on a test landing page only for parent types.
+      $result = '';
+      if (empty($paragraph_data->is_child_type)) {
+        $result = $this->createParagraph($paragraph_data);
+      }
 
       // Create integration files based on configuration.
       if ($is_nextjs) {
@@ -455,13 +460,13 @@ TWIG;
    *   Return a message indicating the result with the node title and URL.
    */
   protected function createParagraph($paragraph_data) {
-    // Create a new paragraph entity.
-    $paragraph = Paragraph::create(
-      [
-        'type' => $paragraph_data->id,
-      ]
-    );
+    // If this is a child paragraph type, skip creating a test node.
+    if (!empty($paragraph_data->parent_type)) {
+      return '';
+    }
 
+    // Create a new paragraph entity.
+    $paragraph = Paragraph::create(['type' => $paragraph_data->id]);
     $module_path = \Drupal::service('extension.list.module')->getPath('drupalx_ai');
 
     // Assign the fields to the paragraph.
@@ -503,8 +508,60 @@ TWIG;
           $paragraph->set($field_name, ['uri' => $url]);
         }
         elseif ($field_type === 'entity_reference_revisions') {
-          // Skip setting sample values for entity reference revisions fields.
-          continue;
+          // For entity reference revisions fields, create a child paragraph.
+          if (!empty($field_array['target_bundle']) && !empty($paragraph_data->child_types)) {
+            foreach ($paragraph_data->child_types as $child_type) {
+              if ($child_type->id === $field_array['target_bundle']) {
+                // Add parent type to avoid creating a test node for the child.
+                $child_type->parent_type = $paragraph_data->id;
+                // Create child paragraph.
+                $child_paragraph = Paragraph::create(['type' => $child_type->id]);
+                foreach ($child_type->fields as $child_field) {
+                  $child_field_array = is_object($child_field) ? get_object_vars($child_field) : $child_field;
+                  $child_field_name = 'field_' . $child_field_array['name'];
+                  if ($child_paragraph->hasField($child_field_name)) {
+                    $child_field_definition = $child_paragraph->getFieldDefinition($child_field_name);
+                    $child_field_type = $child_field_definition->getType();
+
+                    if ($child_field_type === 'image') {
+                      $file_path = $module_path . '/files/card.png';
+                      $file_contents = file_get_contents($file_path);
+                      $directory = 'public://paragraph_images';
+                      $this->fileSystem->prepareDirectory($directory, FileSystemInterface::CREATE_DIRECTORY);
+                      $file = File::create(
+                        [
+                          'uri' => $this->fileSystem->saveData($file_contents, $directory . '/card.png', FileSystemInterface::EXISTS_REPLACE),
+                        ]
+                      );
+                      $file->setPermanent();
+                      $file->save();
+
+                      $child_paragraph->set(
+                        $child_field_name, [
+                          'target_id' => $file->id(),
+                          'alt' => $child_field_array['label'],
+                          'title' => $child_field_array['label'],
+                        ]
+                      );
+                    }
+                    elseif ($child_field_type === 'link') {
+                      $url = $child_field_array['sample_value'];
+                      if (strpos($url, '/') === 0) {
+                        $url = 'internal:' . $url;
+                      }
+                      $child_paragraph->set($child_field_name, ['uri' => $url]);
+                    }
+                    else {
+                      $child_paragraph->set($child_field_name, $child_field_array['sample_value']);
+                    }
+                  }
+                }
+                $child_paragraph->save();
+                $paragraph->get($field_name)->appendItem($child_paragraph);
+                break;
+              }
+            }
+          }
         }
         else {
           $paragraph->set($field_name, $field_array['sample_value']);
@@ -545,7 +602,7 @@ TWIG;
 
     // Return a message indicating the result.
     $edit_url = $node->toUrl('edit-form')->setAbsolute()->toString();
-    return "Created test landing page node and added a paragraph of type '{$paragraph_data->id}'.\nEdit URL: {$edit_url}\n";
+    return "Created test landing page node with '{$paragraph_data->id}' paragraph and its child paragraphs.\nEdit URL: {$edit_url}\n";
   }
 
   /**
