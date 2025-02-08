@@ -92,23 +92,39 @@ class ImportParagraphTypeCommands extends DrushCommands {
   /**
    * Import a new paragraph type based on a theme component using AI.
    *
+   * @param \Symfony\Component\Console\Output\OutputInterface $output
+   *   The output interface.
+   * @param string|null $component_name
+   *   Optional component name to import.
+   * @param array $options
+   *   An array of command options.
+   *
+   * @option auto-confirm
+   *   Skip confirmation prompts.
+   *
    * @command drupalx-ai:import-from-component
    * @aliases dxcomp
+   *
    * @usage drush drupalx-ai:import-from-component
+   * @usage drush drupalx-ai:import-from-component hero
+   * @usage drush drupalx-ai:import-from-component hero --auto-confirm
    */
-  public function importParagraphTypeFromComponent(OutputInterface $output) {
+  public function importParagraphTypeFromComponent(OutputInterface $output, ?string $component_name = NULL, array $options = ['auto-confirm' => FALSE]) {
     // Check if API key is set before proceeding.
     if (empty($this->configFactory->get('drupalx_ai.settings')->get('api_key'))) {
-      $output->writeln("<error>AI API key is not set. Please configure it in the DrupalX AI Settings before running this command.</error>");
+      $output->writeln("<e>AI API key is not set. Please configure it in the DrupalX AI Settings before running this command.</e>");
       return;
     }
 
     // Use the ComponentReaderService for these operations.
-    $componentFolderName = $this->componentReader->askComponentFolder($this->io());
-    [$componentName, $componentContent, $storyContent] = $this->componentReader->readComponentFiles($componentFolderName, $this->io());
+    $componentFolderName = $component_name;
+    if (!$componentFolderName) {
+      $componentFolderName = $this->componentReader->askComponentFolder($this->io(), $options['auto-confirm']);
+    }
+    [$componentName, $componentContent, $storyContent] = $this->componentReader->readComponentFiles($componentFolderName, $this->io(), $options['auto-confirm']);
 
     if (!$componentContent) {
-      $output->writeln("<error>Could not read component file. Please check the file exists and is readable.</error>");
+      $output->writeln("<e>Could not read component file. Please check the file exists and is readable.</e>");
       return;
     }
 
@@ -116,15 +132,15 @@ class ImportParagraphTypeCommands extends DrushCommands {
     $paragraphTypeDetails = $this->generateParagraphTypeDetails($componentName, $componentContent, $storyContent);
 
     if (!$paragraphTypeDetails) {
-      $output->writeln("<error>Failed to generate paragraph type details from the component.</error>");
+      $output->writeln("<e>Failed to generate paragraph type details from the component.</e>");
       return;
     }
 
-    // Display generated details and ask for confirmation.
+    // Display generated details and ask for confirmation if auto-confirm is not set.
     $output->writeln("<info>Generated Paragraph Type Details:</info>");
     $output->writeln(print_r($paragraphTypeDetails, TRUE));
 
-    if (!$this->io()->confirm('Do you want to proceed with importing this paragraph type?', TRUE)) {
+    if (!$options['auto-confirm'] && !$this->io()->confirm('Do you want to proceed with importing this paragraph type?', TRUE)) {
       $output->writeln('Import cancelled.');
       return;
     }
@@ -142,15 +158,21 @@ class ImportParagraphTypeCommands extends DrushCommands {
    */
   protected function generateParagraphTypeDetails($componentName, $componentContent, $storyContent) {
     $prompt = "Based on this component named '{$componentName}', suggest a Drupal paragraph type
-      structure using the suggest_paragraph_type function:\n\n{$componentContent}.
-      Also use content from this component's story {$storyContent} to imform the paragraph type.
+      structure using the suggest_paragraph_type function. If the component has a nested structure
+      (like cards within a card container), create both the parent and child paragraph types.
+      For the recent-cards component specifically, create both a parent paragraph type for the container
+      and a child paragraph type for individual card items:\n\n{$componentContent}.
+      Also use content from this component's story {$storyContent} to inform the paragraph type.
       The name of the paragraph should not include the word 'paragraph'.
       Make sure the name of the paragraph is the exact same as the name of the component.
       For fields, only lowercase alphanumeric characters and underscores are allowed,
       and only lowercase letters and underscore are allowed as the first character.
       Do not add '_component' to the name of the component.
       Do not use the field type 'list_text' - the correct type is 'list_string'.
-      Use only Drupal 10 valid field types. For images use the 'image' field type.";
+      Use only Drupal 10 valid field types. For images use the 'image' field type.
+      For the recent-cards component:
+      1. Create a child paragraph type named 'recent_card_item' with fields for title, summary, link, and media
+      2. Create the parent paragraph type that references the child type";
 
     $tools = [
       [
@@ -210,6 +232,60 @@ class ImportParagraphTypeCommands extends DrushCommands {
                 ],
                 'required' => ['name', 'label', 'type', 'sample_value'],
               ],
+            ],
+            'child_types' => [
+              'type' => 'array',
+              'items' => [
+                'type' => 'object',
+                'properties' => [
+                  'id' => [
+                    'type' => 'string',
+                    'description' => 'Machine name of the child paragraph type',
+                  ],
+                  'name' => [
+                    'type' => 'string',
+                    'description' => 'Human-readable name of the child paragraph type',
+                  ],
+                  'description' => [
+                    'type' => 'string',
+                    'description' => 'Description of the child paragraph type',
+                  ],
+                  'fields' => [
+                    'type' => 'array',
+                    'items' => [
+                      'type' => 'object',
+                      'properties' => [
+                        'name' => [
+                          'type' => 'string',
+                          'description' => 'Machine name of the field',
+                        ],
+                        'label' => [
+                          'type' => 'string',
+                          'description' => 'Human-readable label of the field',
+                        ],
+                        'type' => [
+                          'type' => 'string',
+                          'description' => 'Drupal 10 valid field type',
+                        ],
+                        'required' => [
+                          'type' => 'boolean',
+                          'description' => 'Whether the field is required',
+                        ],
+                        'cardinality' => [
+                          'type' => 'integer',
+                          'description' => 'The number of values users can enter for this field. -1 for unlimited.',
+                        ],
+                        'sample_value' => [
+                          'type' => 'string',
+                          'description' => 'Sample value for the field',
+                        ],
+                      ],
+                      'required' => ['name', 'label', 'type', 'sample_value'],
+                    ],
+                  ],
+                ],
+                'required' => ['id', 'name', 'description', 'fields'],
+              ],g
             ],
           ],
           'required' => ['id', 'name', 'description', 'fields'],
