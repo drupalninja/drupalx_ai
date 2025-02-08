@@ -170,7 +170,17 @@ class ParagraphImporterService {
 
       // Create integration files based on configuration.
       if ($is_nextjs) {
-        $result .= "\n" . $this->createParagraphFragment($paragraph_data->id);
+        // Clear all caches to rebuild the GraphQL schema.
+        drupal_flush_all_caches();
+
+        // For parent types, create both parent and child components.
+        if (empty($paragraph_data->is_child_type) && !empty($paragraph_data->child_types)) {
+          $result .= "\n" . $this->createParagraphFragment($paragraph_data->id, $paragraph_data);
+        }
+        // For child types, only create the component if it's not being created as part of a parent.
+        elseif (!empty($paragraph_data->is_child_type) && empty($paragraph_data->parent_type)) {
+          $result .= "\n" . $this->createParagraphFragment($paragraph_data->id);
+        }
       }
       else {
         $result .= "\n" . $this->createParagraphTemplate($paragraph_data);
@@ -666,7 +676,7 @@ TWIG;
    *   The updated text.
    */
   protected function addAliases($text, $alias) {
-    $pattern = '/\b(body|title|link|summary)(\s)/';
+    $pattern = '/\b(body|title|link|media|summary)(\s)/';
     $replacement = function ($matches) use ($alias) {
       $capitalized = ucfirst($matches[1]);
       return $alias . $capitalized . ': ' . $matches[1] . $matches[2];
@@ -680,11 +690,13 @@ TWIG;
    *
    * @param string $paragraph_type_id
    *   The ID of the paragraph type.
+   * @param object|null $parent_data
+   *   Optional parent paragraph data if this is a parent type.
    *
    * @return string
    *   The output data.
    */
-  protected function createParagraphFragment($paragraph_type_id) {
+  protected function createParagraphFragment($paragraph_type_id, $parent_data = NULL) {
     $fragments = array_map(
       [$this->fragmentManager, 'getFragment'],
       $this->fragmentManager->getTypes()
@@ -697,64 +709,224 @@ TWIG;
 
     $fragment_content = '';
     $fragment_name = '';
+    $output = '';
 
-    foreach ($objects as $fragment) {
-      if (!empty($fragment['bundle']) && $fragment['bundle'] === $paragraph_type_id) {
-        $fragment_content = $fragment['content'];
-        $fragment_name = $fragment['name'];
-        break;
+    // If this is a parent type with child types, create a single component with both fragments:
+    if ($parent_data && !empty($parent_data->child_types)) {
+      // Get the parent fragment:
+      foreach ($objects as $fragment) {
+        if (!empty($fragment['bundle']) && $fragment['bundle'] === $paragraph_type_id) {
+          $fragment_content = $fragment['content'];
+          $fragment_name = $fragment['name'];
+          break;
+        }
+      }
+
+      if (!empty($fragment_content)) {
+        // Transform the parent fragment to TypeScript:
+        [$fragment_name, $fragment_content] = $this->transformFragment($fragment_content);
+        $fragment_content = $this->addAliases($fragment_content, $paragraph_type_id);
+
+        // Get child fragments:
+        $child_fragments = [];
+        foreach ($parent_data->child_types as $child_type) {
+          foreach ($objects as $fragment) {
+            if (!empty($fragment['bundle']) && $fragment['bundle'] === $child_type->id) {
+              [$child_fragment_name, $child_fragment_content] = $this->transformFragment($fragment['content']);
+              $child_fragment_content = $this->addAliases($child_fragment_content, $child_type->id);
+              $child_fragments[] = [
+                'name' => $child_fragment_name,
+                'content' => $child_fragment_content,
+              ];
+              break;
+            }
+          }
+        }
+
+        // Create the component file for the parent type:
+        $component_name = 'Paragraph' . str_replace('_', '', ucwords($paragraph_type_id, '_'));
+        $new_fragment_file = "../nextjs/components/paragraphs/{$component_name}.tsx";
+
+        // Generate component content with both parent and child fragments:
+        $component_content = $this->generateComponentContentWithChildren($component_name, $fragment_name, $fragment_content, $child_fragments);
+
+        // Write the new component file:
+        $this->fileSystem->saveData($component_content, $new_fragment_file, FileSystemInterface::EXISTS_REPLACE);
+
+        // Update the paragraph.ts file:
+        $paragraphs_file = '../nextjs/graphql/fragments/paragraph.ts';
+        $paragraphs_content = file_get_contents($paragraphs_file);
+
+        // Add import statement for parent fragment:
+        $import_statement = "import { {$fragment_name} } from \"@/components/paragraphs/{$component_name}\";";
+        if (strpos($paragraphs_content, $import_statement) === FALSE) {
+          // Add import statement:
+          $paragraphs_content = preg_replace(
+            '/import { graphql } from "@\/graphql\/gql.tada";/',
+            "import { graphql } from \"@/graphql/gql.tada\";\n" . $import_statement,
+            $paragraphs_content
+          );
+
+          // Update ParagraphUnionFragment:
+          $paragraphs_content = preg_replace(
+            '/\.\.\.ParagraphViewFragment/',
+            "...ParagraphViewFragment\n  ...{$fragment_name}",
+            $paragraphs_content
+          );
+
+          $paragraphs_content = preg_replace(
+            '/ParagraphViewFragment,/',
+            "ParagraphViewFragment,\n  {$fragment_name},",
+            $paragraphs_content
+          );
+
+          // Save the updated paragraph.ts file:
+          $this->fileSystem->saveData($paragraphs_content, $paragraphs_file, FileSystemInterface::EXISTS_REPLACE);
+        }
+
+        $output .= "Component {$component_name} created in {$new_fragment_file}.\n";
+        $output .= "Paragraph.ts updated with new import and fragment.";
+      }
+    }
+    // If this is a child type that's not being created as part of a parent component
+    elseif (empty($parent_data)) {
+      foreach ($objects as $fragment) {
+        if (!empty($fragment['bundle']) && $fragment['bundle'] === $paragraph_type_id) {
+          $fragment_content = $fragment['content'];
+          $fragment_name = $fragment['name'];
+          break;
+        }
+      }
+
+      if (!empty($fragment_content)) {
+        // Transform the fragment to TypeScript
+        [$fragment_name, $fragment_content] = $this->transformFragment($fragment_content);
+        $fragment_content = $this->addAliases($fragment_content, $paragraph_type_id);
+
+        // Create the component file
+        $component_name = 'Paragraph' . str_replace('_', '', ucwords($paragraph_type_id, '_'));
+        $new_fragment_file = "../nextjs/components/paragraphs/{$component_name}.tsx";
+
+        // Generate component content
+        $component_content = $this->generateComponentContent($component_name, $fragment_name, $fragment_content);
+
+        // Write the new component file
+        $this->fileSystem->saveData($component_content, $new_fragment_file, FileSystemInterface::EXISTS_REPLACE);
+
+        // Update the paragraph.ts file
+        $paragraphs_file = '../nextjs/graphql/fragments/paragraph.ts';
+        $paragraphs_content = file_get_contents($paragraphs_file);
+
+        // Add import statement
+        $import_statement = "import { {$fragment_name} } from \"@/components/paragraphs/{$component_name}\";";
+        if (strpos($paragraphs_content, $import_statement) === FALSE) {
+          // Add import statement
+          $paragraphs_content = preg_replace(
+            '/import { graphql } from "@\/graphql\/gql.tada";/',
+            "import { graphql } from \"@/graphql/gql.tada\";\n" . $import_statement,
+            $paragraphs_content
+          );
+
+          // Update ParagraphUnionFragment
+          $paragraphs_content = preg_replace(
+            '/\.\.\.ParagraphViewFragment/',
+            "...ParagraphViewFragment\n  ...{$fragment_name}",
+            $paragraphs_content
+          );
+
+          $paragraphs_content = preg_replace(
+            '/ParagraphViewFragment,/',
+            "ParagraphViewFragment,\n  {$fragment_name},",
+            $paragraphs_content
+          );
+
+          // Save the updated paragraph.ts file
+          $this->fileSystem->saveData($paragraphs_content, $paragraphs_file, FileSystemInterface::EXISTS_REPLACE);
+        }
+
+        $output .= "Component {$component_name} created in {$new_fragment_file}.\n";
+        $output .= "Paragraph.ts updated with new import and fragment.";
       }
     }
 
-    if (!empty($fragment_content)) {
-      // Transform the fragment to TypeScript.
-      [$fragment_name, $fragment_content] = $this->transformFragment($fragment_content);
-
-      // Add aliases to the GraphQL query.
-      $fragment_content = $this->addAliases($fragment_content, $paragraph_type_id);
-
-      // Create the new file path.
-      $component_name = 'Paragraph' . str_replace('_', '', ucwords($paragraph_type_id, '_'));
-      $new_fragment_file = "../nextjs/components/paragraphs/{$component_name}.tsx";
-
-      // Generate the component content.
-      $component_content = $this->generateComponentContent($component_name, $fragment_name, $fragment_content);
-
-      // Write the new component file.
-      $this->fileSystem->saveData($component_content, $new_fragment_file, FileSystemInterface::EXISTS_REPLACE);
-
-      // Update the paragraph.ts file.
-      $paragraphs_file = '../nextjs/graphql/fragments/paragraph.ts';
-      $paragraphs_content = file_get_contents($paragraphs_file);
-
-      // Add import statement.
-      $import_statement = "import { {$fragment_name} } from \"@/components/paragraphs/{$component_name}\";";
-      $paragraphs_content = preg_replace(
-        '/import { graphql } from "@\/graphql\/gql.tada";/',
-        "import { graphql } from \"@/graphql/gql.tada\";\n" . $import_statement,
-        $paragraphs_content
-      );
-
-      // Update ParagraphUnionFragment.
-      $paragraphs_content = preg_replace(
-        '/\.\.\.ParagraphViewFragment/',
-        "...ParagraphViewFragment\n  ...{$fragment_name}",
-        $paragraphs_content
-      );
-
-      $paragraphs_content = preg_replace(
-        '/ParagraphViewFragment,/',
-        "ParagraphViewFragment,\n  {$fragment_name},",
-        $paragraphs_content
-      );
-
-      // Save the updated paragraph.ts file.
-      $this->fileSystem->saveData($paragraphs_content, $paragraphs_file, FileSystemInterface::EXISTS_REPLACE);
-
-      return "Component {$component_name} created in {$new_fragment_file}.\nParagraph.ts updated with new import and fragment.";
+    if (empty($output)) {
+      $output = "Error: Unable to create fragment for paragraph type '{$paragraph_type_id}'. No fragment content found.";
     }
 
-    return "Error: Unable to create fragment for paragraph type '{$paragraph_type_id}'. No fragment content found.";
+    return $output;
+  }
+
+  /**
+   * Generate the content for the React component file with child fragments.
+   */
+  public function generateComponentContentWithChildren($component_name, $fragment_name, $fragment_content, $child_fragments) {
+    $imports = $this->generateImports($fragment_content);
+    foreach ($child_fragments as $child) {
+      $imports .= "\n" . $this->generateImports($child['content']);
+    }
+
+    $child_fragment_declarations = '';
+    foreach ($child_fragments as $child) {
+      $child_fragment_declarations .= "\n" . $child['content'] . "\n";
+    }
+
+    $this->integrationTemplate = <<<EOT
+import { FragmentOf, readFragment, graphql } from 'gql.tada';
+{$imports}
+
+{$child_fragment_declarations}
+
+{$fragment_content}
+
+interface {$component_name}Props {
+  paragraph: FragmentOf<typeof {$fragment_name}>,
+}
+
+export default function {$component_name}({ paragraph }: {$component_name}Props) {
+  const paragraphData = readFragment({$fragment_name}, paragraph);
+
+  const DebugView = ({ data }: { data: unknown }) => (
+    <pre style={{ backgroundColor: '#f0f0f0', padding: '10px', borderRadius: '5px', overflow: 'auto' }}>
+      {JSON.stringify(data, null, 2)}
+    </pre>
+  );
+
+  return (
+    <div className="container mx-auto">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {paragraphData.card_items?.map((item, index) => (
+          <div key={item.id} className="bg-white rounded-lg shadow-md overflow-hidden">
+            {item.recent_card_itemMedia && (
+              <div className="aspect-w-16 aspect-h-9">
+                {/* Add media rendering logic here */}
+                <div className="bg-gray-200 w-full h-full"></div>
+              </div>
+            )}
+            <div className="p-6">
+              <h3 className="text-xl font-semibold mb-2">{item.recent_card_itemTitle}</h3>
+              {item.recent_card_itemSummary && (
+                <p className="text-gray-600 mb-4">{item.recent_card_itemSummary.processed}</p>
+              )}
+              {item.recent_card_itemLink && (
+                <a
+                  href={item.recent_card_itemLink.url}
+                  className="text-blue-600 hover:text-blue-800 font-medium"
+                  target={item.recent_card_itemLink.target}
+                >
+                  {item.recent_card_itemLink.title || 'Read more'}
+                </a>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+      {<DebugView data={paragraphData} />}
+    </div>
+  );
+}
+EOT;
+
+    return $this->integrationTemplate;
   }
 
   /**
