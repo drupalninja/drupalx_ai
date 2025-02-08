@@ -109,6 +109,15 @@ class ParagraphImporterService {
         }
       }
 
+      // First create any child paragraph types if they exist
+      $child_types_output = '';
+      if (!empty($paragraph_data->child_types)) {
+        foreach ($paragraph_data->child_types as $child_type) {
+          $child_type_result = $this->importParagraphType($child_type);
+          $child_types_output .= $child_type_result . "\n";
+        }
+      }
+
       // Create the paragraph type.
       $paragraph_type = ParagraphsType::create([
         'id' => $paragraph_data->id,
@@ -159,7 +168,7 @@ class ParagraphImporterService {
         $result .= "\n" . $this->createParagraphTemplate($paragraph_data);
       }
 
-      return "Paragraph type '{$paragraph_data->name}' successfully created with $field_count fields.\n{$result}";
+      return $child_types_output . "Paragraph type '{$paragraph_data->name}' successfully created with $field_count fields.\n{$result}";
     }
     catch (\Exception $e) {
       $this->loggerFactory->get('drupalx_ai')->error('Error importing paragraph type: @message', ['@message' => $e->getMessage()]);
@@ -275,6 +284,12 @@ TWIG;
       }
       $storage_config['settings']['allowed_values'] = $allowed_values;
     }
+    // Add settings for entity_reference_revisions fields.
+    elseif ($field_type === 'entity_reference_revisions') {
+      $storage_config['settings'] = [
+        'target_type' => 'paragraph',
+      ];
+    }
 
     // Check if field storage already exists.
     if (!FieldStorageConfig::loadByName('paragraph', $field_name)) {
@@ -283,13 +298,27 @@ TWIG;
 
     // Create the field instance.
     if (!FieldConfig::loadByName('paragraph', $paragraph_type_id, $field_name)) {
-      FieldConfig::create([
+      $field_config = [
         'field_name' => $field_name,
         'entity_type' => 'paragraph',
         'bundle' => $paragraph_type_id,
         'label' => $field_data['label'],
         'required' => $field_data['required'] ?? FALSE,
-      ])->save();
+      ];
+
+      // Add handler settings for entity_reference_revisions fields
+      if ($field_type === 'entity_reference_revisions') {
+        $field_config['settings'] = [
+          'handler' => 'default:paragraph',
+          'handler_settings' => [
+            'target_bundles' => NULL,
+            'negate' => 0,
+            'target_bundles_drag_drop' => [],
+          ],
+        ];
+      }
+
+      FieldConfig::create($field_config)->save();
     }
 
     // Update GraphQL Compose configuration for this paragraph field.
@@ -326,6 +355,9 @@ TWIG;
     }
     elseif ($field_type === 'text_long' || $field_type === 'text_with_summary') {
       $widget_type = 'text_textarea';
+    }
+    elseif ($field_type === 'entity_reference_revisions') {
+      $widget_type = 'paragraphs';
     }
 
     $form_display->setComponent($field_name, [
@@ -385,6 +417,13 @@ TWIG;
 
       case 'entity_reference':
         $formatter_type = 'entity_reference_label';
+        break;
+
+      case 'entity_reference_revisions':
+        $formatter_type = 'entity_reference_revisions_entity_view';
+        $formatter_settings = [
+          'view_mode' => 'default',
+        ];
         break;
     }
 
@@ -449,6 +488,10 @@ TWIG;
             $url = 'internal:' . $url;
           }
           $paragraph->set($field_name, ['uri' => $url]);
+        }
+        elseif ($field_type === 'entity_reference_revisions') {
+          // Skip setting sample values for entity reference revisions fields.
+          continue;
         }
         else {
           $paragraph->set($field_name, $field['sample_value']);

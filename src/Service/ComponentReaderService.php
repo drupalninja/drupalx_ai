@@ -46,11 +46,13 @@ class ComponentReaderService {
    *
    * @param \Symfony\Component\Console\Style\StyleInterface $io
    *   The Symfony console style interface.
+   * @param bool $auto_confirm
+   *   Whether to automatically select the first option.
    *
    * @return string
    *   The selected component folder name.
    */
-  public function askComponentFolder(StyleInterface $io): string {
+  public function askComponentFolder(StyleInterface $io, bool $auto_confirm = FALSE): string {
     // Get theme configuration.
     $config = $this->configFactory->get('drupalx_ai.settings');
     $is_nextjs = $config->get('is_nextjs');
@@ -72,6 +74,10 @@ class ComponentReaderService {
       }
     );
 
+    if ($auto_confirm) {
+      return reset($components);
+    }
+
     return $components[$io->choice('Select a component folder to import', $components)];
   }
 
@@ -82,6 +88,8 @@ class ComponentReaderService {
    *   The name of the folder containing the component files.
    * @param \Symfony\Component\Console\Style\StyleInterface $io
    *   The Symfony console style interface.
+   * @param bool $auto_confirm
+   *   Whether to automatically select the first option.
    *
    * @return array
    *   An array containing:
@@ -89,7 +97,7 @@ class ComponentReaderService {
    *   - string|false $component_content: The content of the component file.
    *   - string|false $story_content: The content of the story file.
    */
-  public function readComponentFiles(string $component_folder_name, StyleInterface $io): array {
+  public function readComponentFiles(string $component_folder_name, StyleInterface $io, bool $auto_confirm = FALSE): array {
     $logger = $this->loggerFactory->get('drupalx_ai');
 
     // Get theme configuration.
@@ -140,8 +148,8 @@ class ComponentReaderService {
       return [FALSE, FALSE, FALSE];
     }
 
-    // Let user select a component file.
-    $selected_file = $io->choice(
+    // Select the first file if auto-confirm is true, otherwise let user choose.
+    $selected_file = $auto_confirm ? reset($component_files) : $io->choice(
       "Select a file from the {$component_folder_name} component",
       array_combine($component_files, $component_files)
     );

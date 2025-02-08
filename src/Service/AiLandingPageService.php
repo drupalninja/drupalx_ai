@@ -269,10 +269,28 @@ final class AiLandingPageService {
         unset($paragraphData['{']);
       }
 
-      // If parent is 'pricing' and child type is missing, assume
-      // 'pricing_card'.
-      if ($parentType === 'pricing' && !isset($paragraphData['type'])) {
-        $paragraphData['type'] = 'pricing_card';
+      // If type is missing for nested paragraphs, try to determine it from parent
+      if (!isset($paragraphData['type']) && !empty($parentType)) {
+        // Common parent-child relationships
+        $childTypes = [
+          'accordion' => 'accordion_item',
+          'pricing' => 'pricing_card',
+          'stats' => 'stat_item',
+          'features' => 'feature_item',
+          'tabs' => 'tab_item',
+          'carousel' => 'carousel_item',
+          'timeline' => 'timeline_item',
+          'gallery' => 'gallery_item',
+        ];
+
+        // First check if we have a predefined child type
+        if (isset($childTypes[$parentType])) {
+          $paragraphData['type'] = $childTypes[$parentType];
+        }
+        // Otherwise, fallback to parent type + '_item'
+        else {
+          $paragraphData['type'] = $parentType . '_item';
+        }
       }
 
       if (!isset($paragraphData['type'])) {
@@ -293,7 +311,8 @@ final class AiLandingPageService {
         if ($fieldName === 'field_logo') {
           continue;
         }
-        elseif ($fieldDefinition && $fieldDefinition->getType() === 'entity_reference' && $fieldDefinition->getSetting('target_type') === 'media') {
+        elseif ($fieldDefinition && $fieldDefinition->getType() === 'entity_reference' &&
+                $fieldDefinition->getSetting('target_type') === 'media') {
           if (is_string($fieldValue)) {
             $media = $this->createOrFetchMedia($this->preprocessImageSearchTerm($fieldValue));
             if ($media) {
@@ -313,18 +332,33 @@ final class AiLandingPageService {
             }
           }
         }
-        elseif (is_array($fieldValue) && (isset($fieldValue[0]['type']) || isset($fieldValue[0]['{']))) {
+        elseif (is_array($fieldValue) &&
+                (isset($fieldValue[0]['type']) ||
+                isset($fieldValue[0]['{']) ||
+                ($fieldDefinition?->getType() === 'entity_reference_revisions' &&
+                 $fieldDefinition->getSetting('target_type') === 'paragraph'))) {
           // This is likely a nested paragraph field.
           $nestedParagraphs = [];
           foreach ($fieldValue as $nestedParagraphData) {
-            // Pass the current paragraph type as the parent type for nested
-            // paragraphs.
-            $nestedParagraph = $this->createParagraphFromGeneratedContent($nestedParagraphData, $paragraphData['type']);
+            // If the nested data is just a string or simple value, wrap it in a proper structure
+            if (!is_array($nestedParagraphData) || (!isset($nestedParagraphData['type']) && !isset($nestedParagraphData['fields']))) {
+              $nestedParagraphData = [
+                'fields' => ['field_text' => $nestedParagraphData],
+              ];
+            }
+
+            // Pass the current paragraph type as the parent type for nested paragraphs
+            $nestedParagraph = $this->createParagraphFromGeneratedContent(
+              $nestedParagraphData,
+              $paragraphData['type']
+            );
             if ($nestedParagraph) {
               $nestedParagraphs[] = $nestedParagraph;
             }
           }
-          $paragraph->set($fieldName, $nestedParagraphs);
+          if (!empty($nestedParagraphs)) {
+            $paragraph->set($fieldName, $nestedParagraphs);
+          }
         }
         elseif ($fieldName === 'field_icon') {
           $iconName = $this->paragraphStructureService->getBestIconMatch($fieldValue);
