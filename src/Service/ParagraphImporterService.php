@@ -145,15 +145,18 @@ class ParagraphImporterService {
       // Create fields.
       $field_count = 0;
       foreach ($paragraph_data->fields as $field) {
+        // Convert field to array if it's an object.
+        $field_array = is_object($field) ? get_object_vars($field) : $field;
+
         // Validate required field properties.
         $required_field_properties = ['name', 'label', 'type'];
         foreach ($required_field_properties as $property) {
-          if (!isset($field[$property])) {
+          if (!isset($field_array[$property])) {
             throw new \InvalidArgumentException("Missing required field property: $property");
           }
         }
 
-        $this->createField($paragraph_type->id(), $field);
+        $this->createField($paragraph_type->id(), $field_array);
         $field_count++;
       }
 
@@ -311,9 +314,16 @@ TWIG;
         $field_config['settings'] = [
           'handler' => 'default:paragraph',
           'handler_settings' => [
-            'target_bundles' => NULL,
+            'target_bundles' => [
+              $field_data['target_bundle'] => $field_data['target_bundle']
+            ],
             'negate' => 0,
-            'target_bundles_drag_drop' => [],
+            'target_bundles_drag_drop' => [
+              $field_data['target_bundle'] => [
+                'enabled' => TRUE,
+                'weight' => 0
+              ]
+            ],
           ],
         ];
       }
@@ -456,7 +466,10 @@ TWIG;
 
     // Assign the fields to the paragraph.
     foreach ($paragraph_data->fields as $field) {
-      $field_name = !empty($field['name']) ? (strpos($field['name'], 'field_') === 0 ? $field['name'] : 'field_' . $field['name']) : '';
+      // Convert field to array if it's an object.
+      $field_array = is_object($field) ? get_object_vars($field) : $field;
+
+      $field_name = !empty($field_array['name']) ? (strpos($field_array['name'], 'field_') === 0 ? $field_array['name'] : 'field_' . $field_array['name']) : '';
       if (!empty($field_name) && $paragraph->hasField($field_name)) {
         $field_definition = $paragraph->getFieldDefinition($field_name);
         $field_type = $field_definition->getType();
@@ -477,13 +490,13 @@ TWIG;
           $paragraph->set(
             $field_name, [
               'target_id' => $file->id(),
-              'alt' => $field['label'],
-              'title' => $field['label'],
+              'alt' => $field_array['label'],
+              'title' => $field_array['label'],
             ]
           );
         }
         elseif ($field_type === 'link') {
-          $url = $field['sample_value'];
+          $url = $field_array['sample_value'];
           if (strpos($url, '/') === 0) {
             $url = 'internal:' . $url;
           }
@@ -494,7 +507,7 @@ TWIG;
           continue;
         }
         else {
-          $paragraph->set($field_name, $field['sample_value']);
+          $paragraph->set($field_name, $field_array['sample_value']);
         }
       }
       else {

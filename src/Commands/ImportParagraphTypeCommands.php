@@ -90,7 +90,7 @@ class ImportParagraphTypeCommands extends DrushCommands {
   }
 
   /**
-   * Import a new paragraph type based on a theme component using AI.
+   * Import a paragraph type based on a theme component using AI.
    *
    * @param \Symfony\Component\Console\Output\OutputInterface $output
    *   The output interface.
@@ -145,8 +145,11 @@ class ImportParagraphTypeCommands extends DrushCommands {
       return;
     }
 
+    // Convert the array to an object recursively.
+    $paragraphTypeObject = json_decode(json_encode($paragraphTypeDetails));
+
     // Import the paragraph type using the ParagraphImporterService.
-    $result = $this->paragraphImporter->importParagraphType((object) $paragraphTypeDetails);
+    $result = $this->paragraphImporter->importParagraphType($paragraphTypeObject);
     $output->writeln($result);
 
     drupal_flush_all_caches();
@@ -160,9 +163,12 @@ class ImportParagraphTypeCommands extends DrushCommands {
     $prompt = "Based on this component named '{$componentName}', suggest a Drupal paragraph type
       structure using the suggest_paragraph_type function. If the component has a nested structure
       (like cards within a card container), create both the parent and child paragraph types.
-      For the recent-cards component specifically, create both a parent paragraph type for the container
-      and a child paragraph type for individual card items:\n\n{$componentContent}.
-      Also use content from this component's story {$storyContent} to inform the paragraph type.
+      For the recent-cards component specifically:
+      1. Create a parent paragraph type named 'recent_cards' that has a field referencing the child type
+      2. Create a child paragraph type named 'recent_card_item' with fields for title, summary, link, and media
+      3. The parent type should be the main return object, with the child type defined in its child_types array
+      4. The parent type should have an entity_reference_revisions field that references the child type.
+
       The name of the paragraph should not include the word 'paragraph'.
       Make sure the name of the paragraph is the exact same as the name of the component.
       For fields, only lowercase alphanumeric characters and underscores are allowed,
@@ -170,9 +176,47 @@ class ImportParagraphTypeCommands extends DrushCommands {
       Do not add '_component' to the name of the component.
       Do not use the field type 'list_text' - the correct type is 'list_string'.
       Use only Drupal 10 valid field types. For images use the 'image' field type.
-      For the recent-cards component:
-      1. Create a child paragraph type named 'recent_card_item' with fields for title, summary, link, and media
-      2. Create the parent paragraph type that references the child type";
+
+      IMPORTANT: For components that have a parent-child relationship like recent-cards:
+      1. First define the child type in the child_types array
+      2. Then in the parent type's fields, include an 'entity_reference_revisions' field that references the child paragraph type
+      3. The parent type should be the main return object, with child types nested within it
+      4. Make sure to set appropriate cardinality for the reference field (usually -1 for unlimited)
+      5. For entity_reference_revisions fields, set target_type to 'paragraph' and target_bundle to the child type's id
+
+      Example structure for recent-cards:
+      {
+        'id': 'recent_cards',
+        'name': 'Recent Cards',
+        'description': 'A collection of recent card items',
+        'fields': [
+          {
+            'name': 'card_items',
+            'label': 'Card Items',
+            'type': 'entity_reference_revisions',
+            'target_type': 'paragraph',
+            'target_bundle': 'recent_card_item',
+            'cardinality': -1,
+            'required': true
+          }
+        ],
+        'child_types': [
+          {
+            'id': 'recent_card_item',
+            'name': 'Recent Card Item',
+            'description': 'Individual card item',
+            'fields': [
+              {
+                'name': 'title',
+                'label': 'Title',
+                'type': 'string',
+                'required': true
+              },
+              // ... other fields ...
+            ]
+          }
+        ]
+      }";
 
     $tools = [
       [
@@ -228,6 +272,14 @@ class ImportParagraphTypeCommands extends DrushCommands {
                       'type' => 'string',
                     ],
                     'description' => 'Array of string options for the field (list text only)',
+                  ],
+                  'target_type' => [
+                    'type' => 'string',
+                    'description' => 'For entity reference fields, the type of entity to reference',
+                  ],
+                  'target_bundle' => [
+                    'type' => 'string',
+                    'description' => 'For entity reference fields, the bundle to reference',
                   ],
                 ],
                 'required' => ['name', 'label', 'type', 'sample_value'],
@@ -285,7 +337,7 @@ class ImportParagraphTypeCommands extends DrushCommands {
                   ],
                 ],
                 'required' => ['id', 'name', 'description', 'fields'],
-              ],g
+              ],
             ],
           ],
           'required' => ['id', 'name', 'description', 'fields'],
