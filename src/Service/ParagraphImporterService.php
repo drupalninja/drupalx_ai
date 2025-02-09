@@ -187,6 +187,10 @@ class ParagraphImporterService {
         elseif (!empty($paragraph_data->is_child_type) && empty($paragraph_data->parent_type)) {
           $result .= "\n" . $this->createParagraphFragment($paragraph_data->id);
         }
+        // For standalone types (no children).
+        elseif (empty($paragraph_data->is_child_type) && empty($paragraph_data->child_types)) {
+          $result .= "\n" . $this->createParagraphFragment($paragraph_data->id);
+        }
       }
       else {
         $result .= "\n" . $this->createParagraphTemplate($paragraph_data);
@@ -952,7 +956,153 @@ TWIG;
     }
     // For standalone paragraph types (no children):
     else {
-      // Similar logic for standalone paragraph types...
+      // Generate the fragment for the standalone type.
+      $fragment_name = 'Paragraph' . $toPascalCase($paragraph_type_id) . 'Fragment';
+      $fields = ['id'];
+      $fragment_dependencies = [];
+
+      // Get the paragraph type entity to access field definitions.
+      $paragraph_type = ParagraphsType::load($paragraph_type_id);
+      if (!$paragraph_type) {
+        return "Error: Could not load paragraph type {$paragraph_type_id}";
+      }
+
+      // Get field definitions.
+      $field_definitions = \Drupal::service('entity_field.manager')->getFieldDefinitions('paragraph', $paragraph_type_id);
+
+      foreach ($field_definitions as $field_name => $field_definition) {
+        // Skip base fields.
+        if ($field_definition->getFieldStorageDefinition()->isBaseField()) {
+          continue;
+        }
+
+        // Remove 'field_' prefix.
+        $field_name_clean = preg_replace('/^field_/', '', $field_name);
+        $field_type = $field_definition->getType();
+        $field_data = ['name' => $field_name_clean, 'type' => $field_type];
+
+        switch ($field_type) {
+          case 'string':
+          case 'boolean':
+            $fields[] = $field_data;
+            break;
+
+          case 'text':
+          case 'text_long':
+          case 'text_with_summary':
+            $field_data['content'] = "{\n    ...TextFragment\n  }";
+            $fields[] = $field_data;
+            $fragment_dependencies[] = 'TextFragment';
+            break;
+
+          case 'link':
+            $field_data['content'] = "{\n    ...LinkFragment\n  }";
+            $fields[] = $field_data;
+            $fragment_dependencies[] = 'LinkFragment';
+            break;
+
+          case 'image':
+            $field_data['content'] = "{\n    ...MediaUnionFragment\n  }";
+            $fields[] = $field_data;
+            $fragment_dependencies[] = 'MediaUnionFragment';
+            break;
+        }
+      }
+
+      // Add aliases to fields.
+      $fields = $this->addAliases($fields, $toPascalCase($paragraph_type_id));
+
+      // Format fields for fragment.
+      $formatted_fields = array_map(
+        function ($field) {
+          if (is_array($field)) {
+            $field_str = isset($field['alias']) ? "{$field['alias']}: {$field['name']}" : $field['name'];
+            if (isset($field['content'])) {
+              $field_str .= " " . $field['content'];
+            }
+            return $field_str;
+          }
+          return $field;
+        },
+        $fields
+      );
+
+      // Create the fragment.
+      $type_pascal = $toPascalCase($paragraph_type_id);
+      $fragment_deps_str = empty($fragment_dependencies) ? '' : ', [' . implode(', ', array_map(fn($dep) => $dep, $fragment_dependencies)) . ']';
+      $fragment_content = "export const {$fragment_name} = graphql(`fragment {$fragment_name} on Paragraph{$type_pascal} {\n  " . implode("\n  ", $formatted_fields) . "\n}`{$fragment_deps_str});";
+
+      // Create the component file.
+      $component_name = 'Paragraph' . $type_pascal;
+      $new_fragment_file = $this->fileSystem->realpath('../nextjs/components/paragraphs') . "/{$component_name}.tsx";
+
+      // Generate imports.
+      $imports = "import { FragmentOf, readFragment, graphql } from 'gql.tada';\n";
+
+      // Add required imports based on dependencies.
+      $misc_fragments = array_intersect(
+        ['LinkFragment', 'TextFragment', 'TextSummaryFragment', 'DateTimeFragment', 'LanguageFragment'],
+        $fragment_dependencies
+      );
+      $media_fragments = array_intersect(['MediaUnionFragment'], $fragment_dependencies);
+
+      if (!empty($misc_fragments)) {
+        $imports .= "import { " . implode(', ', $misc_fragments) . " } from '@/graphql/fragments/misc';\n";
+      }
+      if (!empty($media_fragments)) {
+        $imports .= "import { " . implode(', ', $media_fragments) . " } from '@/graphql/fragments/media';\n";
+      }
+
+      // Generate component content.
+      $component_content = $imports . "\n";
+      $component_content .= $fragment_content . "\n\n";
+      $component_content .= "interface {$component_name}Props {\n";
+      $component_content .= "  paragraph: FragmentOf<typeof {$fragment_name}>\n";
+      $component_content .= "}\n\n";
+      $component_content .= "export default function {$component_name}({ paragraph }: {$component_name}Props) {\n";
+      $component_content .= "  const paragraphData = readFragment({$fragment_name}, paragraph);\n\n";
+      $component_content .= "  return (\n";
+      $component_content .= "    <div className=\"container mx-auto\">\n";
+      $component_content .= "      <pre>{JSON.stringify(paragraphData, null, 2)}</pre>\n";
+      $component_content .= "    </div>\n";
+      $component_content .= "  );\n";
+      $component_content .= "}\n";
+
+      // Write the new component file.
+      $this->fileSystem->saveData($component_content, $new_fragment_file, FileSystemInterface::EXISTS_REPLACE);
+
+      // Update the paragraph.ts file.
+      $paragraphs_file = '../nextjs/graphql/fragments/paragraph.ts';
+      $paragraphs_content = file_get_contents($paragraphs_file);
+
+      // Add import statement.
+      $import_statement = "import { {$fragment_name} } from \"@/components/paragraphs/{$component_name}\";";
+      if (strpos($paragraphs_content, $import_statement) === FALSE) {
+        $paragraphs_content = preg_replace(
+          '/import { graphql } from "@\/graphql\/gql.tada";/',
+          "import { graphql } from \"@/graphql/gql.tada\";\n" . $import_statement,
+          $paragraphs_content
+        );
+
+        // Update ParagraphUnionFragment.
+        $paragraphs_content = preg_replace(
+          '/\.\.\.ParagraphViewFragment/',
+          "...ParagraphViewFragment\n  ...{$fragment_name}",
+          $paragraphs_content
+        );
+
+        $paragraphs_content = preg_replace(
+          '/ParagraphViewFragment,/',
+          "ParagraphViewFragment,\n  {$fragment_name},",
+          $paragraphs_content
+        );
+
+        // Save the updated paragraph.ts file.
+        $this->fileSystem->saveData($paragraphs_content, $paragraphs_file, FileSystemInterface::EXISTS_REPLACE);
+      }
+
+      $output .= "Component {$component_name} created in {$new_fragment_file}.\n";
+      $output .= "Paragraph.ts updated with new import and fragment.";
     }
 
     return $output;
