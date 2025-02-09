@@ -230,8 +230,9 @@ class ParagraphImporterService {
     // Generate field variables for the template.
     $field_variables = [];
     foreach ($paragraph_data->fields as $field) {
-      $field_name = 'field_' . $field['name'];
-      $field_variables[] = "        {$field['name']}: content.{$field_name}|render|trim";
+      $field_name = 'field_' . (is_array($field) ? $field['name'] : $field->name);
+      $field_var_name = is_array($field) ? $field['name'] : $field->name;
+      $field_variables[] = "        {$field_var_name}: content.{$field_name}|render|trim";
     }
     $field_vars = implode(",\n", $field_variables);
 
