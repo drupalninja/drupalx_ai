@@ -671,24 +671,49 @@ TWIG;
   }
 
   /**
-   * Add aliases to the GraphQL query.
+   * Add aliases to common fields.
    *
-   * @param string $text
-   *   The text to add the alias to.
-   * @param string $alias
-   *   The alias to add.
+   * @param array $fields
+   *   The fields to process.
+   * @param string $prefix
+   *   The prefix to use for aliases.
    *
-   * @return string
-   *   The updated text.
+   * @return array
+   *   The fields with aliases added.
    */
-  protected function addAliases($text, $alias) {
-    $pattern = '/\b(body|title|link|media|summary)(\s)/';
-    $replacement = function ($matches) use ($alias) {
-      $capitalized = ucfirst($matches[1]);
-      return $alias . $capitalized . ': ' . $matches[1] . $matches[2];
-    };
+  protected function addAliases(array $fields, string $prefix) {
+    $common_fields = [
+      'title',
+      'summary',
+      'body',
+      'media',
+      'link',
+      'created',
+      'langcode',
+      'status'
+    ];
 
-    return preg_replace_callback($pattern, $replacement, $text);
+    $aliased_fields = [];
+    foreach ($fields as $field) {
+      if (is_array($field)) {
+        $field_name = $field['name'];
+        if (in_array($field_name, $common_fields)) {
+          $field['alias'] = $prefix . ucfirst($field_name);
+        }
+        $aliased_fields[] = $field;
+      }
+      else {
+        // Handle string field names (like 'id').
+        if (in_array($field, $common_fields)) {
+          $aliased_fields[] = "{$prefix}" . ucfirst($field) . ": {$field}";
+        }
+        else {
+          $aliased_fields[] = $field;
+        }
+      }
+    }
+
+    return $aliased_fields;
   }
 
   /**
@@ -721,78 +746,119 @@ TWIG;
       return $str;
     };
 
-    // If this is a parent type with child types, create a single component with both fragments:
+    // If this is a parent type with child types, create a single component with both fragments.
     if ($parent_data && !empty($parent_data->child_types)) {
-      // First, generate fragments for child types:
+      // First, generate fragments for child types.
       $child_fragments = [];
       foreach ($parent_data->child_types as $child_type) {
         $child_fragment_name = $toPascalCase($child_type->id) . 'Fragment';
         $child_fields = [];
         $fragment_dependencies = [];
 
-        // Add standard fields:
+        // Add standard fields.
         $child_fields[] = 'id';
 
-        // Add custom fields:
+        // Add custom fields.
         foreach ($child_type->fields as $field) {
           $field_array = is_object($field) ? get_object_vars($field) : $field;
           $field_name = $toCamelCase('field_' . $field_array['name']);
+          $field_data = ['name' => $field_name, 'type' => $field_array['type']];
 
           switch ($field_array['type']) {
             case 'string':
-              $child_fields[] = $field_name;
+              $child_fields[] = $field_data;
               break;
 
             case 'text_long':
-              $child_fields[] = "{$field_name} {\n      value\n      processed\n    }";
+              $field_data['content'] = "{\n      value\n      processed\n    }";
+              $child_fields[] = $field_data;
               break;
 
             case 'link':
-              $child_fields[] = "{$field_name} {\n      ...LinkFragment\n    }";
+              $field_data['content'] = "{\n      ...LinkFragment\n    }";
+              $child_fields[] = $field_data;
               $fragment_dependencies[] = 'LinkFragment';
               break;
 
             case 'image':
-              $child_fields[] = "{$field_name} {\n      ...MediaUnionFragment\n    }";
+              $field_data['content'] = "{\n      ...MediaUnionFragment\n    }";
+              $child_fields[] = $field_data;
               $fragment_dependencies[] = 'MediaUnionFragment';
               break;
           }
         }
 
-        // Create the child fragment with PascalCase type name:
+        // Add aliases to child fields.
+        $child_fields = $this->addAliases($child_fields, $toCamelCase($child_type->id));
+
+        // Create the child fragment with PascalCase type name.
         $child_type_pascal = $toPascalCase($child_type->id);
         $fragment_deps_str = empty($fragment_dependencies) ? '' : ', [' . implode(', ', $fragment_dependencies) . ']';
-        $child_fragment_content = "const {$child_fragment_name} = graphql(`fragment {$child_fragment_name} on Paragraph{$child_type_pascal} {\n  " . implode("\n  ", $child_fields) . "\n}`{$fragment_deps_str});";
+
+        // Format fields for fragment.
+        $formatted_fields = array_map(
+          function ($field) {
+            if (is_array($field)) {
+              $field_str = isset($field['alias']) ? "{$field['alias']}: {$field['name']}" : $field['name'];
+              if (isset($field['content'])) {
+                $field_str .= " " . $field['content'];
+              }
+              return $field_str;
+            }
+            return $field;
+          },
+          $child_fields
+        );
+
+        $child_fragment_content = "const {$child_fragment_name} = graphql(`fragment {$child_fragment_name} on Paragraph{$child_type_pascal} {\n  " . implode("\n  ", $formatted_fields) . "\n}`{$fragment_deps_str});";
+
         $child_fragments[] = [
           'name' => $child_fragment_name,
           'content' => $child_fragment_content,
-          'dependencies' => $fragment_dependencies
+          'dependencies' => $fragment_dependencies,
         ];
       }
 
-      // Now generate the parent fragment:
+      // Now generate the parent fragment.
       $parent_fragment_name = 'Paragraph' . $toPascalCase($paragraph_type_id) . 'Fragment';
       $parent_fields = ['id'];
 
-      // Add parent fields:
+      // Add parent fields.
       foreach ($parent_data->fields as $field) {
         $field_array = is_object($field) ? get_object_vars($field) : $field;
         $field_name = $toCamelCase('field_' . $field_array['name']);
+        $field_data = ['name' => $field_name, 'type' => $field_array['type']];
 
         if ($field_array['type'] === 'entity_reference_revisions') {
-          // Reference the child fragment:
+          // Reference the child fragment.
           $child_type = $field_array['target_bundle'];
           $child_fragment_name = $toPascalCase($child_type) . 'Fragment';
-          $parent_fields[] = "{$field_name} {\n    ...{$child_fragment_name}\n  }";
+          $field_data['content'] = "{\n    ...{$child_fragment_name}\n  }";
         }
-        else {
-          $parent_fields[] = $field_name;
-        }
+        $parent_fields[] = $field_data;
       }
 
-      // Create the parent fragment with PascalCase type name:
+      // Add aliases to parent fields.
+      $parent_fields = $this->addAliases($parent_fields, $toPascalCase($paragraph_type_id));
+
+      // Format fields for parent fragment.
+      $formatted_parent_fields = array_map(
+        function ($field) {
+          if (is_array($field)) {
+            $field_str = isset($field['alias']) ? "{$field['alias']}: {$field['name']}" : $field['name'];
+            if (isset($field['content'])) {
+              $field_str .= " " . $field['content'];
+            }
+            return $field_str;
+          }
+          return $field;
+        },
+        $parent_fields
+      );
+
+      // Create the parent fragment with PascalCase type name.
       $parent_type_pascal = $toPascalCase($parent_data->id);
-      $parent_fragment_content = "export const {$parent_fragment_name} = graphql(`fragment {$parent_fragment_name} on Paragraph{$parent_type_pascal} {\n  " . implode("\n  ", $parent_fields) . "\n}`, [" . implode(', ', array_map(fn($f) => $f['name'], $child_fragments)) . "]);";
+      $parent_fragment_content = "export const {$parent_fragment_name} = graphql(`fragment {$parent_fragment_name} on Paragraph{$parent_type_pascal} {\n  " . implode("\n  ", $formatted_parent_fields) . "\n}`, [" . implode(', ', array_map(fn($f) => $f['name'], $child_fragments)) . "]);";
 
       // Create the component file:
       $component_name = 'Paragraph' . $toPascalCase($paragraph_type_id);
