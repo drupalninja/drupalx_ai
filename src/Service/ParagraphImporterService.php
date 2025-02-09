@@ -772,7 +772,7 @@ TWIG;
       $paragraph->save();
       $node = Node::create([
         'type' => 'landing',
-        'title' => "Paragraph: '{$paragraph_data->id}'",
+        'title' => "Paragraph: {$paragraph_data->id}",
       ]);
 
       if ($node->hasField('field_content')) {
