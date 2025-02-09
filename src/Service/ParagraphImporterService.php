@@ -617,7 +617,7 @@ TWIG;
           'uri' => $uri,
           'filename' => basename($destination),
           'filemime' => 'image/png',
-          'status' => FILE_STATUS_PERMANENT,
+          'status' => 1,
         ]);
 
         $file->save();
@@ -664,6 +664,89 @@ TWIG;
 
         try {
           switch ($field_type) {
+            case 'entity_reference':
+              if (isset($field_array['target_type']) && $field_array['target_type'] === 'media') {
+                $this->loggerFactory->get('drupalx_ai')->debug(
+                  'Creating media entity for reference field: @field',
+                  ['@field' => $field_name]
+                );
+
+                $image_file = $createImageFile();
+                if ($image_file) {
+                  try {
+                    // Create a media entity
+                    $media = $this->entityTypeManager->getStorage('media')->create([
+                      'bundle' => 'image',
+                      'name' => $field_array['label'] ?? 'Sample image',
+                      'status' => 1,
+                    ]);
+
+                    // Get the source field for the media type
+                    $media_type = $this->entityTypeManager->getStorage('media_type')->load('image');
+                    $source_field = $media_type->getSource()->getConfiguration()['source_field'];
+
+                    // Set the image field on the media entity
+                    $media->set($source_field, [
+                      'target_id' => $image_file->id(),
+                      'alt' => $field_array['label'] ?? 'Sample image',
+                      'title' => $field_array['label'] ?? 'Sample image',
+                    ]);
+
+                    // Save the media entity
+                    $media->save();
+
+                    $this->loggerFactory->get('drupalx_ai')->info(
+                      'Successfully created media entity @mid for field @field',
+                      [
+                        '@mid' => $media->id(),
+                        '@field' => $field_name
+                      ]
+                    );
+
+                    // Get field settings to determine the structure
+                    $field_settings = $field_definition->getSettings();
+                    $this->loggerFactory->get('drupalx_ai')->debug(
+                      'Field settings: @settings',
+                      ['@settings' => json_encode($field_settings)]
+                    );
+
+                    // Set the media reference on the paragraph
+                    $paragraph->get($field_name)->setValue([
+                      'target_id' => $media->id()
+                    ]);
+
+                    // Verify the field was set correctly
+                    $field_value = $paragraph->get($field_name)->getValue();
+                    $this->loggerFactory->get('drupalx_ai')->debug(
+                      'Field value after setting: @value',
+                      ['@value' => json_encode($field_value)]
+                    );
+
+                    // Double check the media entity exists and has the file
+                    $loaded_media = $this->entityTypeManager->getStorage('media')->load($media->id());
+                    if ($loaded_media) {
+                      $media_file = $loaded_media->get($source_field)->getValue();
+                      $this->loggerFactory->get('drupalx_ai')->debug(
+                        'Media entity exists with ID: @mid and file: @file',
+                        [
+                          '@mid' => $loaded_media->id(),
+                          '@file' => json_encode($media_file)
+                        ]
+                      );
+                    } else {
+                      throw new \Exception('Failed to load created media entity');
+                    }
+                  }
+                  catch (\Exception $e) {
+                    $this->loggerFactory->get('drupalx_ai')->error(
+                      'Error creating media entity: @error',
+                      ['@error' => $e->getMessage()]
+                    );
+                  }
+                }
+              }
+              break;
+
             case 'image':
               $this->loggerFactory->get('drupalx_ai')->debug(
                 'Creating media entity for image field: @field',
@@ -677,13 +760,21 @@ TWIG;
                   $media = $this->entityTypeManager->getStorage('media')->create([
                     'bundle' => 'image',
                     'name' => $field_array['label'] ?? 'Sample image',
-                    'field_media_image' => [
-                      'target_id' => $image_file->id(),
-                      'alt' => $field_array['label'] ?? 'Sample image',
-                      'title' => $field_array['label'] ?? 'Sample image',
-                    ],
                     'status' => 1,
                   ]);
+
+                  // Get the source field for the media type
+                  $media_type = $this->entityTypeManager->getStorage('media_type')->load('image');
+                  $source_field = $media_type->getSource()->getConfiguration()['source_field'];
+
+                  // Set the image field on the media entity
+                  $media->set($source_field, [
+                    'target_id' => $image_file->id(),
+                    'alt' => $field_array['label'] ?? 'Sample image',
+                    'title' => $field_array['label'] ?? 'Sample image',
+                  ]);
+
+                  // Save the media entity
                   $media->save();
 
                   $this->loggerFactory->get('drupalx_ai')->info(
@@ -694,8 +785,39 @@ TWIG;
                     ]
                   );
 
+                  // Get field settings to determine the structure
+                  $field_settings = $field_definition->getSettings();
+                  $this->loggerFactory->get('drupalx_ai')->debug(
+                    'Field settings: @settings',
+                    ['@settings' => json_encode($field_settings)]
+                  );
+
                   // Set the media reference on the paragraph
-                  $paragraph->set($field_name, ['target_id' => $media->id()]);
+                  $paragraph->get($field_name)->setValue([
+                    'target_id' => $media->id()
+                  ]);
+
+                  // Verify the field was set correctly
+                  $field_value = $paragraph->get($field_name)->getValue();
+                  $this->loggerFactory->get('drupalx_ai')->debug(
+                    'Field value after setting: @value',
+                    ['@value' => json_encode($field_value)]
+                  );
+
+                  // Double check the media entity exists and has the file
+                  $loaded_media = $this->entityTypeManager->getStorage('media')->load($media->id());
+                  if ($loaded_media) {
+                    $media_file = $loaded_media->get($source_field)->getValue();
+                    $this->loggerFactory->get('drupalx_ai')->debug(
+                      'Media entity exists with ID: @mid and file: @file',
+                      [
+                        '@mid' => $loaded_media->id(),
+                        '@file' => json_encode($media_file)
+                      ]
+                    );
+                  } else {
+                    throw new \Exception('Failed to load created media entity');
+                  }
                 }
                 catch (\Exception $e) {
                   $this->loggerFactory->get('drupalx_ai')->error(
@@ -719,50 +841,6 @@ TWIG;
                   '@url' => $url
                 ]
               );
-              break;
-
-            case 'entity_reference':
-              if (isset($field_array['target_type']) && $field_array['target_type'] === 'media') {
-                $this->loggerFactory->get('drupalx_ai')->debug(
-                  'Creating media entity for reference field: @field',
-                  ['@field' => $field_name]
-                );
-
-                $image_file = $createImageFile();
-                if ($image_file) {
-                  try {
-                    // Create a media entity
-                    $media = $this->entityTypeManager->getStorage('media')->create([
-                      'bundle' => 'image',
-                      'name' => $field_array['label'] ?? 'Sample image',
-                      'field_media_image' => [
-                        'target_id' => $image_file->id(),
-                        'alt' => $field_array['label'] ?? 'Sample image',
-                        'title' => $field_array['label'] ?? 'Sample image',
-                      ],
-                      'status' => 1,
-                    ]);
-                    $media->save();
-
-                    $this->loggerFactory->get('drupalx_ai')->info(
-                      'Successfully created media entity @mid for field @field',
-                      [
-                        '@mid' => $media->id(),
-                        '@field' => $field_name
-                      ]
-                    );
-
-                    // Set the media reference on the paragraph
-                    $paragraph->set($field_name, ['target_id' => $media->id()]);
-                  }
-                  catch (\Exception $e) {
-                    $this->loggerFactory->get('drupalx_ai')->error(
-                      'Error creating media entity: @error',
-                      ['@error' => $e->getMessage()]
-                    );
-                  }
-                }
-              }
               break;
 
             case 'entity_reference_revisions':
@@ -796,89 +874,143 @@ TWIG;
                       $child_paragraph = Paragraph::create(['type' => $child_type->id]);
                       foreach ($child_type->fields as $child_field) {
                         $child_field_array = is_object($child_field) ? get_object_vars($child_field) : $child_field;
-                        $child_field_name = 'field_' . $child_field_array['name'];
+                        $child_field_name = !empty($child_field_array['name']) ?
+                          (strpos($child_field_array['name'], 'field_') === 0 ? $child_field_array['name'] : 'field_' . $child_field_array['name']) : '';
 
                         // Get the field definition to determine field type
-                        $child_field_definition = $child_paragraph->getFieldDefinition($child_field_name);
-                        $child_field_type = $child_field_definition->getType();
+                        if (!empty($child_field_name) && $child_paragraph->hasField($child_field_name)) {
+                          $child_field_definition = $child_paragraph->getFieldDefinition($child_field_name);
+                          $child_field_type = $child_field_definition->getType();
 
-                        try {
-                          switch ($child_field_type) {
-                            case 'image':
-                              $image_file = $createImageFile();
-                              if ($image_file) {
-                                try {
-                                  // Create a media entity
-                                  $media = $this->entityTypeManager->getStorage('media')->create([
-                                    'bundle' => 'image',
-                                    'name' => $child_field_array['label'] ?? 'Sample image ' . ($i + 1),
-                                    'field_media_image' => [
-                                      'target_id' => $image_file->id(),
-                                      'alt' => $child_field_array['label'] ?? 'Sample image ' . ($i + 1),
-                                      'title' => $child_field_array['label'] ?? 'Sample image ' . ($i + 1),
-                                    ],
-                                    'status' => 1,
-                                  ]);
-                                  $media->save();
+                          $this->loggerFactory->get('drupalx_ai')->debug(
+                            'Processing child field: @field of type @type',
+                            [
+                              '@field' => $child_field_name,
+                              '@type' => $child_field_type
+                            ]
+                          );
 
-                                  $child_paragraph->set($child_field_name, ['target_id' => $media->id()]);
+                          try {
+                            switch ($child_field_type) {
+                              case 'string':
+                                $sample_value = $child_field_array['sample_value'] ?? 'Sample value ' . ($i + 1);
+                                if (is_string($sample_value)) {
+                                  $sample_value .= ' ' . ($i + 1);
                                 }
-                                catch (\Exception $e) {
-                                  $this->loggerFactory->get('drupalx_ai')->error(
-                                    'Error creating media entity for child field: @error',
-                                    ['@error' => $e->getMessage()]
+                                $child_paragraph->set($child_field_name, $sample_value);
+                                break;
+
+                              case 'text_long':
+                                $sample_value = $child_field_array['sample_value'] ?? 'Sample text ' . ($i + 1);
+                                $child_paragraph->set($child_field_name, [
+                                  'value' => $sample_value,
+                                  'format' => 'basic_html',
+                                ]);
+                                break;
+
+                              case 'link':
+                                $url = $child_field_array['sample_value'] ?? '/node/' . ($i + 1);
+                                if (strpos($url, '/') === 0) {
+                                  $url = 'internal:' . $url;
+                                }
+                                $child_paragraph->set($child_field_name, ['uri' => $url]);
+                                break;
+
+                              case 'image':
+                              case 'entity_reference':
+                                // Check if this is a media reference
+                                $target_type = $child_field_definition->getSetting('target_type');
+                                if ($child_field_type === 'image' || ($target_type === 'media')) {
+                                  $this->loggerFactory->get('drupalx_ai')->debug(
+                                    'Creating media for child field: @field',
+                                    ['@field' => $child_field_name]
                                   );
-                                }
-                              }
-                              break;
 
-                            case 'entity_reference':
-                              if (isset($child_field_array['target_type']) && $child_field_array['target_type'] === 'media') {
-                                $image_file = $createImageFile();
-                                if ($image_file) {
-                                  try {
-                                    // Create a media entity
-                                    $media = $this->entityTypeManager->getStorage('media')->create([
-                                      'bundle' => 'image',
-                                      'name' => $child_field_array['label'] ?? 'Sample image ' . ($i + 1),
-                                      'field_media_image' => [
+                                  $image_file = $createImageFile();
+                                  if ($image_file) {
+                                    try {
+                                      // Create a media entity
+                                      $media = $this->entityTypeManager->getStorage('media')->create([
+                                        'bundle' => 'image',
+                                        'name' => $child_field_array['label'] ?? 'Sample image ' . ($i + 1),
+                                        'status' => 1,
+                                      ]);
+
+                                      // Get the source field for the media type
+                                      $media_type = $this->entityTypeManager->getStorage('media_type')->load('image');
+                                      $source_field = $media_type->getSource()->getConfiguration()['source_field'];
+
+                                      // Set the image field on the media entity
+                                      $media->set($source_field, [
                                         'target_id' => $image_file->id(),
                                         'alt' => $child_field_array['label'] ?? 'Sample image ' . ($i + 1),
                                         'title' => $child_field_array['label'] ?? 'Sample image ' . ($i + 1),
-                                      ],
-                                      'status' => 1,
-                                    ]);
-                                    $media->save();
+                                      ]);
 
-                                    $child_paragraph->set($child_field_name, ['target_id' => $media->id()]);
-                                  }
-                                  catch (\Exception $e) {
-                                    $this->loggerFactory->get('drupalx_ai')->error(
-                                      'Error creating media entity for child field: @error',
-                                      ['@error' => $e->getMessage()]
-                                    );
+                                      // Save the media entity
+                                      $media->save();
+
+                                      $this->loggerFactory->get('drupalx_ai')->info(
+                                        'Created media entity @mid for child field @field',
+                                        [
+                                          '@mid' => $media->id(),
+                                          '@field' => $child_field_name
+                                        ]
+                                      );
+
+                                      // Set the media reference on the child paragraph
+                                      $child_paragraph->get($child_field_name)->setValue([
+                                        'target_id' => $media->id()
+                                      ]);
+
+                                      // Verify the field was set
+                                      $field_value = $child_paragraph->get($child_field_name)->getValue();
+                                      $this->loggerFactory->get('drupalx_ai')->debug(
+                                        'Child field value after setting: @value',
+                                        ['@value' => json_encode($field_value)]
+                                      );
+
+                                      // Double check the media entity exists and has the file
+                                      $loaded_media = $this->entityTypeManager->getStorage('media')->load($media->id());
+                                      if ($loaded_media) {
+                                        $media_file = $loaded_media->get($source_field)->getValue();
+                                        $this->loggerFactory->get('drupalx_ai')->debug(
+                                          'Media entity exists with ID: @mid and file: @file',
+                                          [
+                                            '@mid' => $loaded_media->id(),
+                                            '@file' => json_encode($media_file)
+                                          ]
+                                        );
+                                      }
+                                    }
+                                    catch (\Exception $e) {
+                                      $this->loggerFactory->get('drupalx_ai')->error(
+                                        'Error creating media for child field: @error',
+                                        ['@error' => $e->getMessage()]
+                                      );
+                                    }
                                   }
                                 }
-                              }
-                              break;
+                                break;
 
-                            default:
-                              $sample_value = $child_field_array['sample_value'] ?? 'Sample value ' . ($i + 1);
-                              if (is_string($sample_value)) {
-                                $sample_value .= ' ' . ($i + 1);
-                              }
-                              $child_paragraph->set($child_field_name, $sample_value);
-                              break;
+                              default:
+                                $sample_value = $child_field_array['sample_value'] ?? 'Sample value ' . ($i + 1);
+                                if (is_string($sample_value)) {
+                                  $sample_value .= ' ' . ($i + 1);
+                                }
+                                $child_paragraph->set($child_field_name, $sample_value);
+                                break;
+                            }
                           }
-                        }
-                        catch (\Exception $e) {
-                          $this->loggerFactory->get('drupalx_ai')->error(
-                            'Error setting child field @field: @error',
-                            [
-                              '@field' => $child_field_name,
-                              '@error' => $e->getMessage()
-                            ]
-                          );
+                          catch (\Exception $e) {
+                            $this->loggerFactory->get('drupalx_ai')->error(
+                              'Error setting child field @field: @error',
+                              [
+                                '@field' => $child_field_name,
+                                '@error' => $e->getMessage()
+                              ]
+                            );
+                          }
                         }
                       }
 
