@@ -183,10 +183,6 @@ class ParagraphImporterService {
         if (empty($paragraph_data->is_child_type) && !empty($paragraph_data->child_types)) {
           $result .= "\n" . $this->createParagraphFragment($paragraph_data->id, $paragraph_data);
         }
-        // For child types, only create the component if it's not being created as part of a parent.
-        elseif (!empty($paragraph_data->is_child_type) && empty($paragraph_data->parent_type)) {
-          $result .= "\n" . $this->createParagraphFragment($paragraph_data->id);
-        }
         // For standalone types (no children).
         elseif (empty($paragraph_data->is_child_type) && empty($paragraph_data->child_types)) {
           $result .= "\n" . $this->createParagraphFragment($paragraph_data->id);
