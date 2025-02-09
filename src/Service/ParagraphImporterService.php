@@ -314,6 +314,12 @@ TWIG;
         'target_type' => 'paragraph',
       ];
     }
+    // Add settings for media entity reference fields.
+    elseif ($field_type === 'entity_reference' && isset($field_data['target_type']) && $field_data['target_type'] === 'media') {
+      $storage_config['settings'] = [
+        'target_type' => 'media',
+      ];
+    }
 
     // Check if field storage already exists.
     if (!FieldStorageConfig::loadByName('paragraph', $field_name)) {
@@ -345,6 +351,25 @@ TWIG;
                 'weight' => 0
               ]
             ],
+          ],
+        ];
+      }
+      // Add handler settings for media entity reference fields.
+      elseif ($field_type === 'entity_reference' && isset($field_data['target_type']) && $field_data['target_type'] === 'media') {
+        $field_config['settings'] = [
+          'handler' => 'default:media',
+          'handler_settings' => [
+            'target_bundles' => [
+              'image' => 'image',
+              'remote_video' => 'remote_video',
+              'video' => 'video',
+              'svg' => 'svg',
+            ],
+            'sort' => [
+              'field' => '_none',
+            ],
+            'auto_create' => FALSE,
+            'auto_create_bundle' => '',
           ],
         ];
       }
@@ -447,7 +472,14 @@ TWIG;
         break;
 
       case 'entity_reference':
-        $formatter_type = 'entity_reference_label';
+        if (isset($field_array['target_type']) && $field_array['target_type'] === 'media') {
+          $field_data['content'] = "{\n    ...MediaUnionFragment\n  }";
+          $fields[] = $field_data;
+          $fragment_dependencies[] = 'MediaUnionFragment';
+        } else {
+          $formatter_type = 'entity_reference_label';
+          $fields[] = $field_data;
+        }
         break;
 
       case 'entity_reference_revisions':
@@ -476,8 +508,18 @@ TWIG;
    *   Return a message indicating the result with the node title and URL.
    */
   protected function createParagraph($paragraph_data) {
+    // Debug: Log start of method and input data
+    $this->loggerFactory->get('drupalx_ai')->debug(
+      'Starting createParagraph method with data: @data',
+      ['@data' => json_encode($paragraph_data)]
+    );
+
     // If this is a child paragraph type, skip creating a test node.
     if (!empty($paragraph_data->parent_type)) {
+      $this->loggerFactory->get('drupalx_ai')->debug(
+        'Skipping test node creation for child paragraph type: @type',
+        ['@type' => $paragraph_data->id]
+      );
       return '';
     }
 
@@ -485,107 +527,404 @@ TWIG;
     $paragraph = Paragraph::create(['type' => $paragraph_data->id]);
     $module_path = \Drupal::service('extension.list.module')->getPath('drupalx_ai');
 
-    // Assign the fields to the paragraph.
+    $this->loggerFactory->get('drupalx_ai')->debug(
+      'Module path resolved to: @path',
+      ['@path' => $module_path]
+    );
+
+    // Helper function to create a new image file with enhanced debugging
+    $createImageFile = function () use ($module_path) {
+      $file_path = $module_path . '/files/card.png';
+
+      $this->loggerFactory->get('drupalx_ai')->debug(
+        'Attempting to create image file from: @path',
+        ['@path' => $file_path]
+      );
+
+      // Debug file existence and permissions
+      if (file_exists($file_path)) {
+        $perms = fileperms($file_path);
+        $this->loggerFactory->get('drupalx_ai')->debug(
+          'Source file exists. Permissions: @perms',
+          ['@perms' => decoct($perms & 0777)]
+        );
+      } else {
+        $this->loggerFactory->get('drupalx_ai')->error(
+          'Source file does not exist at path: @path',
+          ['@path' => $file_path]
+        );
+        return NULL;
+      }
+
+      // Check if file is readable
+      if (!is_readable($file_path)) {
+        $this->loggerFactory->get('drupalx_ai')->error(
+          'Source file is not readable: @path',
+          ['@path' => $file_path]
+        );
+        return NULL;
+      }
+
+      // Ensure the directory exists and is writable
+      $directory = 'public://paragraph_images';
+      try {
+        if ($this->fileSystem->prepareDirectory($directory, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS)) {
+          $this->loggerFactory->get('drupalx_ai')->debug(
+            'Successfully prepared directory: @dir',
+            ['@dir' => $directory]
+          );
+        } else {
+          throw new \Exception('Failed to prepare directory');
+        }
+      } catch (\Exception $e) {
+        $this->loggerFactory->get('drupalx_ai')->error(
+          'Failed to prepare directory @dir: @error',
+          [
+            '@dir' => $directory,
+            '@error' => $e->getMessage()
+          ]
+        );
+        return NULL;
+      }
+
+      // Generate a unique filename
+      $destination = $directory . '/card_' . uniqid() . '.png';
+
+      try {
+        // Read the source file contents
+        $file_contents = file_get_contents($file_path);
+        if ($file_contents === FALSE) {
+          throw new \Exception("Could not read source file: $file_path");
+        }
+
+        $this->loggerFactory->get('drupalx_ai')->debug(
+          'Successfully read source file, size: @size bytes',
+          ['@size' => strlen($file_contents)]
+        );
+
+        // Save the file and create the file entity
+        $uri = $this->fileSystem->saveData($file_contents, $destination, FileSystemInterface::EXISTS_REPLACE);
+        if (!$uri) {
+          throw new \Exception("Failed to save file to: $destination");
+        }
+
+        $this->loggerFactory->get('drupalx_ai')->debug(
+          'Successfully saved file to: @uri',
+          ['@uri' => $uri]
+        );
+
+        $file = File::create([
+          'uri' => $uri,
+          'filename' => basename($destination),
+          'filemime' => 'image/png',
+          'status' => FILE_STATUS_PERMANENT,
+        ]);
+
+        $file->save();
+
+        $this->loggerFactory->get('drupalx_ai')->info(
+          'Successfully created file entity: @fid',
+          ['@fid' => $file->id()]
+        );
+
+        return $file;
+      } catch (\Exception $e) {
+        $this->loggerFactory->get('drupalx_ai')->error(
+          'Error creating image file: @error',
+          ['@error' => $e->getMessage()]
+        );
+        return NULL;
+      }
+    };
+
+    // Assign the fields to the paragraph with enhanced debugging
     foreach ($paragraph_data->fields as $field) {
-      // Convert field to array if it's an object.
+      // Convert field to array if it's an object
       $field_array = is_object($field) ? get_object_vars($field) : $field;
 
-      $field_name = !empty($field_array['name']) ? (strpos($field_array['name'], 'field_') === 0 ? $field_array['name'] : 'field_' . $field_array['name']) : '';
+      $field_name = !empty($field_array['name']) ?
+        (strpos($field_array['name'], 'field_') === 0 ? $field_array['name'] : 'field_' . $field_array['name']) : '';
+
+      $this->loggerFactory->get('drupalx_ai')->debug(
+        'Processing field: @field',
+        ['@field' => $field_name]
+      );
+
       if (!empty($field_name) && $paragraph->hasField($field_name)) {
         $field_definition = $paragraph->getFieldDefinition($field_name);
         $field_type = $field_definition->getType();
 
-        if ($field_type === 'image') {
-          $file_path = $module_path . '/files/card.png';
-          $file_contents = file_get_contents($file_path);
-          $directory = 'public://paragraph_images';
-          $this->fileSystem->prepareDirectory($directory, FileSystemInterface::CREATE_DIRECTORY);
-          $file = File::create(
-            [
-              'uri' => $this->fileSystem->saveData($file_contents, $directory . '/card.png', FileSystemInterface::EXISTS_REPLACE),
-            ]
-          );
-          $file->setPermanent();
-          $file->save();
+        $this->loggerFactory->get('drupalx_ai')->debug(
+          'Field @field is of type: @type',
+          [
+            '@field' => $field_name,
+            '@type' => $field_type
+          ]
+        );
 
-          $paragraph->set(
-            $field_name, [
-              'target_id' => $file->id(),
-              'alt' => $field_array['label'],
-              'title' => $field_array['label'],
-            ]
-          );
-        }
-        elseif ($field_type === 'link') {
-          $url = $field_array['sample_value'];
-          if (strpos($url, '/') === 0) {
-            $url = 'internal:' . $url;
-          }
-          $paragraph->set($field_name, ['uri' => $url]);
-        }
-        elseif ($field_type === 'entity_reference_revisions') {
-          // For entity reference revisions fields, create a child paragraph.
-          if (!empty($field_array['target_bundle']) && !empty($paragraph_data->child_types)) {
-            foreach ($paragraph_data->child_types as $child_type) {
-              if ($child_type->id === $field_array['target_bundle']) {
-                // Add parent type to avoid creating a test node for the child.
-                $child_type->parent_type = $paragraph_data->id;
-                // Create child paragraph.
-                $child_paragraph = Paragraph::create(['type' => $child_type->id]);
-                foreach ($child_type->fields as $child_field) {
-                  $child_field_array = is_object($child_field) ? get_object_vars($child_field) : $child_field;
-                  $child_field_name = 'field_' . $child_field_array['name'];
-                  if ($child_paragraph->hasField($child_field_name)) {
-                    $child_field_definition = $child_paragraph->getFieldDefinition($child_field_name);
-                    $child_field_type = $child_field_definition->getType();
+        try {
+          switch ($field_type) {
+            case 'image':
+              $this->loggerFactory->get('drupalx_ai')->debug(
+                'Creating media entity for image field: @field',
+                ['@field' => $field_name]
+              );
 
-                    if ($child_field_type === 'image') {
-                      $file_path = $module_path . '/files/card.png';
-                      $file_contents = file_get_contents($file_path);
-                      $directory = 'public://paragraph_images';
-                      $this->fileSystem->prepareDirectory($directory, FileSystemInterface::CREATE_DIRECTORY);
-                      $file = File::create(
-                        [
-                          'uri' => $this->fileSystem->saveData($file_contents, $directory . '/card.png', FileSystemInterface::EXISTS_REPLACE),
-                        ]
-                      );
-                      $file->setPermanent();
-                      $file->save();
+              $image_file = $createImageFile();
+              if ($image_file) {
+                try {
+                  // Create a media entity
+                  $media = $this->entityTypeManager->getStorage('media')->create([
+                    'bundle' => 'image',
+                    'name' => $field_array['label'] ?? 'Sample image',
+                    'field_media_image' => [
+                      'target_id' => $image_file->id(),
+                      'alt' => $field_array['label'] ?? 'Sample image',
+                      'title' => $field_array['label'] ?? 'Sample image',
+                    ],
+                    'status' => 1,
+                  ]);
+                  $media->save();
 
-                      $child_paragraph->set(
-                        $child_field_name, [
-                          'target_id' => $file->id(),
-                          'alt' => $child_field_array['label'],
-                          'title' => $child_field_array['label'],
-                        ]
-                      );
-                    }
-                    elseif ($child_field_type === 'link') {
-                      $url = $child_field_array['sample_value'];
-                      if (strpos($url, '/') === 0) {
-                        $url = 'internal:' . $url;
-                      }
-                      $child_paragraph->set($child_field_name, ['uri' => $url]);
-                    }
-                    else {
-                      $child_paragraph->set($child_field_name, $child_field_array['sample_value']);
-                    }
+                  $this->loggerFactory->get('drupalx_ai')->info(
+                    'Successfully created media entity @mid for field @field',
+                    [
+                      '@mid' => $media->id(),
+                      '@field' => $field_name
+                    ]
+                  );
+
+                  // Set the media reference on the paragraph
+                  $paragraph->set($field_name, ['target_id' => $media->id()]);
+                }
+                catch (\Exception $e) {
+                  $this->loggerFactory->get('drupalx_ai')->error(
+                    'Error creating media entity: @error',
+                    ['@error' => $e->getMessage()]
+                  );
+                }
+              }
+              break;
+
+            case 'link':
+              $url = $field_array['sample_value'];
+              if (strpos($url, '/') === 0) {
+                $url = 'internal:' . $url;
+              }
+              $paragraph->set($field_name, ['uri' => $url]);
+              $this->loggerFactory->get('drupalx_ai')->debug(
+                'Set link field @field with URL: @url',
+                [
+                  '@field' => $field_name,
+                  '@url' => $url
+                ]
+              );
+              break;
+
+            case 'entity_reference':
+              if (isset($field_array['target_type']) && $field_array['target_type'] === 'media') {
+                $this->loggerFactory->get('drupalx_ai')->debug(
+                  'Creating media entity for reference field: @field',
+                  ['@field' => $field_name]
+                );
+
+                $image_file = $createImageFile();
+                if ($image_file) {
+                  try {
+                    // Create a media entity
+                    $media = $this->entityTypeManager->getStorage('media')->create([
+                      'bundle' => 'image',
+                      'name' => $field_array['label'] ?? 'Sample image',
+                      'field_media_image' => [
+                        'target_id' => $image_file->id(),
+                        'alt' => $field_array['label'] ?? 'Sample image',
+                        'title' => $field_array['label'] ?? 'Sample image',
+                      ],
+                      'status' => 1,
+                    ]);
+                    $media->save();
+
+                    $this->loggerFactory->get('drupalx_ai')->info(
+                      'Successfully created media entity @mid for field @field',
+                      [
+                        '@mid' => $media->id(),
+                        '@field' => $field_name
+                      ]
+                    );
+
+                    // Set the media reference on the paragraph
+                    $paragraph->set($field_name, ['target_id' => $media->id()]);
+                  }
+                  catch (\Exception $e) {
+                    $this->loggerFactory->get('drupalx_ai')->error(
+                      'Error creating media entity: @error',
+                      ['@error' => $e->getMessage()]
+                    );
                   }
                 }
-                $child_paragraph->save();
-                $paragraph->get($field_name)->appendItem($child_paragraph);
-                break;
               }
-            }
+              break;
+
+            case 'entity_reference_revisions':
+              $this->loggerFactory->get('drupalx_ai')->debug(
+                'Processing entity reference revisions field: @field',
+                ['@field' => $field_name]
+              );
+
+              if (!empty($field_array['target_bundle']) && !empty($paragraph_data->child_types)) {
+                foreach ($paragraph_data->child_types as $child_type) {
+                  if ($child_type->id === $field_array['target_bundle']) {
+                    // Add parent type to avoid creating a test node for the child
+                    $child_type->parent_type = $paragraph_data->id;
+
+                    // Get the field cardinality
+                    $field_storage = $field_definition->getFieldStorageDefinition();
+                    $cardinality = $field_storage->getCardinality();
+                    if ($cardinality === -1) {
+                      $cardinality = 3;
+                    }
+
+                    $this->loggerFactory->get('drupalx_ai')->debug(
+                      'Creating @count child paragraphs of type @type',
+                      [
+                        '@count' => $cardinality,
+                        '@type' => $child_type->id
+                      ]
+                    );
+
+                    for ($i = 0; $i < $cardinality; $i++) {
+                      $child_paragraph = Paragraph::create(['type' => $child_type->id]);
+                      foreach ($child_type->fields as $child_field) {
+                        $child_field_array = is_object($child_field) ? get_object_vars($child_field) : $child_field;
+                        $child_field_name = 'field_' . $child_field_array['name'];
+
+                        // Get the field definition to determine field type
+                        $child_field_definition = $child_paragraph->getFieldDefinition($child_field_name);
+                        $child_field_type = $child_field_definition->getType();
+
+                        try {
+                          switch ($child_field_type) {
+                            case 'image':
+                              $image_file = $createImageFile();
+                              if ($image_file) {
+                                try {
+                                  // Create a media entity
+                                  $media = $this->entityTypeManager->getStorage('media')->create([
+                                    'bundle' => 'image',
+                                    'name' => $child_field_array['label'] ?? 'Sample image ' . ($i + 1),
+                                    'field_media_image' => [
+                                      'target_id' => $image_file->id(),
+                                      'alt' => $child_field_array['label'] ?? 'Sample image ' . ($i + 1),
+                                      'title' => $child_field_array['label'] ?? 'Sample image ' . ($i + 1),
+                                    ],
+                                    'status' => 1,
+                                  ]);
+                                  $media->save();
+
+                                  $child_paragraph->set($child_field_name, ['target_id' => $media->id()]);
+                                }
+                                catch (\Exception $e) {
+                                  $this->loggerFactory->get('drupalx_ai')->error(
+                                    'Error creating media entity for child field: @error',
+                                    ['@error' => $e->getMessage()]
+                                  );
+                                }
+                              }
+                              break;
+
+                            case 'entity_reference':
+                              if (isset($child_field_array['target_type']) && $child_field_array['target_type'] === 'media') {
+                                $image_file = $createImageFile();
+                                if ($image_file) {
+                                  try {
+                                    // Create a media entity
+                                    $media = $this->entityTypeManager->getStorage('media')->create([
+                                      'bundle' => 'image',
+                                      'name' => $child_field_array['label'] ?? 'Sample image ' . ($i + 1),
+                                      'field_media_image' => [
+                                        'target_id' => $image_file->id(),
+                                        'alt' => $child_field_array['label'] ?? 'Sample image ' . ($i + 1),
+                                        'title' => $child_field_array['label'] ?? 'Sample image ' . ($i + 1),
+                                      ],
+                                      'status' => 1,
+                                    ]);
+                                    $media->save();
+
+                                    $child_paragraph->set($child_field_name, ['target_id' => $media->id()]);
+                                  }
+                                  catch (\Exception $e) {
+                                    $this->loggerFactory->get('drupalx_ai')->error(
+                                      'Error creating media entity for child field: @error',
+                                      ['@error' => $e->getMessage()]
+                                    );
+                                  }
+                                }
+                              }
+                              break;
+
+                            default:
+                              $sample_value = $child_field_array['sample_value'] ?? 'Sample value ' . ($i + 1);
+                              if (is_string($sample_value)) {
+                                $sample_value .= ' ' . ($i + 1);
+                              }
+                              $child_paragraph->set($child_field_name, $sample_value);
+                              break;
+                          }
+                        }
+                        catch (\Exception $e) {
+                          $this->loggerFactory->get('drupalx_ai')->error(
+                            'Error setting child field @field: @error',
+                            [
+                              '@field' => $child_field_name,
+                              '@error' => $e->getMessage()
+                            ]
+                          );
+                        }
+                      }
+
+                      $child_paragraph->save();
+                      $this->loggerFactory->get('drupalx_ai')->debug(
+                        'Saved child paragraph @pid of type @type',
+                        [
+                          '@pid' => $child_paragraph->id(),
+                          '@type' => $child_type->id
+                        ]
+                      );
+
+                      $paragraph->get($field_name)->appendItem($child_paragraph);
+                    }
+                    break;
+                  }
+                }
+              }
+              break;
+
+            default:
+              $paragraph->set($field_name, $field_array['sample_value']);
+              $this->loggerFactory->get('drupalx_ai')->debug(
+                'Set field @field with value: @value',
+                [
+                  '@field' => $field_name,
+                  '@value' => is_scalar($field_array['sample_value']) ?
+                    $field_array['sample_value'] :
+                    json_encode($field_array['sample_value'])
+                ]
+              );
+              break;
           }
+        } catch (\Exception $e) {
+          $this->loggerFactory->get('drupalx_ai')->error(
+            'Error processing field @field: @error',
+            [
+              '@field' => $field_name,
+              '@error' => $e->getMessage()
+            ]
+          );
         }
-        else {
-          $paragraph->set($field_name, $field_array['sample_value']);
-        }
-      }
-      else {
+      } else {
         $this->loggerFactory->get('drupalx_ai')->warning(
-          "Field @field does not exist on the paragraph type @type.", [
+          "Field @field does not exist on the paragraph type @type",
+          [
             '@field' => $field_name ?? 'undefined',
             '@type' => $paragraph_data->id,
           ]
@@ -593,32 +932,71 @@ TWIG;
       }
     }
 
-    // Save the paragraph entity.
-    $paragraph->save();
+    // Save the paragraph entity
+    try {
+      $paragraph->save();
+      $this->loggerFactory->get('drupalx_ai')->info(
+        'Successfully saved paragraph @pid of type @type',
+        [
+          '@pid' => $paragraph->id(),
+          '@type' => $paragraph_data->id,
+        ]
+      );
+    } catch (\Exception $e) {
+      $this->loggerFactory->get('drupalx_ai')->error(
+        'Error saving paragraph: @error',
+        ['@error' => $e->getMessage()]
+      );
+      return "Error saving paragraph: " . $e->getMessage();
+    }
 
-    // Create the node with the provided title.
-    $node = Node::create(
-      [
+    // Create the node with the provided title
+    try {
+      $node = Node::create([
         'type' => 'landing',
         'title' => "Paragraph: '{$paragraph_data->id}'",
-      ]
-    );
+      ]);
 
-    // Attach the paragraph to the node's field_content.
-    if ($node->hasField('field_content')) {
-      $node->get('field_content')->appendItem($paragraph);
+      $this->loggerFactory->get('drupalx_ai')->debug(
+        'Created landing page node for paragraph type: @type',
+        ['@type' => $paragraph_data->id]
+      );
+
+      // Attach the paragraph to the node's field_content
+      if ($node->hasField('field_content')) {
+        $node->get('field_content')->appendItem($paragraph);
+        $node->save();
+
+        $this->loggerFactory->get('drupalx_ai')->info(
+          'Successfully created and saved landing page node @nid with paragraph @pid',
+          [
+            '@nid' => $node->id(),
+            '@pid' => $paragraph->id()
+          ]
+        );
+
+        // Return a message indicating the result with the edit URL
+        $edit_url = $node->toUrl('edit-form')->setAbsolute()->toString();
+
+        $this->loggerFactory->get('drupalx_ai')->debug(
+          'Node edit URL: @url',
+          ['@url' => $edit_url]
+        );
+
+        return "Created test landing page node with '{$paragraph_data->id}' paragraph and its child paragraphs.\nEdit URL: {$edit_url}\n";
+      }
+      else {
+        $error_msg = 'The node does not have the field_content field.';
+        $this->loggerFactory->get('drupalx_ai')->error($error_msg);
+        throw new \Exception($error_msg);
+      }
+    } catch (\Exception $e) {
+      $this->loggerFactory->get('drupalx_ai')->error(
+        'Error creating test node: @error',
+        ['@error' => $e->getMessage()]
+      );
+      return "Error creating test node: " . $e->getMessage();
     }
-    else {
-      $this->loggerFactory->get('drupalx_ai')->error('The node does not have the field_content field.');
-      return NULL;
-    }
-
-    // Save the node.
-    $node->save();
-
-    // Return a message indicating the result.
-    $edit_url = $node->toUrl('edit-form')->setAbsolute()->toString();
-    return "Created test landing page node with '{$paragraph_data->id}' paragraph and its child paragraphs.\nEdit URL: {$edit_url}\n";
   }
 
   /**
