@@ -400,11 +400,16 @@ TWIG;
 
     // Set appropriate widget type based on field type.
     $widget_type = 'string_textfield';
+    $widget_settings = [];
+
     if ($field_type === 'list_string') {
       $widget_type = 'options_select';
     }
     elseif ($field_type === 'image') {
-      $widget_type = 'image_image';
+      $widget_type = 'media_library_widget';
+      $widget_settings = [
+        'media_types' => ['image'],
+      ];
     }
     elseif ($field_type === 'link') {
       $widget_type = 'link_default';
@@ -415,10 +420,17 @@ TWIG;
     elseif ($field_type === 'entity_reference_revisions') {
       $widget_type = 'paragraphs';
     }
+    elseif ($field_type === 'entity_reference' && isset($field_data['target_type']) && $field_data['target_type'] === 'media') {
+      $widget_type = 'media_library_widget';
+      $widget_settings = [
+        'media_types' => ['image', 'remote_video', 'video', 'svg'],
+      ];
+    }
 
     $form_display->setComponent($field_name, [
       'type' => $widget_type,
       'weight' => 0,
+      'settings' => $widget_settings,
     ])->save();
 
     // Update the view display.
