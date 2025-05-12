@@ -1,35 +1,8 @@
 # Main services.yml file
 services:
-  drupalx_ai.paragraph_importer:
-    class: \Drupal\drupalx_ai\Service\ParagraphImporterService
-    arguments:
-      - '@config.factory'
-      - '@entity_type.manager'
-      - '@logger.factory'
-      - '@file_system'
-      - '@?graphql_compose_fragments.manager'
-
   drupalx_ai.ai_model_api:
     class: \Drupal\drupalx_ai\Service\AiModelApiService
     arguments: ['@http_client_factory', '@config.factory', '@logger.factory']
-
-  drupalx_ai.component_reader:
-    class: \Drupal\drupalx_ai\Service\ComponentReaderService
-    arguments:
-      - '@config.factory'
-      - '@logger.factory'
-      - '@theme.manager'
-
-  drupalx_ai.storybook_generator:
-    class: \Drupal\drupalx_ai\Service\StorybookGeneratorService
-    arguments:
-      - '@logger.factory'
-      - '@drupalx_ai.ai_model_api'
-      - '@config.factory'
-
-  drupalx_ai.cypress_generator:
-    class: \Drupal\drupalx_ai\Service\CypressGeneratorService
-    arguments: ['@logger.factory', '@drupalx_ai.ai_model_api']
 
   drupalx_ai.paragraph_structure:
     class: \Drupal\drupalx_ai\Service\ParagraphStructureService

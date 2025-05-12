@@ -1,46 +1,6 @@
 services:
-  drupalx_ai.import_paragraph_type_commands:
-    class: \Drupal\drupalx_ai\Commands\ImportParagraphTypeCommands
-    arguments:
-      - '@config.factory'
-      - '@drupalx_ai.paragraph_importer'
-      - '@logger.factory'
-      - '@drupalx_ai.ai_model_api'
-      - '@drupalx_ai.component_reader'
-    tags:
-      - { name: drush.command }
-
-  drupalx_ai.generate_storybook_commands:
-    class: \Drupal\drupalx_ai\Commands\GenerateStorybookCommands
-    arguments:
-      - '@config.factory'
-      - '@logger.factory'
-      - '@theme.manager'
-      - '@drupalx_ai.ai_model_api'
-      - '@drupalx_ai.component_reader'
-      - '@drupalx_ai.storybook_generator'
-    tags:
-      - { name: drush.command }
-
-  drupalx_ai.generate_cypress_commands:
-    class: \Drupal\drupalx_ai\Commands\GenerateCypressCommands
-    arguments:
-      - '@config.factory'
-      - '@logger.factory'
-      - '@drupalx_ai.ai_model_api'
-      - '@drupalx_ai.component_reader'
-      - '@drupalx_ai.cypress_generator'
-    tags:
-      - { name: drush.command }
-
   drupalx_ai.ai_landing_page_commands:
     class: \Drupal\drupalx_ai\Commands\AiLandingPageCommands
     arguments: ['@drupalx_ai.ai_landing_page_service']
-    tags:
-      - { name: drush.command }
-
-  drupalx_ai.update_tailwind_theme_commands:
-    class: Drupal\drupalx_ai\Commands\UpdateTailwindThemeCommands
-    arguments: ['@config.factory', '@drupalx_ai.ai_model_api']
     tags:
       - { name: drush.command }

@@ -53,14 +53,11 @@ class DrupalXAISettingsForm extends ConfigFormBase {
       '#type' => 'select',
       '#title' => $this->t('AI Provider'),
       '#options' => [
-        'anthropic' => $this->t('Anthropic'),
-        'openai' => $this->t('OpenAI'),
         'groq' => $this->t('Groq'),
-        'fireworks' => $this->t('Fireworks'),
-        'nebius' => $this->t('Nebius'),
       ],
-      '#default_value' => $config->get('ai_provider') ?: 'anthropic',
+      '#default_value' => 'groq',
       '#required' => TRUE,
+      '#access' => FALSE,
     ];
 
     $form['ai_provider']['api_key'] = [
@@ -71,113 +68,21 @@ class DrupalXAISettingsForm extends ConfigFormBase {
       '#required' => TRUE,
     ];
 
-    // Anthropic-specific settings.
-    $form['ai_provider']['anthropic_settings'] = [
-      '#type' => 'fieldset',
-      '#title' => $this->t('Anthropic Settings'),
-      '#states' => [
-        'visible' => [
-          ':input[name="provider"]' => ['value' => 'anthropic'],
-        ],
-      ],
-    ];
-
-    $form['ai_provider']['anthropic_settings']['claude_model'] = [
-      '#type' => 'select',
-      '#title' => $this->t('Claude Model'),
-      '#options' => [
-        'claude-3-haiku-20240307' => $this->t('Claude 3 Haiku (Faster, cheaper)'),
-        'claude-3-sonnet-20240229' => $this->t('Claude 3 Sonnet (More capable)'),
-        'claude-3-opus-20240229' => $this->t('Claude 3 Opus (Most capable)'),
-      ],
-      '#default_value' => $config->get('claude_model') ?: 'claude-3-haiku-20240307',
-      '#description' => $this->t('Choose the Claude model to use.'),
-    ];
-
-    // OpenAI-specific settings.
-    $form['ai_provider']['openai_settings'] = [
-      '#type' => 'fieldset',
-      '#title' => $this->t('OpenAI Settings'),
-      '#states' => [
-        'visible' => [
-          ':input[name="provider"]' => ['value' => 'openai'],
-        ],
-      ],
-    ];
-
-    $form['ai_provider']['openai_settings']['openai_model'] = [
-      '#type' => 'select',
-      '#title' => $this->t('OpenAI Model'),
-      '#options' => [
-        'gpt-3.5-turbo' => $this->t('GPT-3.5 Turbo (Very fast, cheap)'),
-        'gpt-4o' => $this->t('GPT-4o (More capable)'),
-        'gpt-4o-mini' => $this->t('GPT-4o mini (Faster, cheaper)'),
-      ],
-      '#default_value' => $config->get('openai_model') ?: 'gpt-4o-mini',
-      '#description' => $this->t('Choose the OpenAI model to use.'),
-    ];
-
     // Groq-specific settings.
     $form['ai_provider']['groq_settings'] = [
       '#type' => 'fieldset',
       '#title' => $this->t('Groq Settings'),
-      '#states' => [
-        'visible' => [
-          ':input[name="provider"]' => ['value' => 'groq'],
-        ],
-      ],
     ];
 
     $form['ai_provider']['groq_settings']['groq_model'] = [
       '#type' => 'select',
       '#title' => $this->t('Groq Model'),
       '#options' => [
-        'llama-3.1-70b-versatile' => $this->t('LLama 3.1-70B (Versatile)'),
+        'meta-llama/llama-4-maverick-17b-128e-instruct' => $this->t('meta-llama/llama-4-maverick-17b-128e-instruct'),
+        'meta-llama/llama-4-scout-17b-16e-instruct' => $this->t('meta-llama/llama-4-scout-17b-16e-instruct'),
       ],
-      '#default_value' => $config->get('groq_model') ?: 'mixtral-8x7b-32768',
+      '#default_value' => $config->get('groq_model') ?: 'meta-llama/llama-4-maverick-17b-128e-instruct',
       '#description' => $this->t('Choose the Groq model to use.'),
-    ];
-
-    // Fireworks-specific settings.
-    $form['ai_provider']['fireworks_settings'] = [
-      '#type' => 'fieldset',
-      '#title' => $this->t('Fireworks Settings'),
-      '#states' => [
-        'visible' => [
-          ':input[name="provider"]' => ['value' => 'fireworks'],
-        ],
-      ],
-    ];
-
-    $form['ai_provider']['fireworks_settings']['fireworks_model'] = [
-      '#type' => 'select',
-      '#title' => $this->t('Fireworks Model'),
-      '#options' => [
-        'accounts/fireworks/models/firefunction-v2' => $this->t('Firefunction v2'),
-      ],
-      '#default_value' => $config->get('fireworks_model') ?: 'accounts/fireworks/models/firefunction-v2',
-      '#description' => $this->t('Choose the Fireworks model to use.'),
-    ];
-
-    // Nebius-specific settings.
-    $form['ai_provider']['nebius_settings'] = [
-      '#type' => 'fieldset',
-      '#title' => $this->t('Nebius Settings'),
-      '#states' => [
-        'visible' => [
-          ':input[name="provider"]' => ['value' => 'nebius'],
-        ],
-      ],
-    ];
-
-    $form['ai_provider']['nebius_settings']['nebius_model'] = [
-      '#type' => 'select',
-      '#title' => $this->t('Nebius Model'),
-      '#options' => [
-        'meta-llama/Llama-3.3-70B-Instruct-fast' => $this->t('Llama-3.3-70B-Instruct (fast)'),
-      ],
-      '#default_value' => $config->get('nebius_model') ?: 'meta-llama/Llama-3.3-70B-Instruct-fast',
-      '#description' => $this->t('Choose the Nebius model to use.'),
     ];
 
     $form['image_generator'] = [
@@ -253,27 +158,10 @@ class DrupalXAISettingsForm extends ConfigFormBase {
   public function validateForm(array &$form, FormStateInterface $form_state) {
     parent::validateForm($form, $form_state);
 
-    $provider = $form_state->getValue('provider');
     $image_generator = $form_state->getValue('service');
 
-    if ($provider === 'anthropic' && empty($form_state->getValue('claude_model'))) {
-      $form_state->setErrorByName('claude_model', $this->t('Claude Model is required when Anthropic is selected as the AI provider.'));
-    }
-
-    if ($provider === 'openai' && empty($form_state->getValue('openai_model'))) {
-      $form_state->setErrorByName('openai_model', $this->t('OpenAI Model is required when OpenAI is selected as the AI provider.'));
-    }
-
-    if ($provider === 'groq' && empty($form_state->getValue('groq_model'))) {
-      $form_state->setErrorByName('groq_model', $this->t('Groq Model is required when Groq is selected as the AI provider.'));
-    }
-
-    if ($provider === 'fireworks' && empty($form_state->getValue('fireworks_model'))) {
-      $form_state->setErrorByName('fireworks_model', $this->t('Fireworks Model is required when Fireworks is selected as the AI provider.'));
-    }
-
-    if ($provider === 'nebius' && empty($form_state->getValue('nebius_model'))) {
-      $form_state->setErrorByName('nebius_model', $this->t('Nebius Model is required when Nebius is selected as the AI provider.'));
+    if (empty($form_state->getValue('groq_model'))) {
+      $form_state->setErrorByName('groq_model', $this->t('Groq Model is required.'));
     }
 
     if ($image_generator === 'pexels' && empty($form_state->getValue('pexels_api_key'))) {
@@ -295,13 +183,9 @@ class DrupalXAISettingsForm extends ConfigFormBase {
   public function submitForm(array &$form, FormStateInterface $form_state) {
     $this->config('drupalx_ai.settings')
       ->set('is_nextjs', $form_state->getValue('is_nextjs'))
-      ->set('ai_provider', $form_state->getValue('provider'))
+      ->set('ai_provider', 'groq')
       ->set('api_key', $form_state->getValue('api_key'))
-      ->set('claude_model', $form_state->getValue('claude_model'))
-      ->set('openai_model', $form_state->getValue('openai_model'))
       ->set('groq_model', $form_state->getValue('groq_model'))
-      ->set('fireworks_model', $form_state->getValue('fireworks_model'))
-      ->set('nebius_model', $form_state->getValue('nebius_model'))
       ->set('image_generator', $form_state->getValue('service'))
       ->set('pexels_api_key', $form_state->getValue('pexels_api_key'))
       ->set('unsplash_api_key', $form_state->getValue('unsplash_api_key'))

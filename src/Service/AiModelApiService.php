@@ -67,37 +67,10 @@ class AiModelApiService {
    *   The result of the API call, or FALSE on failure.
    */
   public function callAiApi($prompt, array $tools, $expectedFunctionName, $maxRetries = 3, $initialRetryDelay = 1) {
-    $config = $this->configFactory->get('drupalx_ai.settings');
-    $api_provider = $config->get('ai_provider') ?: 'anthropic';
-    $api_key = $config->get('api_key');
-
-    if (empty($api_key)) {
-      $this->loggerFactory->get('drupalx_ai')->error('AI API key is not set. Please configure it in the DrupalX AI Settings.');
-      return FALSE;
-    }
-
-    $this->loggerFactory->get('drupalx_ai')->notice('Using AI provider: @provider', ['@provider' => $api_provider]);
-
-    switch ($api_provider) {
-      case 'anthropic':
-        return $this->callAnthropicApi($prompt, $tools, $expectedFunctionName, $maxRetries, $initialRetryDelay);
-
-      case 'openai':
-        return $this->callOpenAiApi($prompt, $tools, $expectedFunctionName, $maxRetries, $initialRetryDelay);
-
-      case 'groq':
-        return $this->callGroqApi($prompt, $tools, $expectedFunctionName, $maxRetries, $initialRetryDelay);
-
-      case 'fireworks':
-        return $this->callFireworksApi($prompt, $tools, $expectedFunctionName, $maxRetries, $initialRetryDelay);
-
-      case 'nebius':
-        return $this->callNebiusApi($prompt, $tools, $expectedFunctionName, $maxRetries, $initialRetryDelay);
-
-      default:
-        $this->loggerFactory->get('drupalx_ai')->error('Invalid AI provider selected. Defaulting to Anthropic.');
-        return $this->callAnthropicApi($prompt, $tools, $expectedFunctionName, $maxRetries, $initialRetryDelay);
-    }
+    // Directly call the Groq API method.
+    // The API key check is handled within callGroqApi.
+    $this->loggerFactory->get('drupalx_ai')->notice('Using Groq AI provider.');
+    return $this->callGroqApi($prompt, $tools, $expectedFunctionName, $maxRetries, $initialRetryDelay);
   }
 
   /**
@@ -144,203 +117,6 @@ class AiModelApiService {
     ];
 
     $this->loggerFactory->get('drupalx_ai')->notice('Calling Groq API with model: @model', ['@model' => $groq_model]);
-
-    return $this->makeApiCallWithRetry($url, $data, $headers, $expectedFunctionName, $maxRetries, $initialRetryDelay);
-  }
-
-  /**
-   * Makes an API call to Fireworks' completion endpoint with retry functionality.
-   *
-   * @param string $prompt
-   *   The user prompt/question to send to the Fireworks API.
-   * @param array $tools
-   *   Array of tools/functions that the model can use to respond.
-   * @param string $expectedFunctionName
-   *   The name of the function that is expected to be called by the model.
-   * @param int $maxRetries
-   *   Maximum number of retry attempts for failed API calls.
-   * @param int $initialRetryDelay
-   *   Initial delay in seconds between retry attempts. May increase with backoff.
-   *
-   * @return array
-   *   The decoded JSON response from the Fireworks API.
-   */
-  protected function callFireworksApi($prompt, array $tools, $expectedFunctionName, $maxRetries, $initialRetryDelay) {
-    $config = $this->configFactory->get('drupalx_ai.settings');
-    $fireworks_model = $config->get('fireworks_model') ?: 'accounts/fireworks/models/firefunction-v2';
-    $api_key = $config->get('api_key');
-
-    $url = 'https://api.fireworks.ai/inference/v1/chat/completions';
-    $data = [
-      'model' => $fireworks_model,
-      'max_tokens' => 4000,
-      'top_p' => 1,
-      'top_k' => 40,
-      'presence_penalty' => 0,
-      'frequency_penalty' => 0,
-      'temperature' => 0.6,
-      'messages' => [
-        [
-          'role' => 'system',
-          'content' => 'You are a helpful assistant. Use the supplied tools to assist the user.',
-        ],
-        [
-          'role' => 'user',
-          'content' => $prompt,
-        ],
-      ],
-      'tools' => $this->convertToolsToOpenAiFormat($tools),
-    ];
-
-    $headers = [
-      'Accept' => 'application/json',
-      'Content-Type' => 'application/json',
-      'Authorization' => 'Bearer ' . $api_key,
-    ];
-
-    $this->loggerFactory->get('drupalx_ai')->notice('Calling Fireworks API with model: @model', ['@model' => $fireworks_model]);
-
-    return $this->makeApiCallWithRetry($url, $data, $headers, $expectedFunctionName, $maxRetries, $initialRetryDelay);
-  }
-
-  /**
-   * Makes a call to the Anthropic API with retry logic.
-   *
-   * @param string $prompt
-   *   The input prompt to send to the API.
-   * @param array $tools
-   *   Array of function definitions that can be called by the model.
-   * @param string $expectedFunctionName
-   *   The name of the function we expect the model to call.
-   * @param int $maxRetries
-   *   Maximum number of retry attempts on failure (default: 3).
-   * @param int $initialRetryDelay
-   *   Initial delay between retries in milliseconds (default: 1000).
-   *
-   * @return array
-   *   The parsed API response.
-   */
-  protected function callAnthropicApi($prompt, array $tools, $expectedFunctionName, $maxRetries, $initialRetryDelay) {
-    $config = $this->configFactory->get('drupalx_ai.settings');
-    $claude_model = $config->get('claude_model') ?: 'claude-3-haiku-20240307';
-    $api_key = $config->get('api_key');
-
-    $url = 'https://api.anthropic.com/v1/messages';
-    $data = [
-      'model' => $claude_model,
-      'max_tokens' => 4096,
-      'messages' => [
-        [
-          'role' => 'user',
-          'content' => $prompt,
-        ],
-      ],
-      'tools' => $tools,
-    ];
-
-    $headers = [
-      'content-type' => 'application/json',
-      'x-api-key' => $api_key,
-      'anthropic-version' => '2023-06-01',
-    ];
-
-    $this->loggerFactory->get('drupalx_ai')->notice('Calling Anthropic API with model: @model', ['@model' => $claude_model]);
-
-    return $this->makeApiCallWithRetry($url, $data, $headers, $expectedFunctionName, $maxRetries, $initialRetryDelay);
-  }
-
-  /**
-   * Makes a call to the OpenAI API with retry logic.
-   *
-   * @param string $prompt
-   *   The input prompt to send to the API.
-   * @param array $tools
-   *   Array of function definitions that can be called by the model.
-   * @param string $expectedFunctionName
-   *   The name of the function we expect the model to call.
-   * @param int $maxRetries
-   *   Maximum number of retry attempts on failure (default: 3).
-   * @param int $initialRetryDelay
-   *   Initial delay between retries in milliseconds (default: 1000).
-   *
-   * @return array
-   *   The parsed API response.
-   */
-  protected function callOpenAiApi($prompt, array $tools, $expectedFunctionName, $maxRetries, $initialRetryDelay) {
-    $config = $this->configFactory->get('drupalx_ai.settings');
-    $openai_model = $config->get('openai_model') ?: 'gpt-4o-mini';
-    $api_key = $config->get('api_key');
-
-    $url = 'https://api.openai.com/v1/chat/completions';
-    $data = [
-      'model' => $openai_model,
-      'messages' => [
-        [
-          'role' => 'system',
-          'content' => 'You are a helpful assistant. Use the supplied tools to assist the user.',
-        ],
-        [
-          'role' => 'user',
-          'content' => $prompt,
-        ],
-      ],
-      'tools' => $this->convertToolsToOpenAiFormat($tools),
-    ];
-
-    $headers = [
-      'Content-Type' => 'application/json',
-      'Authorization' => 'Bearer ' . $api_key,
-    ];
-
-    $this->loggerFactory->get('drupalx_ai')->notice('Calling OpenAI API with model: @model', ['@model' => $openai_model]);
-
-    return $this->makeApiCallWithRetry($url, $data, $headers, $expectedFunctionName, $maxRetries, $initialRetryDelay);
-  }
-
-  /**
-   * Makes an API call to Nebius' completion endpoint with retry functionality.
-   *
-   * @param string $prompt
-   *   The user prompt/question to send to the Nebius API.
-   * @param array $tools
-   *   Array of tools/functions that the model can use to respond.
-   * @param string $expectedFunctionName
-   *   The name of the function that is expected to be called by the model.
-   * @param int $maxRetries
-   *   Maximum number of retry attempts for failed API calls.
-   * @param int $initialRetryDelay
-   *   Initial delay in seconds between retry attempts. May increase with backoff.
-   *
-   * @return array
-   *   The decoded JSON response from the Nebius API.
-   */
-  protected function callNebiusApi($prompt, array $tools, $expectedFunctionName, $maxRetries, $initialRetryDelay) {
-    $config = $this->configFactory->get('drupalx_ai.settings');
-    $nebius_model = $config->get('nebius_model') ?: 'meta-llama/Llama-3.3-70B-Instruct-fast';
-    $api_key = $config->get('api_key');
-
-    $url = 'https://api.studio.nebius.ai/v1/chat/completions';
-    $data = [
-      'model' => $nebius_model,
-      'messages' => [
-        [
-          'role' => 'system',
-          'content' => 'You are a helpful assistant. Use the supplied tools to assist the user.',
-        ],
-        [
-          'role' => 'user',
-          'content' => $prompt,
-        ],
-      ],
-      'tools' => $this->convertToolsToOpenAiFormat($tools),
-    ];
-
-    $headers = [
-      'Content-Type' => 'application/json',
-      'Authorization' => 'Bearer ' . $api_key,
-    ];
-
-    $this->loggerFactory->get('drupalx_ai')->notice('Calling Nebius API with model: @model', ['@model' => $nebius_model]);
 
     return $this->makeApiCallWithRetry($url, $data, $headers, $expectedFunctionName, $maxRetries, $initialRetryDelay);
   }
@@ -472,50 +248,8 @@ class AiModelApiService {
    *   The parsed function call arguments or FALSE on failure.
    */
   protected function parseApiResponse($responseData, $expectedFunctionName) {
-    $api_provider = $this->configFactory->get('drupalx_ai.settings')->get('ai_provider') ?: 'anthropic';
-
-    switch ($api_provider) {
-      case 'anthropic':
-        return $this->parseAnthropicResponse($responseData, $expectedFunctionName);
-
-      case 'openai':
-      case 'groq':
-      case 'fireworks':
-      case 'nebius':
-        return $this->parseOpenAiResponse($responseData, $expectedFunctionName);
-
-      default:
-        return FALSE;
-    }
-  }
-
-  /**
-   * Parse Anthropic API response.
-   *
-   * @param mixed $responseData
-   *   The API response data.
-   * @param string $expectedFunctionName
-   *   Expected function name.
-   *
-   * @return mixed
-   *   The parsed function call arguments or FALSE on failure.
-   */
-  protected function parseAnthropicResponse($responseData, $expectedFunctionName) {
-    if (!isset($responseData['content']) || !is_array($responseData['content'])) {
-      throw new \RuntimeException('Unexpected API response format: content array not found');
-    }
-
-    foreach ($responseData['content'] as $content) {
-      if (isset($content['type']) && $content['type'] === 'tool_use' && isset($content['input'])) {
-        $arguments = $content['input'];
-        if (is_array($arguments)) {
-          $this->loggerFactory->get('drupalx_ai')->notice('Successfully parsed function call arguments');
-          return $arguments;
-        }
-      }
-    }
-
-    return FALSE;
+    // Groq uses the OpenAI response format.
+    return $this->parseOpenAiResponse($responseData, $expectedFunctionName);
   }
 
   /**
@@ -624,22 +358,11 @@ class AiModelApiService {
     $responseBody = $e->hasResponse() ? $e->getResponse()->getBody()->getContents() : '';
     $errorData = json_decode($responseBody, TRUE);
 
-    $api_provider = $this->configFactory->get('drupalx_ai.settings')->get('ai_provider') ?: 'anthropic';
-
-    if (
-      $api_provider === 'anthropic' && isset($errorData['type']) && $errorData['type'] === 'error' &&
-      isset($errorData['error']['type']) && $errorData['error']['type'] === 'overloaded_error'
-    ) {
-      $this->loggerFactory->get('drupalx_ai')->warning('Anthropic API overloaded. Retrying in @seconds seconds...', ['@seconds' => $retryDelay]);
-      if ($retryCount < $maxRetries) {
-        sleep($retryDelay);
-        return TRUE;
-      }
-    }
-    elseif (in_array($api_provider, ['openai', 'groq', 'fireworks']) && isset($errorData['error']['type']) && $errorData['error']['type'] === 'rate_limit_exceeded') {
+    // Generic rate limit check (Groq uses OpenAI format).
+    if (isset($errorData['error']['type']) && $errorData['error']['type'] === 'rate_limit_exceeded') {
       $this->loggerFactory->get('drupalx_ai')->warning(
-        '@provider API rate limit exceeded. Retrying in @seconds seconds...',
-        ['@provider' => ucfirst($api_provider), '@seconds' => $retryDelay]
+        'Groq API rate limit exceeded. Retrying in @seconds seconds...',
+        ['@seconds' => $retryDelay]
       );
       if ($retryCount < $maxRetries) {
         sleep($retryDelay);
