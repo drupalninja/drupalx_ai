@@ -1,0 +1,299 @@
+{
+  "paragraphs": {
+    "accordion": {
+      "field_title": "Frequently Asked Questions",
+      "field_accordion_item": [
+        {
+          "type": "accordion_item",
+          "field_title": "How do I get started?",
+          "field_body": {
+            "value": "<p>Getting started is easy. Simply create an account and follow the step-by-step instructions.</p>",
+            "format": "restricted_html"
+          },
+          "field_link": {
+            "uri": "internal:/get-started",
+            "title": "Start here"
+          }
+        },
+        {
+          "type": "accordion_item",
+          "field_title": "What features are included?",
+          "field_body": {
+            "value": "<p>Our platform includes numerous features such as analytics, reporting, and team collaboration tools.</p>",
+            "format": "restricted_html"
+          },
+          "field_link": {
+            "uri": "internal:/features",
+            "title": "View all features"
+          }
+        }
+      ]
+    },
+    "accordion_item": {
+      "field_title": "What are the pricing options?",
+      "field_body": {
+        "value": "<p>We offer flexible pricing plans for individuals, small businesses, and enterprise customers.</p>",
+        "format": "restricted_html"
+      },
+      "field_link": {
+        "uri": "internal:/pricing",
+        "title": "View pricing plans"
+      }
+    },
+    "bullet": {
+      "field_icon": "fa-check-circle",
+      "field_summary": "Industry-leading performance and reliability"
+    },
+    "card": {
+      "field_title": "Innovative Solutions",
+      "field_summary": "Our innovative approach helps you solve complex problems efficiently.",
+      "field_link": {
+        "uri": "internal:/solutions",
+        "title": "Learn more"
+      },
+      "field_media": {
+        "type": "image",
+        "alt": "Image representing innovative solutions"
+      }
+    },
+    "card_group": {
+      "field_title": "Our Services",
+      "field_card": [
+        {
+          "type": "card",
+          "field_title": "Consulting",
+          "field_summary": "Expert consulting services for your business needs.",
+          "field_link": {
+            "title": "Learn more"
+          },
+          "field_media": {
+            "type": "image",
+            "alt": "Consulting services illustration"
+          }
+        },
+        {
+          "type": "card",
+          "field_title": "Development",
+          "field_summary": "Custom development solutions for web and mobile.",
+          "field_link": {
+            "title": "Explore"
+          },
+          "field_media": {
+            "type": "image",
+            "alt": "Development services illustration"
+          }
+        }
+      ]
+    },
+    "carousel": {
+      "field_carousel_item": [
+        {
+          "type": "carousel_item",
+          "field_title": "Welcome to Our Platform",
+          "field_summary": "Discover how our solutions can transform your business.",
+          "field_media": {
+            "type": "image",
+            "alt": "Platform overview"
+          }
+        },
+        {
+          "type": "carousel_item",
+          "field_title": "New Features Available",
+          "field_summary": "Explore our latest platform updates and enhancements.",
+          "field_media": {
+            "type": "image",
+            "alt": "New features showcase"
+          }
+        }
+      ]
+    },
+    "carousel_item": {
+      "field_title": "Success Stories",
+      "field_summary": "See how our clients have achieved remarkable results.",
+      "field_media": {
+        "type": "image",
+        "alt": "Client success story illustration"
+      }
+    },
+    "embed": {
+      "field_title": "Product Demo Video",
+      "field_script": "<iframe width=\"560\" height=\"315\" src=\"https://www.youtube.com/embed/example\" frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture\" allowfullscreen></iframe>"
+    },
+    "gallery": {
+      "field_title": "Project Gallery",
+      "field_body": {
+        "value": "<p>Explore our recent project highlights and achievements.</p>",
+        "format": "restricted_html"
+      },
+      "field_media_item": [
+        {
+          "type": "image",
+          "alt": "Project 1 showcase"
+        },
+        {
+          "type": "image",
+          "alt": "Project 2 showcase"
+        },
+        {
+          "type": "image",
+          "alt": "Project 3 showcase"
+        }
+      ]
+    },
+    "hero": {
+      "field_heading": {
+        "value": "<h1>Transform Your Digital Experience</h1>",
+        "format": "restricted_html"
+      },
+      "field_hero_layout": "right",
+      "field_link": {
+        "uri": "internal:/get-started",
+        "title": "Get Started"
+      },
+      "field_link2": {
+        "uri": "internal:/contact",
+        "title": "Contact Us"
+      },
+      "field_media": {
+        "type": "image",
+        "alt": "Digital transformation illustration"
+      },
+      "field_summary": "Empower your business with our cutting-edge solutions and expert team."
+    },
+    "logo_collection": {
+      "field_title": "Our Trusted Partners",
+      "field_media_item": [
+        {
+          "type": "image",
+          "alt": "Partner company logo"
+        },
+        {
+          "type": "image",
+          "alt": "Partner company logo"
+        },
+        {
+          "type": "image",
+          "alt": "Partner company logo"
+        }
+      ]
+    },
+    "media": {
+      "field_title": "Product Demonstration",
+      "field_media": {
+        "type": "video",
+        "alt": "Product demonstration video"
+      }
+    },
+    "newsletter": {
+      "field_title": "Subscribe to Our Newsletter",
+      "field_summary": "Stay updated with our latest news, features, and special offers delivered directly to your inbox."
+    },
+    "pricing": {
+      "field_eyebrow": "Flexible Plans",
+      "field_title": "Choose the Right Plan for Your Business",
+      "field_summary": "We offer a range of pricing options to suit businesses of all sizes.",
+      "field_pricing_cards": [
+        {
+          "type": "pricing_card",
+          "field_eyebrow": "Basic",
+          "field_title": "$19",
+          "field_suffix": "/month",
+          "field_features_text": "<ul><li>10 users</li><li>Basic features</li><li>Email support</li></ul>",
+          "field_link": {
+            "uri": "internal:/signup/basic",
+            "title": "Get Started"
+          }
+        },
+        {
+          "type": "pricing_card",
+          "field_eyebrow": "Pro",
+          "field_title": "$49",
+          "field_suffix": "/month",
+          "field_features_text": "<ul><li>50 users</li><li>All features</li><li>Priority support</li><li>Advanced analytics</li></ul>",
+          "field_link": {
+            "uri": "internal:/signup/pro",
+            "title": "Sign Up Now"
+          }
+        }
+      ]
+    },
+    "pricing_card": {
+      "field_eyebrow": "Enterprise",
+      "field_title": "$199",
+      "field_suffix": "/month",
+      "field_features_text": "<ul><li>Unlimited users</li><li>All features</li><li>24/7 support</li><li>Custom integrations</li><li>Dedicated account manager</li></ul>",
+      "field_link": {
+        "uri": "internal:/signup/enterprise",
+        "title": "Contact Sales"
+      }
+    },
+    "quote": {
+      "field_quote": "The platform has completely transformed how we approach our digital strategy. The results have exceeded our expectations!",
+      "field_author": "Jane Smith",
+      "field_job_title": "CEO, Example Company",
+      "field_logo": {
+        "type": "image",
+        "alt": "Example Company logo"
+      },
+      "field_thumb": {
+        "type": "image",
+        "alt": "Portrait of Jane Smith"
+      }
+    },
+    "sidebyside": {
+      "field_eyebrow": "Why Choose Us",
+      "field_features": [
+        {
+          "type": "bullet",
+          "field_icon": "fa-check",
+          "field_summary": "10+ years of industry experience"
+        },
+        {
+          "type": "bullet",
+          "field_icon": "fa-check",
+          "field_summary": "Award-winning solutions"
+        },
+        {
+          "type": "bullet",
+          "field_icon": "fa-check",
+          "field_summary": "Dedicated customer support"
+        }
+      ],
+      "field_heading": {
+        "value": "<h2>Our Approach Makes the Difference</h2>",
+        "format": "restricted_html"
+      },
+      "field_inverted": false,
+      "field_link": {
+        "uri": "internal:/about-us",
+        "title": "Learn More About Us"
+      },
+      "field_layout": "text_left",
+      "field_media": {
+        "type": "image",
+        "alt": "Illustration of our approach"
+      },
+      "field_summary": "Our unique methodology combines industry expertise with cutting-edge technology to deliver exceptional results for our clients."
+    },
+    "stats_item": {
+      "field_prefix": "+",
+      "field_title": "95",
+      "field_suffix": "%",
+      "field_summary": "Customer satisfaction rating"
+    },
+    "text": {
+      "field_body": {
+        "value": "<h2>About Our Company</h2><p>Founded in 2010, our company has been at the forefront of digital innovation. We specialize in creating solutions that help businesses thrive in the digital age.</p><p>Our team of experts combines technical expertise with strategic thinking to deliver outstanding results for our clients across various industries.</p>",
+        "format": "full_html"
+      }
+    },
+    "views": {
+      "field_title": "Latest Blog Posts",
+      "field_view": {
+        "id": "blog",
+        "display_id": "block_1",
+        "arguments": []
+      }
+    }
+  }
+}
