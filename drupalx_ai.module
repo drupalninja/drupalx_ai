@@ -1,0 +1,38 @@
+<?php
+
+/**
+ * @file
+ * Contains drupalx_ai.module.
+ */
+
+use Drupal\Core\Routing\RouteMatchInterface;
+
+/**
+ * Implements hook_help().
+ */
+function drupalx_ai_help($route_name, RouteMatchInterface $route_match) {
+  switch ($route_name) {
+    // Main module help for the drupalx_ai module.
+    case 'help.page.drupalx_ai':
+      $output = '';
+      $output .= '<h3>' . t('About') . '</h3>';
+      $output .= '<p>' . t('Provides AI-powered features including a chatbot and landing page generation.') . '</p>';
+      return $output;
+
+    default:
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function drupalx_ai_theme($existing, $type, $theme, $path) {
+  return [
+    'drupalx_ai_chatbot_widget' => [
+      'render element' => 'elements',
+      'template' => 'drupalx-ai-chatbot-widget',
+      'path' => $path . '/templates',
+    ],
+  ];
+}
+

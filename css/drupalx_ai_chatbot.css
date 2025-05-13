@@ -1,0 +1,56 @@
+/* DrupalX AI Chatbot Styles */
+
+.drupalx-ai-chatbot-widget {
+  border: 1px solid #ccc;
+  padding: 10px;
+  background-color: #f9f9f9;
+  max-width: 400px;
+  font-family: sans-serif;
+}
+
+.drupalx-ai-chatbot-messages {
+  height: 200px;
+  border: 1px solid #eee;
+  margin-bottom: 10px;
+  padding: 5px;
+  overflow-y: auto;
+  background-color: #fff;
+}
+
+.drupalx-ai-chatbot-messages .message {
+  margin-bottom: 5px;
+  padding: 3px;
+  border-radius: 3px;
+}
+
+.drupalx-ai-chatbot-messages .message.user {
+  text-align: right;
+  background-color: #e1f5fe;
+}
+
+.drupalx-ai-chatbot-messages .message.bot {
+  text-align: left;
+  background-color: #f1f8e9;
+}
+
+.drupalx-ai-chatbot-input {
+  display: flex;
+}
+
+.drupalx-ai-chatbot-input input[type="text"] {
+  flex-grow: 1;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-right: none;
+}
+
+.drupalx-ai-chatbot-input button {
+  padding: 8px 15px;
+  border: 1px solid #ccc;
+  background-color: #eee;
+  cursor: pointer;
+}
+
+.drupalx-ai-chatbot-input button:hover {
+  background-color: #ddd;
+}

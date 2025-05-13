@@ -1,0 +1,11 @@
+chatbot:
+  version: 1.x
+  css:
+    theme:
+      css/drupalx_ai_chatbot.css: {}
+  js:
+    js/drupalx_ai_chatbot.js: {}
+  dependencies:
+    - core/jquery
+    - core/drupal
+    - core/drupalSettings

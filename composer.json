@@ -1,0 +1,16 @@
+{
+  "name": "drupalninja/drupalx_ai",
+  "type": "drupal-module",
+  "description": "Provides AI-powered features including a chatbot and landing page generation.",
+  "keywords": [
+    "Drupal",
+    "AI",
+    "Chatbot",
+    "OpenAI"
+  ],
+  "license": "GPL-2.0-or-later",
+  "require": {
+    "drupal/core": "^9 || ^10",
+    "openai-php/client": "^0.12"
+  }
+}

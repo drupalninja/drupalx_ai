@@ -1,0 +1,12 @@
+drupalx_ai.chatbot_process:
+  path: '/_drupalx_ai/chatbot/process'
+  defaults:
+    _controller: '\Drupal\drupalx_ai\Controller\ChatbotController::processMessage'
+    _title: 'Process Chatbot Message'
+  requirements:
+    _permission: 'access content'
+  options:
+    _access_checks:
+      # Allow POST requests only for security.
+      # This might need adjustment depending on how you send data.
+      methods: [POST]
