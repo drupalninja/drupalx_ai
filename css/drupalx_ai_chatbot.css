@@ -1,56 +1,263 @@
 /* DrupalX AI Chatbot Styles */
 
-.drupalx-ai-chatbot-widget {
-  border: 1px solid #ccc;
-  padding: 10px;
-  background-color: #f9f9f9;
-  max-width: 400px;
-  font-family: sans-serif;
+/* Chatbot container */
+.drupalx-ai-chatbot-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1000;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
 }
 
-.drupalx-ai-chatbot-messages {
-  height: 200px;
-  border: 1px solid #eee;
-  margin-bottom: 10px;
-  padding: 5px;
-  overflow-y: auto;
+/* Toggle button */
+.drupalx-ai-chatbot-toggle {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background-color: #0078d7;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  animation: bounce 1.5s ease infinite;
+  animation-delay: 2s;
+}
+
+.drupalx-ai-chatbot-toggle:hover {
+  background-color: #0069c0;
+  transform: scale(1.05);
+  animation-play-state: paused;
+}
+
+.drupalx-ai-chatbot-toggle svg {
+  width: 30px;
+  height: 30px;
+}
+
+/* Widget */
+.drupalx-ai-chatbot-widget {
+  display: none; /* Hidden by default */
+  width: 350px;
+  border-radius: 10px;
+  overflow: hidden;
   background-color: #fff;
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15);
+  margin-bottom: 70px;
+  transition: all 0.3s ease;
+  transform-origin: bottom right;
+}
+
+.drupalx-ai-chatbot-widget.active {
+  display: block;
+  animation: slideUp 0.3s forwards;
+}
+
+/* Header */
+.drupalx-ai-chatbot-header {
+  background-color: #0078d7;
+  color: white;
+  padding: 15px;
+  font-weight: bold;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.drupalx-ai-chatbot-close {
+  cursor: pointer;
+  font-size: 20px;
+}
+
+/* Messages area */
+.drupalx-ai-chatbot-messages {
+  height: 300px;
+  padding: 15px;
+  overflow-y: auto;
+  background-color: #f5f5f5;
 }
 
 .drupalx-ai-chatbot-messages .message {
-  margin-bottom: 5px;
-  padding: 3px;
-  border-radius: 3px;
+  margin-bottom: 12px;
+  padding: 10px 15px;
+  border-radius: 18px;
+  max-width: 80%;
+  word-wrap: break-word;
+  position: relative;
+  clear: both;
 }
 
 .drupalx-ai-chatbot-messages .message.user {
-  text-align: right;
-  background-color: #e1f5fe;
+  float: right;
+  background-color: #0078d7;
+  color: white;
+  border-bottom-right-radius: 5px;
 }
 
 .drupalx-ai-chatbot-messages .message.bot {
-  text-align: left;
-  background-color: #f1f8e9;
+  float: left;
+  background-color: #e9e9eb;
+  color: #333;
+  border-bottom-left-radius: 5px;
 }
 
+/* Typing indicator */
+.drupalx-ai-chatbot-messages .typing-indicator {
+  padding: 8px 12px;
+  display: inline-block;
+  width: auto;
+  min-width: 30px;
+}
+
+.drupalx-ai-chatbot-messages .typing-indicator span {
+  height: 8px;
+  width: 8px;
+  float: left;
+  margin: 0 1px;
+  background-color: #9e9ea1;
+  display: block;
+  border-radius: 50%;
+  opacity: 0.4;
+}
+
+.drupalx-ai-chatbot-messages .typing-indicator span:nth-of-type(1) {
+  animation: typing 1s infinite 0s;
+}
+
+.drupalx-ai-chatbot-messages .typing-indicator span:nth-of-type(2) {
+  animation: typing 1s infinite 0.2s;
+}
+
+.drupalx-ai-chatbot-messages .typing-indicator span:nth-of-type(3) {
+  animation: typing 1s infinite 0.4s;
+}
+
+@keyframes typing {
+  0% { transform: translateY(0px); }
+  33% { transform: translateY(-5px); }
+  66% { transform: translateY(0px); }
+}
+
+/* Input area */
 .drupalx-ai-chatbot-input {
   display: flex;
+  padding: 10px;
+  background-color: #fff;
+  border-top: 1px solid #eee;
 }
 
 .drupalx-ai-chatbot-input input[type="text"] {
   flex-grow: 1;
-  padding: 8px;
-  border: 1px solid #ccc;
-  border-right: none;
+  padding: 12px 15px;
+  border: 1px solid #ddd;
+  border-radius: 20px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.drupalx-ai-chatbot-input input[type="text"]:focus {
+  border-color: #0078d7;
 }
 
 .drupalx-ai-chatbot-input button {
+  margin-left: 10px;
   padding: 8px 15px;
-  border: 1px solid #ccc;
-  background-color: #eee;
+  background-color: #0078d7;
+  color: white;
+  border: none;
+  border-radius: 20px;
   cursor: pointer;
+  transition: background-color 0.2s;
 }
 
 .drupalx-ai-chatbot-input button:hover {
-  background-color: #ddd;
+  background-color: #0069c0;
+}
+
+.drupalx-ai-chatbot-input button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+/* Position fix for toggle button when widget is open */
+.drupalx-ai-chatbot-widget.active ~ .drupalx-ai-chatbot-toggle {
+  transform: scale(0.8);
+  opacity: 0.8;
+}
+
+/* Animation */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes bounce {
+  0%, 20%, 50%, 80%, 100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-10px);
+  }
+  60% {
+    transform: translateY(-5px);
+  }
+}
+
+/* Stop the animation when the chatbot is active */
+.drupalx-ai-chatbot-widget.active + .drupalx-ai-chatbot-toggle {
+  animation-play-state: paused;
+}
+
+/* Responsive styles */
+@media (max-width: 480px) {
+  .drupalx-ai-chatbot-widget {
+    width: 280px;
+    margin-bottom: 60px;
+    right: 0;
+  }
+  
+  .drupalx-ai-chatbot-toggle {
+    width: 50px;
+    height: 50px;
+  }
+  
+  .drupalx-ai-chatbot-toggle svg {
+    width: 25px;
+    height: 25px;
+  }
+  
+  .drupalx-ai-chatbot-header {
+    padding: 10px;
+  }
+  
+  .drupalx-ai-chatbot-messages {
+    height: 250px;
+  }
+  
+  .drupalx-ai-chatbot-messages .message {
+    max-width: 85%;
+  }
+}
+
+/* Accessibility - Visually Hidden */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
 }

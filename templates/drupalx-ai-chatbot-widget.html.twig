@@ -1,7 +1,21 @@
-<div class="drupalx-ai-chatbot-widget">
-  <div class="drupalx-ai-chatbot-messages" aria-live="polite"></div>
-  <div class="drupalx-ai-chatbot-input">
-    <input type="text" placeholder="Ask to create a landing page..." aria-label="Chatbot message input" />
-    <button type="button">{{ 'Send'|t }}</button>
+<div class="drupalx-ai-chatbot-container">
+  <div class="drupalx-ai-chatbot-toggle" aria-label="{{ 'Open chatbot'|t }}">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+    </svg>
+  </div>
+  
+  <div class="drupalx-ai-chatbot-widget">
+    <div class="drupalx-ai-chatbot-header">
+      <div>{{ 'DrupalX AI Assistant'|t }}</div>
+      <div class="drupalx-ai-chatbot-close" aria-label="{{ 'Close chatbot'|t }}" role="button" tabindex="0">&times;</div>
+    </div>
+    <div class="drupalx-ai-chatbot-messages" aria-live="polite">
+      <span class="visually-hidden">{{ 'Chat messages will appear here'|t }}</span>
+    </div>
+    <div class="drupalx-ai-chatbot-input">
+      <input type="text" placeholder="{{ 'Ask to create a landing page...'|t }}" aria-label="{{ 'Chatbot message input'|t }}" />
+      <button type="button">{{ 'Send'|t }}</button>
+    </div>
   </div>
 </div>
