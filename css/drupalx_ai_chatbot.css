@@ -25,14 +25,11 @@
   position: absolute;
   bottom: 0;
   right: 0;
-  animation: bounce 1.5s ease infinite;
-  animation-delay: 2s;
 }
 
 .drupalx-ai-chatbot-toggle:hover {
   background-color: #0069c0;
   transform: scale(1.05);
-  animation-play-state: paused;
 }
 
 .drupalx-ai-chatbot-toggle svg {
@@ -202,22 +199,7 @@
   }
 }
 
-@keyframes bounce {
-  0%, 20%, 50%, 80%, 100% {
-    transform: translateY(0);
-  }
-  40% {
-    transform: translateY(-10px);
-  }
-  60% {
-    transform: translateY(-5px);
-  }
-}
-
-/* Stop the animation when the chatbot is active */
-.drupalx-ai-chatbot-widget.active + .drupalx-ai-chatbot-toggle {
-  animation-play-state: paused;
-}
+/* Animation keyframes for bounce have been removed */
 
 /* Responsive styles */
 @media (max-width: 480px) {
