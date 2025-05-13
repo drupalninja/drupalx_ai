@@ -9,3 +9,4 @@ chatbot:
     - core/jquery
     - core/drupal
     - core/drupalSettings
+    - core/once

@@ -4,9 +4,9 @@
   Drupal.behaviors.drupalxAiChatbot = {
     attach: function (context, settings) {
       // Find all chatbot containers on the page (though typically one per page).
-      // Use Drupal.once() instead of the deprecated jQuery once plugin
-      Drupal.once('drupalx-ai-chatbot', '.drupalx-ai-chatbot-container', context).forEach(function (container) {
-        var $container = $(container);
+      // Use data attribute to track initialization status
+      $(once('drupalx-ai-chatbot', '.drupalx-ai-chatbot-container', context)).each(function () {
+        var $container = $(this);
         var $toggle = $container.find('.drupalx-ai-chatbot-toggle');
         var $closeBtn = $container.find('.drupalx-ai-chatbot-close');
         var $widget = $container.find('.drupalx-ai-chatbot-widget');
