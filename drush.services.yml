@@ -1,6 +1,0 @@
-services:
-  drupalx_ai.ai_landing_page_commands:
-    class: \Drupal\drupalx_ai\Commands\AiLandingPageCommands
-    arguments: ['@drupalx_ai.ai_landing_page_service']
-    tags:
-      - { name: drush.command }
