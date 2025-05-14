@@ -10,6 +10,7 @@ use Drupal\key\KeyRepositoryInterface;
 use GuzzleHttp\Client as GuzzleClient;
 use OpenAI\Factory;
 use OpenAI\Client as OpenAIClient;
+use Drupal\drupalx_ai\Service\ValidationService;
 
 /**
  * Service for interacting with an OpenAI-compatible AI.
@@ -59,6 +60,13 @@ class AIService {
   protected string $apiKey;
 
   /**
+   * The DrupalX AI Validation service.
+   *
+   * @var \Drupal\drupalx_ai\Service\ValidationService
+   */
+  protected ValidationService $validationService;
+
+  /**
    * Constructs a new AIService object.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
@@ -69,17 +77,21 @@ class AIService {
    *   The file system service.
    * @param \Drupal\Core\Logger\LoggerChannelFactoryInterface $logger_factory
    *   The logger factory.
+   * @param \Drupal\drupalx_ai\Service\ValidationService $validation_service
+   *   The DrupalX AI Validation service.
    */
   public function __construct(
     ConfigFactoryInterface $config_factory,
     KeyRepositoryInterface $key_repository,
     FileSystemInterface $file_system,
-    LoggerChannelFactoryInterface $logger_factory
+    LoggerChannelFactoryInterface $logger_factory,
+    ValidationService $validation_service
   ) {
     $this->configFactory = $config_factory;
     $this->keyRepository = $key_repository;
     $this->fileSystem = $file_system;
     $this->logger = $logger_factory->get('drupalx_ai');
+    $this->validationService = $validation_service;
   }
 
   /**
@@ -275,86 +287,54 @@ PROMPT;
         // $extracted_ai_components remains empty and will be returned as such.
       }
 
-      // Perform validation using the facade function from validation.inc.
-      $overall_validation_status = NULL;
+      // Perform validation using the injected ValidationService.
+      $overall_validation_status = 'validation_not_run';
+      $validation_data = [
+        'status' => $overall_validation_status,
+        'message' => 'Validation did not run.',
+        'results' => ['errors' => [], 'warnings' => []]
+      ];
 
-      // Ensure validation.inc is loaded.
-      $module_path = NULL;
-      try {
-        $module = \Drupal::moduleHandler()->getModule('drupalx_ai');
-        if ($module) {
-          $module_path = $module->getPath();
-        }
-      }
-      catch (\Exception $e) {
-        $this->logger->error('Failed to get drupalx_ai module path via ModuleHandler: @message', ['@message' => $e->getMessage()]);
-        $overall_validation_status = 'error_module_path_critical';
-      }
-
-      if ($overall_validation_status === 'error_module_path_critical') {
-        $this->logger->error("Critical: Could not determine module path for drupalx_ai. AI Component validation cannot proceed.");
-      }
-      elseif (!$module_path) {
-        // This case should ideally be caught by the previous exception/check but as a fallback.
-        $this->logger->error("Could not determine module path for drupalx_ai; AI component validation cannot proceed.");
-        $overall_validation_status = 'error_module_path_missing';
+      if (empty($extracted_ai_components)) {
+        $this->logger->info("No components were extracted from AI response; skipping validation call.");
+        $overall_validation_status = 'success_no_components_to_validate';
+        $validation_data = [
+          'status' => $overall_validation_status,
+          'message' => 'No AI components to validate.',
+          'results' => ['errors' => [], 'warnings' => []],
+        ];
       }
       else {
-        $validation_inc_path = DRUPAL_ROOT . DIRECTORY_SEPARATOR . $module_path . '/inc/validation.inc';
-        if (file_exists($validation_inc_path)) {
-          require_once $validation_inc_path;
-          if (function_exists('drupalx_ai_perform_full_validation')) {
-            if (empty($extracted_ai_components)) {
-              $this->logger->info("No components were extracted from AI response; skipping full validation call.");
-              // Even if no components, we can consider validation 'successful' in terms of process, with no errors/warnings.
-              $overall_validation_status = 'success_no_components_to_validate';
-              $validation_data = ['status' => $overall_validation_status, 'message' => 'No AI components to validate.', 'results' => ['errors' => [], 'warnings' => []]];
-            }
-            else {
-              $this->logger->info('Calling drupalx_ai_perform_full_validation for AI components.');
-              $validation_data = drupalx_ai_perform_full_validation($extracted_ai_components);
-              $overall_validation_status = $validation_data['status'] ?? 'unknown_error_during_validation';
-            }
-
-            // Log based on the status and results from the facade function.
-            if ($overall_validation_status !== 'success' && $overall_validation_status !== 'success_no_components_to_validate') {
-              $this->logger->error(
-                "Validation Orchestration Status: @status. Message: @message. Details: @details",
-                [
-                  '@status' => $overall_validation_status,
-                  '@message' => $validation_data['message'] ?? 'No specific message.',
-                  '@details' => json_encode($validation_data['results'] ?? []),
-                ]
-              );
-            }
-            elseif (!empty($validation_data['results']['errors'])) {
-              $this->logger->error(
-                "AI Components Validation completed with Errors: @errors. Warnings: @warnings",
-                [
-                  '@errors' => json_encode($validation_data['results']['errors']),
-                  '@warnings' => json_encode($validation_data['results']['warnings'] ?? []),
-                ]
-              );
-            }
-            elseif (!empty($validation_data['results']['warnings'])) {
-              $this->logger->warning("AI Components Validation completed with Warnings: @warnings", [
-                '@warnings' => json_encode($validation_data['results']['warnings']),
-              ]);
-            }
-            else {
-              $this->logger->info("AI Components Validation completed successfully with no errors or warnings. Status: @status", ['@status' => $overall_validation_status]);
-            }
-          }
-          else {
-            $this->logger->error("Facade validation function 'drupalx_ai_perform_full_validation' not found in @path", ['@path' => $validation_inc_path]);
-            $overall_validation_status = 'error_facade_function_missing';
-          }
-        }
-        else {
-          $this->logger->error("Validation script 'validation.inc' not found at computed path: @path", ['@path' => $validation_inc_path]);
-          $overall_validation_status = 'error_validation_script_missing';
-        }
+        $this->logger->info('Calling ValidationService for AI components.');
+        $validation_data = $this->validationService->performFullValidation($extracted_ai_components);
+        $overall_validation_status = $validation_data['status'] ?? 'unknown_error_during_validation';
       }
+
+      // Log based on the status and results from the ValidationService.
+      if ($overall_validation_status !== 'success' && $overall_validation_status !== 'success_no_components_to_validate') {
+        $log_context = [
+          '@status' => $overall_validation_status,
+          '@message' => $validation_data['message'] ?? 'No specific message.',
+          '@details' => json_encode($validation_data['results'] ?? []),
+        ];
+        $this->logger->error("Validation Service Status: @status. Message: @message. Details: @details", $log_context);
+      }
+      elseif (!empty($validation_data['results']['errors'])) {
+        $log_context = [
+          '@errors' => json_encode($validation_data['results']['errors']),
+          '@warnings' => json_encode($validation_data['results']['warnings'] ?? []),
+        ];
+        $this->logger->error("AI Components Validation by Service completed with Errors: @errors. Warnings: @warnings", $log_context);
+      }
+      elseif (!empty($validation_data['results']['warnings'])) {
+        $this->logger->warning("AI Components Validation by Service completed with Warnings: @warnings", [
+          '@warnings' => json_encode($validation_data['results']['warnings']),
+        ]);
+      }
+      else {
+        $this->logger->info("AI Components Validation by Service completed successfully. Status: @status", ['@status' => $overall_validation_status]);
+      }
+
       // The AIService continues to return the extracted components, regardless of validation outcome for now.
       // Validation is primarily for logging and future stricter handling if needed.
       return $extracted_ai_components;

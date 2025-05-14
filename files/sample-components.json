@@ -210,7 +210,7 @@
         "type": "bullet",
         "field_icon": "fa-cogs",
         "field_summary": "Highly customizable features."
-      },
+      }
     ],
     "field_sidebyside_layout": "left",
     "field_link": {
