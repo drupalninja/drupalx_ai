@@ -7,7 +7,8 @@ use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\Logger\LoggerChannelInterface;
 use Drupal\key\KeyRepositoryInterface;
-use OpenAI\OpenAI as OpenAIAPI;
+use GuzzleHttp\Client as GuzzleClient;
+use OpenAI\Factory;
 use OpenAI\Client as OpenAIClient;
 
 /**
@@ -125,7 +126,10 @@ class AIService {
         }
       }
 
-      $factory = OpenAIAPI::factory()->withApiKey($this->apiKey);
+      $guzzleClient = new GuzzleClient(['verify' => FALSE]);
+      $factory = (new Factory())
+        ->withApiKey($this->apiKey)
+        ->withHttpClient($guzzleClient);
 
       // Use the processed base_uri_to_use.
       // If it's empty or different from the default OpenAI, set it.
@@ -208,6 +212,14 @@ PROMPT;
         ],
         // 'response_format' => ['type' => 'json_object'], // This ensures the AI *tries* to send JSON.
       ]);
+
+      // Check if choices exist and are not empty before proceeding.
+      if (empty($response->choices)) {
+        $this->logger->error('AI response is missing or has empty "choices". Full response: @response', [
+          '@response' => json_encode($response->toArray()),
+        ]);
+        return NULL;
+      }
 
       $content = $response->choices[0]->message->content;
       // The AI might return plain JSON string or a JSON string wrapped in markdown code block.
