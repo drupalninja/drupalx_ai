@@ -1,0 +1,3 @@
+api_endpoint: 'https://api.openai.com/v1'
+model_name: 'gpt-3.5-turbo'
+api_key_id: '' # Machine name of the API key configured in the Key module.

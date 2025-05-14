@@ -10,3 +10,11 @@ drupalx_ai.chatbot_process:
       # Allow POST requests only for security.
       # This might need adjustment depending on how you send data.
       methods: [POST]
+
+drupalx_ai.settings:
+  path: '/admin/config/drupalx_ai/settings'
+  defaults:
+    _form: '\Drupal\drupalx_ai\Form\AISettingsForm'
+    _title: 'DrupalX AI Settings'
+  requirements:
+    _permission: 'administer site configuration'

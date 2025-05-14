@@ -1,0 +1,6 @@
+drupalx_ai.settings:
+  title: 'DrupalX AI Settings'
+  description: 'Configure settings for DrupalX AI integration.'
+  parent: system.admin_config_services
+  route_name: drupalx_ai.settings
+  weight: 100
