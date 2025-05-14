@@ -210,7 +210,8 @@ PROMPT;
           ],
           ['role' => 'user', 'content' => $prompt],
         ],
-        // 'response_format' => ['type' => 'json_object'], // This ensures the AI *tries* to send JSON.
+        'temperature' => 0.7,
+        'max_tokens' => 4000,
       ]);
 
       // Check if choices exist and are not empty before proceeding.
@@ -238,27 +239,125 @@ PROMPT;
         return NULL;
       }
 
-      // The prompt asks for an array of components.
-      // Handle cases where AI might wrap it, e.g., {"components": [...] } or just return the array.
+      $this->logger->info('AI Response JSON: @json', ['@json' => json_encode($decoded_components)]);
+
+      // Determine the actual list of components from the AI response.
+      $extracted_ai_components = [];
       if (is_array($decoded_components)) {
-        // Case 1: Direct array of components (or empty array).
-        if (empty($decoded_components) || (isset($decoded_components[0]) && isset($decoded_components[0]['id']))) {
-          return $decoded_components;
+        // Case 1: Direct array of components.
+        if (empty($decoded_components) ||
+            (isset($decoded_components[0]) && is_array($decoded_components[0]) &&
+             (isset($decoded_components[0]['id']) || isset($decoded_components[0]['type'])))
+           ) {
+          $extracted_ai_components = $decoded_components;
         }
-        // Case 2: Wrapped array. Check common keys.
-        foreach (['components', 'selected_components', 'result', 'data'] as $key) {
-          if (isset($decoded_components[$key]) && is_array($decoded_components[$key])) {
-            // Further check if the sub-array contains component-like structures or is empty.
-            if (empty($decoded_components[$key]) || (isset($decoded_components[$key][0]) && isset($decoded_components[$key][0]['id']))) {
-              return $decoded_components[$key];
+        // Case 2: Wrapped array.
+        else {
+          foreach (['components', 'selected_components', 'result', 'data'] as $key_to_check) {
+            if (isset($decoded_components[$key_to_check]) && is_array($decoded_components[$key_to_check])) {
+              $potential_components_array = $decoded_components[$key_to_check];
+              if (empty($potential_components_array) ||
+                  (isset($potential_components_array[0]) && is_array($potential_components_array[0]) &&
+                   (isset($potential_components_array[0]['id']) || isset($potential_components_array[0]['type'])))
+                 ) {
+                $extracted_ai_components = $potential_components_array;
+                // Found components in a wrapper.
+                break;
+              }
             }
           }
         }
       }
 
-      $this->logger->warning('AI response was valid JSON but not in the expected array format or known wrapped format. Response: @response', ['@response' => $content]);
-      // Return empty array if the structure is not what we expect but is valid JSON.
-      return [];
+      // Log if AI response was JSON but not the expected component structure.
+      if (empty($extracted_ai_components) && $decoded_components !== NULL && json_last_error() === JSON_ERROR_NONE) {
+        $this->logger->warning('AI response was valid JSON but not in the expected array format or known wrapped format. Raw response: @response', ['@response' => $content]);
+        // $extracted_ai_components remains empty and will be returned as such.
+      }
+
+      // Perform validation using the facade function from validation.inc.
+      $overall_validation_status = NULL;
+
+      // Ensure validation.inc is loaded.
+      $module_path = NULL;
+      try {
+        $module = \Drupal::moduleHandler()->getModule('drupalx_ai');
+        if ($module) {
+          $module_path = $module->getPath();
+        }
+      }
+      catch (\Exception $e) {
+        $this->logger->error('Failed to get drupalx_ai module path via ModuleHandler: @message', ['@message' => $e->getMessage()]);
+        $overall_validation_status = 'error_module_path_critical';
+      }
+
+      if ($overall_validation_status === 'error_module_path_critical') {
+        $this->logger->error("Critical: Could not determine module path for drupalx_ai. AI Component validation cannot proceed.");
+      }
+      elseif (!$module_path) {
+        // This case should ideally be caught by the previous exception/check but as a fallback.
+        $this->logger->error("Could not determine module path for drupalx_ai; AI component validation cannot proceed.");
+        $overall_validation_status = 'error_module_path_missing';
+      }
+      else {
+        $validation_inc_path = DRUPAL_ROOT . DIRECTORY_SEPARATOR . $module_path . '/inc/validation.inc';
+        if (file_exists($validation_inc_path)) {
+          require_once $validation_inc_path;
+          if (function_exists('drupalx_ai_perform_full_validation')) {
+            if (empty($extracted_ai_components)) {
+              $this->logger->info("No components were extracted from AI response; skipping full validation call.");
+              // Even if no components, we can consider validation 'successful' in terms of process, with no errors/warnings.
+              $overall_validation_status = 'success_no_components_to_validate';
+              $validation_data = ['status' => $overall_validation_status, 'message' => 'No AI components to validate.', 'results' => ['errors' => [], 'warnings' => []]];
+            }
+            else {
+              $this->logger->info('Calling drupalx_ai_perform_full_validation for AI components.');
+              $validation_data = drupalx_ai_perform_full_validation($extracted_ai_components);
+              $overall_validation_status = $validation_data['status'] ?? 'unknown_error_during_validation';
+            }
+
+            // Log based on the status and results from the facade function.
+            if ($overall_validation_status !== 'success' && $overall_validation_status !== 'success_no_components_to_validate') {
+              $this->logger->error(
+                "Validation Orchestration Status: @status. Message: @message. Details: @details",
+                [
+                  '@status' => $overall_validation_status,
+                  '@message' => $validation_data['message'] ?? 'No specific message.',
+                  '@details' => json_encode($validation_data['results'] ?? []),
+                ]
+              );
+            }
+            elseif (!empty($validation_data['results']['errors'])) {
+              $this->logger->error(
+                "AI Components Validation completed with Errors: @errors. Warnings: @warnings",
+                [
+                  '@errors' => json_encode($validation_data['results']['errors']),
+                  '@warnings' => json_encode($validation_data['results']['warnings'] ?? []),
+                ]
+              );
+            }
+            elseif (!empty($validation_data['results']['warnings'])) {
+              $this->logger->warning("AI Components Validation completed with Warnings: @warnings", [
+                '@warnings' => json_encode($validation_data['results']['warnings']),
+              ]);
+            }
+            else {
+              $this->logger->info("AI Components Validation completed successfully with no errors or warnings. Status: @status", ['@status' => $overall_validation_status]);
+            }
+          }
+          else {
+            $this->logger->error("Facade validation function 'drupalx_ai_perform_full_validation' not found in @path", ['@path' => $validation_inc_path]);
+            $overall_validation_status = 'error_facade_function_missing';
+          }
+        }
+        else {
+          $this->logger->error("Validation script 'validation.inc' not found at computed path: @path", ['@path' => $validation_inc_path]);
+          $overall_validation_status = 'error_validation_script_missing';
+        }
+      }
+      // The AIService continues to return the extracted components, regardless of validation outcome for now.
+      // Validation is primarily for logging and future stricter handling if needed.
+      return $extracted_ai_components;
     }
     catch (\Exception $e) {
       $this->logger->error('Error communicating with AI: @message. Request details: Model - @model', [
@@ -270,3 +369,4 @@ PROMPT;
   }
 
 }
+

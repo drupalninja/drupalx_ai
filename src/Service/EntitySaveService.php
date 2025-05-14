@@ -130,22 +130,57 @@ class EntitySaveService {
       $owner_id = 1;
     }
 
-    foreach ($components_data as $component_data) {
-      if (empty($component_data['id']) || empty($component_data['data'])) {
-        $log_context = ['@component' => json_encode($component_data)];
-        $this->logger->warning('Skipping component due to missing id or data: @component', $log_context);
+    foreach ($components_data as $key => $component_data) {
+      if (!is_array($component_data) || (empty($component_data['type']) && empty($component_data['id']) && empty($component_data['name']))) {
+        $this->logger->warning('Skipping component due to missing type, id, or name. Component data: @data', [
+          '@data' => json_encode($component_data),
+        ]);
         continue;
       }
 
-      // Example: 'Hero Section' maps to paragraph type 'component_hero_section'.
-      $paragraph_type = 'component_' . strtolower(str_replace(' ', '_', $component_data['id']));
+      // Try to derive paragraph type from 'type', then 'id', then 'name'.
+      $paragraph_bundle_key_name = NULL;
+      if (!empty($component_data['type'])) {
+        $paragraph_bundle_key_name = $component_data['type'];
+      }
+      elseif (!empty($component_data['id'])) {
+        $this->logger->debug("Component data is missing 'type', falling back to 'id' for paragraph bundle key: @id", ['@id' => $component_data['id']]);
+        $paragraph_bundle_key_name = $component_data['id'];
+      }
+      elseif (!empty($component_data['name'])) {
+        // This fallback might be less reliable.
+        $this->logger->debug("Component data is missing 'type' and 'id', falling back to 'name' for paragraph bundle key: @name", ['@name' => $component_data['name']]);
+        $paragraph_bundle_key_name = $component_data['name'];
+      }
+
+      if (!$paragraph_bundle_key_name) {
+        // This case should be caught by the initial check, but as a safeguard.
+        $this->logger->warning('Skipping component because a bundle key (type, id, or name) could not be determined. Component data: @data', [
+          '@data' => json_encode($component_data),
+        ]);
+        continue;
+      }
+
+      // Convert a descriptive name like "Hero Section" to "component_hero_section".
+      // Or use directly if it already matches the pattern like "component_hero_section".
+      if (!str_starts_with($paragraph_bundle_key_name, 'component_')) {
+        $paragraph_type = 'component_' . strtolower(str_replace(' ', '_', $paragraph_bundle_key_name));
+      }
+      else {
+        $paragraph_type = $paragraph_bundle_key_name;
+      }
+
+      $this->logger->info('Attempting to create paragraph of type: @type for component: @key_name', [
+        '@type' => $paragraph_type,
+        '@key_name' => $paragraph_bundle_key_name,
+      ]);
 
       try {
         $paragraph_bundle_info = $this->entityTypeBundleInfo->getBundleInfo('paragraph');
         if (!isset($paragraph_bundle_info[$paragraph_type])) {
           $log_context = [
             '@bundle' => $paragraph_type,
-            '@component_id' => $component_data['id'],
+            '@component_id' => $paragraph_bundle_key_name,
           ];
           $this->logger->error('Paragraph bundle @bundle does not exist. Skipping component: @component_id', $log_context);
           continue;
@@ -173,7 +208,7 @@ class EntitySaveService {
               else {
                 $log_context = [
                   '@field_name' => $field_name,
-                  '@id' => $component_data['id'],
+                  '@id' => $paragraph_bundle_key_name,
                 ];
                 $this->logger->warning('Field @field_name is entity_reference but not targeting media. Cannot process media_url for component @id.', $log_context);
               }
@@ -223,7 +258,7 @@ class EntitySaveService {
             $log_context = [
               '@bundle' => $paragraph_type,
               '@field_name' => $field_name,
-              '@component_id' => $component_data['id'],
+              '@component_id' => $paragraph_bundle_key_name,
             ];
             $this->logger->warning('Paragraph bundle @bundle does not have field @field_name. Skipping for component: @component_id', $log_context);
           }
