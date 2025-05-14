@@ -7,7 +7,7 @@ use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\Logger\LoggerChannelInterface;
 use Drupal\key\KeyRepositoryInterface;
-use OpenAI;
+use OpenAI\OpenAI as OpenAIAPI;
 use OpenAI\Client as OpenAIClient;
 
 /**
@@ -106,22 +106,44 @@ class AIService {
       return FALSE;
     }
     $this->apiKey = $key_entity->getKeyValue();
-    $api_endpoint = $config->get('api_endpoint');
+    $configured_url = $config->get('api_endpoint');
 
     try {
-      // The PHP OpenAI client v0.7.0+ allows setting a custom base URI via a factory.
-      // The `OpenAI::client($apiKey)` is a shorthand for the default setup.
-      // To use a custom endpoint, we need to use the factory pattern.
-      $factory = OpenAI::factory()
-        ->withApiKey($this->apiKey);
+      $base_uri_to_use = $configured_url;
+      $chat_completions_suffix = '/chat/completions';
 
-      if ($api_endpoint && $api_endpoint !== 'https://api.openai.com/v1') {
-        $factory = $factory->withBaseUri($api_endpoint);
-        $this->logger->info('Using custom API endpoint: @endpoint', ['@endpoint' => $api_endpoint]);
+      // If the configured URL ends with the chat completions suffix, strip it to get the base URI.
+      // This allows users to paste full chat completion URLs (e.g., from Groq docs)
+      // and the service will correctly determine the base for the OpenAI client.
+      if (is_string($configured_url) && str_ends_with($configured_url, $chat_completions_suffix)) {
+        $base_uri_to_use = substr($configured_url, 0, -strlen($chat_completions_suffix));
+        // Ensure we don't have an empty base URI if the suffix was the entire string (unlikely).
+        if (empty($base_uri_to_use)) {
+          // Revert if stripping made it empty.
+          $base_uri_to_use = $configured_url;
+          $this->logger->warning('Configured API endpoint was just the suffix "@suffix". Using it as is, which might be incorrect.', ['@suffix' => $chat_completions_suffix]);
+        }
       }
-      else {
-        // Default OpenAI API endpoint.
-        $factory = $factory->withBaseUri('https://api.openai.com/v1');
+
+      $factory = OpenAIAPI::factory()->withApiKey($this->apiKey);
+
+      // Use the processed base_uri_to_use.
+      // If it's empty or different from the default OpenAI, set it.
+      // The OpenAI client defaults to 'https://api.openai.com/v1' if no base URI is set via factory.
+      if (!empty($base_uri_to_use) && $base_uri_to_use !== 'https://api.openai.com/v1') {
+        $factory = $factory->withBaseUri($base_uri_to_use);
+        $this->logger->info('Using API base URI: @uri (derived from configured: @configured)', [
+          '@uri' => $base_uri_to_use,
+          '@configured' => $configured_url,
+        ]);
+      }
+      // If $base_uri_to_use is 'https://api.openai.com/v1' or empty (after potential stripping issues),
+      // let the client use its default, or explicitly set it if you want to be sure.
+      // For clarity, if it ended up as the default, we can still log what was configured.
+      elseif ($configured_url !== 'https://api.openai.com/v1') {
+        $this->logger->info('Configured API endpoint "@configured" results in using the default OpenAI base URI.', [
+          '@configured' => $configured_url,
+        ]);
       }
 
       $this->client = $factory->make();

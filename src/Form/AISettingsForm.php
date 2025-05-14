@@ -2,6 +2,7 @@
 
 namespace Drupal\drupalx_ai\Form;
 
+use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\key\KeyRepositoryInterface;
@@ -64,9 +65,9 @@ class AISettingsForm extends ConfigFormBase {
 
     $form['api_endpoint'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('API Endpoint URL'),
+      '#title' => $this->t('API Chat Completions URL / Base URL'),
       '#default_value' => $config->get('api_endpoint'),
-      '#description' => $this->t('The base URL for the OpenAI compatible API. E.g., https://api.openai.com/v1'),
+      '#description' => $this->t('Enter the full URL for the chat completions endpoint (e.g., <code>https://api.example.com/v1/chat/completions</code>) or just the base URL (e.g., <code>https://api.example.com/v1</code>). If the full path is not provided, <code>/chat/completions</code> will be assumed by the client.'),
       '#required' => TRUE,
     ];
 
