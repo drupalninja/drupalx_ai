@@ -62,7 +62,7 @@ class ChatbotController extends ControllerBase {
     try {
       $node_storage = $this->entityTypeManager->getStorage('node');
       $node = $node_storage->create([
-        'type' => 'landing_page',
+        'type' => 'landing',
         'title' => $node_title,
         'body' => [
           'value' => $node_body,

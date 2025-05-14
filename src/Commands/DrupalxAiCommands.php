@@ -42,7 +42,7 @@ class DrupalxAiCommands extends DrushCommands {
 
     // IMPORTANT: Assumes a content type 'landing_page' exists.
     $node = $node_storage->create([
-      'type' => 'landing_page',
+      'type' => 'landing',
       'title' => 'AI Generated Landing Page (Stub)',
       'body' => [
         'value' => 'This is a placeholder for an AI generated landing page.',
