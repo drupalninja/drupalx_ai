@@ -135,6 +135,7 @@ class ChatbotController extends ControllerBase {
         'uid' => $uid,
         'status' => 1,
         // Published.
+        'field_hide_page_title' => TRUE,
       ]);
       $node->save();
       $this->logger->info(
@@ -146,7 +147,7 @@ class ChatbotController extends ControllerBase {
       );
 
       // Save entities to the node.
-      $result = $this->entitySaveService->saveEntitiesToNode($node, $components);
+      $result = $this->entitySaveService->saveEntitiesToNode($node->id(), $components);
 
       if (isset($result['error'])) {
         $this->logger->error('Error saving entities: @error', ['@error' => $result['error']]);

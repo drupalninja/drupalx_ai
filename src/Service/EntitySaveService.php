@@ -131,6 +131,25 @@ class EntitySaveService {
       }
     }
 
+    // Attach paragraphs to the node's field_content.
+    if (!empty($created_entity_ids) && $node->hasField('field_content')) {
+      $paragraph_references = [];
+      foreach ($created_entity_ids as $pid) {
+        $paragraph_references[] = [
+          'target_id' => $pid,
+          'target_revision_id' => $pid,
+        ];
+      }
+
+      $node->set('field_content', $paragraph_references);
+      $node->save();
+
+      $this->logger->notice('Added @count paragraphs to node @nid.', [
+        '@count' => count($created_entity_ids),
+        '@nid' => $nid,
+      ]);
+    }
+
     return $created_entity_ids;
   }
 
