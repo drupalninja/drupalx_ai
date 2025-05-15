@@ -239,8 +239,9 @@ class EntitySaveService {
       $component_type = strtolower($component['type']);
 
       // Only log details for each component if detailed logging is enabled
+      // We'll keep logs minimal for command-line operations
       if ($detailed_logging) {
-        $this->logger->notice('EntitySaveService: Processing component type: @type at index @index', [
+        $this->logger->debug('EntitySaveService: Processing component type: @type at index @index', [
           '@type' => $component_type,
           '@index' => $index,
         ]);
