@@ -75,6 +75,13 @@ class ParagraphService {
   protected ValidationService $validationService;
 
   /**
+   * Cached child processing configuration.
+   *
+   * @var array|null
+   */
+  protected static ?array $childProcessingConfigCache = NULL;
+
+  /**
    * Constructs a new ParagraphService object.
    *
    * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
@@ -450,23 +457,6 @@ class ParagraphService {
         [$drupal_target_field, $expected_child_bundle] = $config;
 
         if (isset($component_data[$ai_data_key]) && is_array($component_data[$ai_data_key])) {
-          if ($ai_data_key !== $this->normalizeFieldName($ai_data_key) && $ai_data_key !== $drupal_target_field) {
-            if ($paragraph_type === 'card_group' && ($ai_data_key === 'cards' || $ai_data_key === 'card')) {
-              $this->logger->notice(
-                'Child data for @parent_type found under AI key "@ai_key" instead of the expected "@expected_key". Proceeding.',
-                [
-                  '@parent_type' => $paragraph_type,
-                  '@ai_key' => $ai_data_key,
-                  '@expected_key' => 'field_card',
-                  'component_data' => json_encode($component_data[$ai_data_key]),
-                ]
-              );
-            }
-          }
-
-          // Important: Once children are processed for a given Drupal field using one AI key,
-          // break to avoid processing another AI key that maps to the same Drupal field.
-          // E.g., if 'field_card' is found, don't also process 'cards' for the same 'field_card' target.
           $this->createGenericChildItems(
             $paragraph,
             $component_data[$ai_data_key],
@@ -487,11 +477,12 @@ class ParagraphService {
    * @param \Drupal\paragraphs\Entity\Paragraph $parent_paragraph
    *   The parent paragraph.
    * @param array $child_items_data_list
-   *   Array of child item data objects (e.g., the content of component_data['field_card']).
+   *   Array of child item data objects.
    * @param int $owner_id
    *   The owner ID.
    * @param string $drupal_target_field_name
-   *   The machine name of the field on the parent_paragraph that will store these children.
+   *   The machine name of the field on the parent_paragraph that will store
+   *   these children.
    * @param string $expected_child_bundle_type
    *   The expected paragraph bundle type for the children.
    */
@@ -604,7 +595,8 @@ class ParagraphService {
    * Returns the configuration map for processing child entities.
    *
    * This map defines, for each parent paragraph type, which AI data keys
-   * correspond to child lists, their target Drupal fields, and expected child bundles.
+   * correspond to child lists, their target Drupal fields, and expected child
+   * bundles.
    *
    * @return array
    *   The child processing configuration map.
@@ -614,21 +606,59 @@ class ParagraphService {
    *   ]
    */
   protected function getChildProcessingConfiguration(): array {
-    return [
-      'card_group' => [
-        'field_card' => ['field_card', 'card'],
-        // Fallback AI keys for card_group children.
-        'cards' => ['field_card', 'card'],
-        'card' => ['field_card', 'card'],
-      ],
-      'feature_list' => [
-        'features' => ['field_feature_items', 'feature_item'],
-      ],
-      'accordion' => [
-        'items' => ['field_accordion_items', 'accordion_item'],
-      ],
-      // Add other parent paragraph types and their child configurations here.
-    ];
+    if (self::$childProcessingConfigCache !== NULL) {
+      return self::$childProcessingConfigCache;
+    }
+
+    $inferred_map = [];
+    $samples_result = $this->validationService->loadSampleComponents();
+
+    if ($samples_result['status'] === 'success' && !empty($samples_result['data'])) {
+      $all_sample_components = $samples_result['data'];
+
+      foreach ($all_sample_components as $sample_component) {
+        if (!is_array($sample_component) || !isset($sample_component['type'])) {
+          continue;
+        }
+        $parent_bundle_type = $sample_component['type'];
+
+        foreach ($sample_component as $field_name => $field_value) {
+          if ($field_name === 'type') {
+            continue;
+          }
+
+          // Check if the field_value represents a list of potential child
+          // paragraphs.
+          if (is_array($field_value) && !empty($field_value) && isset($field_value[0]) && is_array($field_value[0])) {
+            $first_child_sample = $field_value[0];
+            if (isset($first_child_sample['type']) && is_string($first_child_sample['type'])) {
+              $expected_child_bundle_type = $first_child_sample['type'];
+              // Use the field name from the sample as the AI data key and
+              // Drupal field name. Normalization is applied when setting
+              // fields, but samples should ideally use snake_case.
+              $drupal_field_name = $this->normalizeFieldName($field_name);
+              // Or $drupal_field_name if we enforce strict normalization for AI
+              // keys.
+              $ai_data_key = $field_name;
+
+              if (!isset($inferred_map[$parent_bundle_type])) {
+                $inferred_map[$parent_bundle_type] = [];
+              }
+              $inferred_map[$parent_bundle_type][$ai_data_key] = [
+                $drupal_field_name,
+                $expected_child_bundle_type,
+              ];
+            }
+          }
+        }
+      }
+    }
+    else {
+      $this->logger->warning('Could not load sample components to infer child processing configuration. Falling back to empty map.');
+    }
+
+    self::$childProcessingConfigCache = $inferred_map;
+    return self::$childProcessingConfigCache;
   }
 
 }

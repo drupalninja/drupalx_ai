@@ -41,7 +41,7 @@
           "title": "Learn more"
         },
         "field_media": {
-          "type": "image",
+          "type": "media",
           "alt": "Consulting services illustration"
         }
       },
@@ -53,7 +53,7 @@
           "title": "Explore"
         },
         "field_media": {
-          "type": "image",
+          "type": "media",
           "alt": "Development services illustration"
         }
       }
@@ -67,7 +67,7 @@
         "field_title": "Welcome to Our Platform",
         "field_summary": "Discover how our solutions can transform your business.",
         "field_media": {
-          "type": "image",
+          "type": "media",
           "alt": "Platform overview"
         }
       },
@@ -76,7 +76,7 @@
         "field_title": "New Features Available",
         "field_summary": "Explore our latest platform updates and enhancements.",
         "field_media": {
-          "type": "image",
+          "type": "media",
           "alt": "New features showcase"
         }
       }
@@ -91,15 +91,15 @@
     },
     "field_media_item": [
       {
-        "type": "image",
+        "type": "media",
         "alt": "Project 1 showcase"
       },
       {
-        "type": "image",
+        "type": "media",
         "alt": "Project 2 showcase"
       },
       {
-        "type": "image",
+        "type": "media",
         "alt": "Project 3 showcase"
       }
     ]
@@ -120,7 +120,7 @@
       "title": "Contact Us"
     },
     "field_media": {
-      "type": "image",
+      "type": "media",
       "alt": "Digital transformation illustration"
     },
     "field_summary": "Empower your business with our cutting-edge solutions and expert team."
@@ -130,15 +130,15 @@
     "field_title": "Our Trusted Partners",
     "field_media_item": [
       {
-        "type": "image",
+        "type": "media",
         "alt": "Partner company logo"
       },
       {
-        "type": "image",
+        "type": "media",
         "alt": "Partner company logo"
       },
       {
-        "type": "image",
+        "type": "media",
         "alt": "Partner company logo"
       }
     ]
@@ -184,11 +184,11 @@
     "field_author": "Jane Smith",
     "field_job_title": "CEO, Example Company",
     "field_logo": {
-      "type": "image",
+      "type": "media",
       "alt": "Example Company logo"
     },
     "field_thumb": {
-      "type": "image",
+      "type": "media",
       "alt": "Portrait of Jane Smith"
     }
   },
@@ -218,7 +218,7 @@
       "title": "Learn More About Our Approach"
     },
     "field_media": {
-      "type": "image",
+      "type": "media",
       "media_url": "public://sample_images/side_by_side_placeholder.jpg",
       "alt": "Informative image complementing the text content",
       "field_caption": "Optional caption for the media"
