@@ -8,5 +8,6 @@ services:
       - '@current_user'
       - '@logger.factory'
       - '@drupalx_ai.output_formatter_service'
+      - '@drupalx_ai.paragraph_service'
     tags:
       - { name: drush.command }

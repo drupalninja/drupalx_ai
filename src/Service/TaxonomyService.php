@@ -56,7 +56,7 @@ class TaxonomyService {
   }
 
   /**
-   * Creates a taxonomy term with the given name in a vocabulary and returns its ID.
+   * Creates a taxonomy term with the given name in a vocabulary and returns ID.
    *
    * @param string $term_name
    *   Name of the term to create.

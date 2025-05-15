@@ -80,6 +80,8 @@ class EntitySaveService {
    *   The taxonomy service.
    * @param \Drupal\drupalx_ai\Service\FileService $file_service
    *   The file service.
+   * @param \Drupal\drupalx_ai\Service\OutputFormatterService $output_formatter
+   *   The output formatter service.
    */
   public function __construct(
     EntityTypeManagerInterface $entity_type_manager,
@@ -100,122 +102,6 @@ class EntitySaveService {
   }
 
   /**
-   * Saves components data to a given node.
-   *
-   * It delegates the actual work to specialized services.
-   *
-   * @param int $nid
-   *   The node ID.
-   * @param array $components_data
-   *   Array of component data to save.
-   * @param bool $already_preprocessed
-   *   Whether the components have already been preprocessed.
-   *
-   * @return array
-   *   Array of created entity IDs.
-   */
-  public function saveEntitiesToNode(int $nid, array $components_data, bool $already_preprocessed = false): array {
-    // Only log the full component data if it hasn't been preprocessed already
-    if (!$already_preprocessed) {
-      // Log the full component data structure we're receiving.
-      $this->logger->notice('EntitySaveService: Full components data JSON structure: @data', [
-        '@data' => json_encode($components_data, JSON_PRETTY_PRINT),
-      ]);
-    }
-
-    $node_storage = $this->entityTypeManager->getStorage('node');
-    $node = $node_storage->load($nid);
-
-    if (!$node) {
-      $this->logger->error('EntitySaveService: Node with ID @nid not found.', ['@nid' => $nid]);
-      return [];
-    }
-
-    // Clear any existing paragraphs from the node
-    if ($node->hasField('field_content')) {
-      $this->logger->notice('EntitySaveService: Clearing existing paragraphs from node @nid.', ['@nid' => $nid]);
-      $node->set('field_content', []);
-      $node->save();
-    }
-
-    // Quick check if we need to do any preprocessing
-    if (!$already_preprocessed) {
-      $need_preprocessing = FALSE;
-      foreach ($components_data as $component) {
-        if (isset($component['type']) && strtolower($component['type']) === 'card') {
-          $need_preprocessing = TRUE;
-          break;
-        }
-      }
-
-      // Only preprocess if needed (to avoid duplicate preprocessing)
-      if ($need_preprocessing) {
-        $this->logger->notice('EntitySaveService: Detected potential card structure issues, performing preprocessing...');
-        // Use detailed logging only if the components weren't preprocessed elsewhere
-        $components_data = $this->preprocessComponents($components_data, true);
-      }
-      else {
-        $this->logger->notice('EntitySaveService: No standalone cards detected, skipping preprocessing.');
-      }
-    }
-    else {
-      $this->logger->notice('EntitySaveService: Components were already preprocessed elsewhere, skipping preprocessing step.');
-    }
-
-    $created_entity_ids = [];
-
-    // Process each component and add to the node.
-    foreach ($components_data as $component_data) {
-      $paragraph_id = $this->paragraphService->createNestedParagraph(
-        $component_data,
-        $node->id()
-      );
-
-      if ($paragraph_id) {
-        $created_entity_ids[] = $paragraph_id;
-      }
-    }
-
-    // Attach paragraphs to the node's field_content.
-    if (!empty($created_entity_ids) && $node->hasField('field_content')) {
-      // Load all paragraphs to check their bundle types before attaching
-      $paragraph_storage = $this->entityTypeManager->getStorage('paragraph');
-      $paragraph_references = [];
-      $added_count = 0;
-
-      foreach ($created_entity_ids as $pid) {
-        $paragraph = $paragraph_storage->load($pid);
-        if (!$paragraph) {
-          $this->logger->warning('Could not load paragraph with ID @id', ['@id' => $pid]);
-          continue;
-        }
-
-        // Skip any 'card' paragraphs at the top level - they should only be children of card_group
-        if ($paragraph->bundle() === 'card') {
-          $this->logger->warning('Skipping attaching card paragraph @id to node directly - cards should only be in card_groups', ['@id' => $pid]);
-          continue;
-        }
-
-        $paragraph_references[] = [
-          'target_id' => $pid,
-          'target_revision_id' => $pid,
-        ];
-        $added_count++;
-      }
-
-      $node->set('field_content', $paragraph_references);
-      $node->save();
-
-      $this->logger->notice('Added @count paragraphs to node @nid.', [
-        '@count' => count($created_entity_ids),
-        '@nid' => $nid,
-      ]);
-    }
-
-    return $created_entity_ids;
-  }
-
-  /**
    * Preprocesses component data to ensure proper nesting structure.
    *
    * This function reorganizes standalone card components by moving them into
@@ -224,20 +110,20 @@ class EntitySaveService {
    * @param array $components_data
    *   The raw component data from AI.
    * @param bool $detailed_logging
-   *   Whether to generate detailed logs for debugging. Default is true.
+   *   Whether to generate detailed logs for debugging. Default is TRUE.
    *
    * @return array
    *   The preprocessed component data.
    */
-  public function preprocessComponents(array $components_data, bool $detailed_logging = true): array {
-    // Check if we have any standalone card components
+  public function preprocessComponents(array $components_data, bool $detailed_logging = TRUE): array {
+    // Check if we have any standalone card components.
     $card_components = [];
     $non_card_components = [];
     $card_group_needed = FALSE;
 
-    // First pass - identify problematic components
+    // First pass - identify problematic components.
     foreach ($components_data as $index => $component) {
-      // Missing type is a major issue
+      // Missing type is a major issue.
       if (!isset($component['type'])) {
         $this->logger->error('EntitySaveService: Component at index @index is missing type field: @data', [
           '@index' => $index,
@@ -248,8 +134,8 @@ class EntitySaveService {
 
       $component_type = strtolower($component['type']);
 
-      // Only log details for each component if detailed logging is enabled
-      // We'll keep logs minimal for command-line operations
+      // Only log details for each component if detailed logging is enabled.
+      // We'll keep logs minimal for command-line operations.
       if ($detailed_logging) {
         $this->logger->debug('EntitySaveService: Processing component type: @type at index @index', [
           '@type' => $component_type,
@@ -257,7 +143,7 @@ class EntitySaveService {
         ]);
       }
 
-      // Handle cards
+      // Handle cards.
       if ($component_type === 'card') {
         $card_components[] = $component;
         $card_group_needed = TRUE;
@@ -266,16 +152,16 @@ class EntitySaveService {
           '@data' => json_encode($component),
         ]);
       }
-      // Special handling for card_group to ensure it has proper structure
+      // Special handling for card_group to ensure it has proper structure.
       elseif ($component_type === 'card_group') {
-        // Ensure field_card is properly populated
+        // Ensure field_card is properly populated.
         if (!isset($component['field_card']) || !is_array($component['field_card'])) {
           $this->logger->warning('Card group at index @index has missing or invalid field_card: @data', [
             '@index' => $index,
             '@data' => json_encode($component),
           ]);
 
-          // Initialize field_card as empty array if missing
+          // Initialize field_card as empty array if missing.
           $component['field_card'] = [];
         }
         elseif ($detailed_logging) {
@@ -285,7 +171,7 @@ class EntitySaveService {
           ]);
         }
 
-        // Verify that all field_card items have type=card
+        // Verify that all field_card items have type=card.
         if (!empty($component['field_card'])) {
           foreach ($component['field_card'] as $card_index => $card) {
             if (!isset($card['type']) || strtolower($card['type']) !== 'card') {
@@ -294,7 +180,7 @@ class EntitySaveService {
                 '@data' => json_encode($card),
               ]);
 
-              // Fix by explicitly setting type
+              // Fix by explicitly setting type.
               $component['field_card'][$card_index]['type'] = 'card';
             }
           }
@@ -302,14 +188,14 @@ class EntitySaveService {
 
         $non_card_components[] = $component;
       }
-      // Handle specific cases where cards might be in the wrong field
+      // Handle specific cases where cards might be in the wrong field.
       elseif (isset($component['card']) && is_array($component['card'])) {
         $this->logger->warning('Component type @type has a "card" field that should be field_card: @data', [
           '@type' => $component_type,
           '@data' => json_encode($component),
         ]);
 
-        // Check if these are indeed cards we can reuse
+        // Check if these are indeed cards we can reuse.
         $valid_cards = TRUE;
         foreach ($component['card'] as $card) {
           if (!isset($card['type']) || (!in_array(strtolower($card['type']), ['card', 'stats_item']))) {
@@ -319,7 +205,7 @@ class EntitySaveService {
         }
 
         if ($valid_cards && !empty($component['card'])) {
-          // Create a proper card_group with these cards
+          // Create a proper card_group with these cards.
           $card_group = [
             'type' => 'card_group',
             'field_title' => $component['title'] ?? $component['field_title'] ?? 'Related Items',
@@ -333,8 +219,9 @@ class EntitySaveService {
           }
 
           $non_card_components[] = $card_group;
-        } else {
-          // If not valid cards, just keep the component as is
+        }
+        else {
+          // If not valid cards, just keep the component as is.
           $non_card_components[] = $component;
         }
       }

@@ -471,7 +471,7 @@ EOT;
 
     // Process components through our preprocessor to fix any issues
     $extracted_ai_components = $this->preprocessComponents($extracted_ai_components);
-    
+
     // Perform validation using the injected ValidationService.
     $validation_data = $this->validationService->performFullValidation($extracted_ai_components);
 

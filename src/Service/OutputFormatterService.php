@@ -13,7 +13,7 @@ class OutputFormatterService {
    * @var array
    */
   protected array $iconMap = [
-    // Entity operations
+    // Entity operations.
     'creating' => '🔨',
     'created' => '✅',
     'clearing' => '🧹',
@@ -33,7 +33,7 @@ class OutputFormatterService {
     'found' => '🔎',
     'id' => '🔢',
 
-    // Media operations
+    // Media operations.
     'media' => '🖼️',
     'image' => '📷',
     'video' => '🎬',
@@ -45,7 +45,7 @@ class OutputFormatterService {
     'alt' => '🔤',
     'logo' => '®️',
 
-    // Entity types
+    // Entity types.
     'node' => '📝',
     'paragraph' => '📌',
     'hero' => '🏔️',
@@ -71,7 +71,7 @@ class OutputFormatterService {
     'summary' => '💬',
     'heading' => '📍',
 
-    // Fields and data
+    // Fields and data.
     'field' => '🏷️',
     'component' => '🧩',
     'type' => '📋',
@@ -160,7 +160,7 @@ class OutputFormatterService {
       }
     }
 
-    // Check for specific operations
+    // Check for specific operations.
     if (strpos($messageLower, 'creat') === 0) {
       return $this->iconMap['creating'];
     }
@@ -171,7 +171,7 @@ class OutputFormatterService {
       return $this->iconMap['media'];
     }
 
-    // Default
+    // Default.
     return '📌';
   }
 
@@ -187,28 +187,28 @@ class OutputFormatterService {
   protected function extractComponentType(string $message): ?string {
     $messageLower = strtolower($message);
 
-    // List of known component types to search for
+    // List of known component types to search for.
     $componentTypes = [
       'hero', 'card_group', 'card', 'text', 'quote', 'banner', 'accordion',
       'tabs', 'newsletter', 'cta', 'logo_collection', 'stats', 'feature_item',
-      'features', 'timeline', 'slider', 'gallery', 'sidebyside'
+      'features', 'timeline', 'slider', 'gallery', 'sidebyside',
     ];
 
-    // Look for component type mentions
+    // Look for component type mentions.
     foreach ($componentTypes as $type) {
       if (strpos($messageLower, $type) !== FALSE) {
         return $type;
       }
     }
 
-    // Check for "Component type:" pattern which often appears in logs
+    // Check for "Component type:" pattern which often appears in logs.
     if (preg_match('/component type[\s]*:([\s]*)(\w+)/', $messageLower, $matches)) {
       if (isset($matches[2]) && !empty($matches[2])) {
         return $matches[2];
       }
     }
 
-    // Check for "Creating nested paragraph from component:" pattern
+    // Check for "Creating nested paragraph from component:" pattern.
     if (strpos($messageLower, 'creating nested paragraph from component') !== FALSE) {
       if (preg_match('/"type"[\s]*:[\s]*"([^"]+)"/', $messageLower, $matches)) {
         if (isset($matches[1]) && !empty($matches[1])) {
@@ -217,7 +217,7 @@ class OutputFormatterService {
       }
     }
 
-    return null;
+    return NULL;
   }
 
   /**
@@ -232,7 +232,7 @@ class OutputFormatterService {
    *   The message with replaced values.
    */
   protected function replaceContextInMessage(string $message, array $context): string {
-    // Replace placeholders like @variable with their values
+    // Replace placeholders like @variable with their values.
     foreach ($context as $key => $value) {
       if (is_string($key) && strpos($key, '@') === 0) {
         $placeholder = $key;

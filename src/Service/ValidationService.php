@@ -57,7 +57,6 @@ class ValidationService {
 
   /**
    * Validates generated components against sample components.
-   * (Previously validate_components in validation.inc)
    */
   protected function validateComponents(array $components, array $sample_components_by_type): array {
     $results = [
@@ -126,7 +125,6 @@ class ValidationService {
 
   /**
    * Validates nested fields in components.
-   * (Previously validate_nested_field in validation.inc)
    */
   protected function validateNestedField(string $field_path, array $component_field, array $sample_field, array &$results, int $component_number, string $type, int $index, array $component_for_reporting, array $path = []): void {
     if ($this->detectIsList($sample_field)) {
@@ -198,7 +196,6 @@ class ValidationService {
 
   /**
    * Detects hallucinated fields in a component.
-   * (Previously detect_hallucinated_fields in validation.inc)
    */
   protected function detectHallucinatedFields(array $component, array $sample, array $path, array &$results, int $component_number, string $type, int $index, array $component_for_reporting): void {
     foreach ($component as $field => $value) {
@@ -226,7 +223,6 @@ class ValidationService {
 
   /**
    * Determines if a field in a sample component is required.
-   * (Previously detect_required_field in validation.inc)
    */
   protected function detectRequiredField(string $field_name, array $sample_component): bool {
     return isset($sample_component[$field_name]);
@@ -234,7 +230,6 @@ class ValidationService {
 
   /**
    * Checks if an array is a list (sequential numeric keys).
-   * (Previously detect_is_list in validation.inc)
    */
   protected function detectIsList(array $array): bool {
     if (empty($array)) {
@@ -245,7 +240,6 @@ class ValidationService {
 
   /**
    * Checks if an array is an associative array (object-like structure).
-   * (Previously detect_is_object in validation.inc)
    */
   protected function detectIsObject(array $array): bool {
     return !empty($array) && !$this->detectIsList($array);
@@ -287,7 +281,6 @@ class ValidationService {
 
   /**
    * Prepares sample components indexed by their type.
-   * (Previously drupalx_ai_prepare_samples_by_type in validation.inc)
    */
   protected function prepareSamplesByType(array $all_sample_components_array): array {
     $sample_components_by_type = [];
@@ -306,7 +299,8 @@ class ValidationService {
    * Loads sample components from the specified file.
    *
    * @param string $sample_path
-   *   Path to the sample components JSON file. If not provided, will use the default path.
+   *   Path to the sample components JSON file. If not provided, will use the
+   *   default path.
    *
    * @return array
    *   An array containing 'status', 'message', and 'data'.
@@ -381,11 +375,12 @@ class ValidationService {
     $component_type_mapping = $this->getComponentTypeMapping();
 
     foreach ($sample_components as $key => $component_data) {
-      // Handle both associative arrays with type as key and numeric arrays where type
-      // is specified in the component data.
+      // Handle both associative arrays with type as key and numeric arrays
+      // where type is specified in the component data.
       $component_type = '';
 
-      // If the component data is an array and has a 'type' key, use that as the component type.
+      // If the component data is an array and has a 'type' key, use that as the
+      // component type.
       if (is_array($component_data) && isset($component_data['type'])) {
         $component_type = $component_data['type'];
       }
@@ -398,7 +393,8 @@ class ValidationService {
         $component_type = $key;
       }
 
-      // Check if we need to map this component type to a valid paragraph bundle.
+      // Check if we need to map this component type to a valid paragraph
+      // bundle.
       $mapped_type = $component_type;
       if (isset($component_type_mapping[$component_type])) {
         $mapped_type = $component_type_mapping[$component_type];
@@ -435,7 +431,6 @@ class ValidationService {
   /**
    * Performs a full validation of AI-generated components.
    *
-   * (Previously drupalx_ai_perform_full_validation in validation.inc)
    * This is the main public method to be called by other services.
    */
   public function performFullValidation(array $ai_components_to_validate): array {

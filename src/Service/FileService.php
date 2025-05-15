@@ -6,7 +6,6 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\Logger\LoggerChannelInterface;
 use Drupal\Core\File\FileSystemInterface;
-use Drupal\file\Entity\File;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 
@@ -90,7 +89,8 @@ class FileService {
     if (empty($filename)) {
       return 'unnamed_file';
     }
-    // Ensure filename is not too long (e.g. less than 200 chars after sanitization).
+    // Ensure filename is not too long (e.g. less than 200 chars after
+    // sanitization).
     $filename = mb_substr(mb_strtolower($filename), 0, 200);
     // Remove trailing period if any.
     $filename = rtrim($filename, '.');
@@ -112,7 +112,8 @@ class FileService {
    */
   public function createPlaceholderFile(int $owner_id): ?int {
     // In a production environment, this would create an actual file.
-    // For the prototype, we'll log the intent and return file ID 1 as a placeholder.
+    // For the prototype, we'll log the intent and return file ID 1 as a
+    // placeholder.
     $this->logger->notice('Would create a placeholder file with owner ID: @owner_id', [
       '@owner_id' => $owner_id,
     ]);

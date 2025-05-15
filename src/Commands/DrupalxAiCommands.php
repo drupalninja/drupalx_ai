@@ -7,6 +7,7 @@ use Drupal\Core\Session\AccountInterface;
 use Drupal\drupalx_ai\Service\AIService;
 use Drupal\drupalx_ai\Service\EntitySaveService;
 use Drupal\drupalx_ai\Service\OutputFormatterService;
+use Drupal\drupalx_ai\Service\ParagraphService;
 use Drupal\node\Entity\Node;
 use Drush\Commands\DrushCommands;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
@@ -33,6 +34,13 @@ class DrupalxAiCommands extends DrushCommands {
    * @var \Drupal\drupalx_ai\Service\EntitySaveService
    */
   protected EntitySaveService $entitySaveService;
+
+  /**
+   * The paragraph service.
+   *
+   * @var \Drupal\drupalx_ai\Service\ParagraphService
+   */
+  protected ParagraphService $paragraphService;
 
   /**
    * The entity type manager.
@@ -75,6 +83,10 @@ class DrupalxAiCommands extends DrushCommands {
    *   The current user.
    * @param \Drupal\Core\Logger\LoggerChannelFactoryInterface $logger_factory
    *   The logger factory.
+   * @param \Drupal\drupalx_ai\Service\OutputFormatterService $output_formatter
+   *   The output formatter service.
+   * @param \Drupal\drupalx_ai\Service\ParagraphService $paragraph_service
+   *   The paragraph service.
    */
   public function __construct(
     AIService $ai_service,
@@ -82,7 +94,8 @@ class DrupalxAiCommands extends DrushCommands {
     EntityTypeManagerInterface $entity_type_manager,
     AccountProxyInterface $current_user,
     LoggerChannelFactoryInterface $logger_factory,
-    OutputFormatterService $output_formatter
+    OutputFormatterService $output_formatter,
+    ParagraphService $paragraph_service
   ) {
     parent::__construct();
     $this->aiService = $ai_service;
@@ -91,6 +104,7 @@ class DrupalxAiCommands extends DrushCommands {
     $this->currentUser = $current_user;
     $this->drupalxAiLogger = $logger_factory->get('drupalx_ai');
     $this->outputFormatter = $output_formatter;
+    $this->paragraphService = $paragraph_service;
   }
 
   /**
@@ -100,6 +114,10 @@ class DrupalxAiCommands extends DrushCommands {
    * @aliases dxp
    * @param string $description
    *   The description of the page to generate.
+   * @param array $options
+   *   An associative array of options.
+   *   - uid: The user ID to assign as the author of the page. Defaults to the current Drush user or user 1.
+   *
    * @option uid The user ID to assign as the author of the page. Defaults to the current Drush user or user 1.
    * @usage drupalx_ai:generate-page "Create a page about sustainable energy solutions for urban environments."
    * @usage dxp "A promotional page for a new tech startup focused on AI-driven analytics." --uid=1
@@ -152,7 +170,7 @@ Suggested title was: <fg=green>"{@title}"</>.
     }
 
     // Preprocess components to detect common structural issues.
-    $components = $this->preprocessAIGeneratedComponents($components);
+    $components = $this->preprocessAiGeneratedComponents($components);
 
     // Output a summary of components instead of verbose logs.
     $component_types = [];
@@ -219,7 +237,7 @@ Suggested title was: <fg=green>"{@title}"</>.
       // Show a nice colorful progress bar.
       $this->formatProgressBar(count($components));
 
-      $result = $this->entitySaveService->saveEntitiesToNode($node->id(), $components, TRUE);
+      $result = $this->paragraphService->saveEntitiesToNode($node->id(), $components, TRUE);
 
       if (isset($result['error'])) {
         $this->logger()->error(
@@ -295,13 +313,13 @@ Suggested title was: <fg=green>"{@title}"</>.
    * @return array
    *   The preprocessed components data.
    */
-  protected function preprocessAIGeneratedComponents(array $components): array {
-    // Log original components for debugging
-    $this->drupalxAiLogger->notice('DrushCommand: Starting preprocessAIGeneratedComponents with @count components', [
+  protected function preprocessAiGeneratedComponents(array $components): array {
+    // Log original components for debugging.
+    $this->drupalxAiLogger->notice('DrushCommand: Starting preprocessAiGeneratedComponents with @count components', [
       '@count' => count($components),
     ]);
 
-    // Delegate preprocessing to EntitySaveService for consistency
+    // Delegate preprocessing to EntitySaveService for consistency.
     $preprocessed = $this->entitySaveService->preprocessComponents($components, TRUE);
 
     return $preprocessed;
@@ -399,7 +417,7 @@ Suggested title was: <fg=green>"{@title}"</>.
     $this->output()->writeln('');
     $this->output()->writeln('<fg=blue;options=bold>⏳ Creating components...</>');
 
-    // Simple progress bar
+    // Simple progress bar.
     $barWidth = 50;
     $colors = ['red', 'yellow', 'green', 'cyan', 'blue', 'magenta'];
 
@@ -408,19 +426,20 @@ Suggested title was: <fg=green>"{@title}"</>.
       $colorIndex = $i % count($colors);
       $color = $colors[$colorIndex];
 
-      // Create the progress bar
+      // Create the progress bar.
       $progress = str_repeat('=', $i);
       $remaining = str_repeat(' ', $barWidth - $i);
 
-      // Add some dynamic icons based on progress
+      // Add some dynamic icons based on progress.
       $icons = ['📌', '🏢', '🏔️', '🃏', '💬', '✨'];
       $icon = $icons[$i % count($icons)];
 
-      // Display the progress bar with color
+      // Display the progress bar with color.
       $this->output()->write("\r<fg=$color>$icon [$progress>$remaining] $percent%</>");
 
-      // Simulate the process for the progress bar
-      usleep(20000); // 20ms delay
+      // Simulate the process for the progress bar.
+      // 20ms delay.
+      usleep(20000);
     }
 
     $this->output()->writeln('');
