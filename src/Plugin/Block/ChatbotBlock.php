@@ -7,6 +7,7 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Drupal\Core\Routing\UrlGeneratorInterface;
+use Drupal\drupalx_ai\Service\AIService;
 
 /**
  * Provides a 'ChatbotBlock' block.
@@ -26,11 +27,19 @@ class ChatbotBlock extends BlockBase implements ContainerFactoryPluginInterface 
   protected $urlGenerator;
 
   /**
+   * The AI service.
+   *
+   * @var \Drupal\drupalx_ai\Service\AIService
+   */
+  protected AIService $aiService;
+
+  /**
    * {@inheritdoc}
    */
-  public function __construct(array $configuration, $plugin_id, $plugin_definition, UrlGeneratorInterface $url_generator) {
+  public function __construct(array $configuration, $plugin_id, $plugin_definition, UrlGeneratorInterface $url_generator, AIService $ai_service) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
     $this->urlGenerator = $url_generator;
+    $this->aiService = $ai_service;
   }
 
   /**
@@ -41,7 +50,8 @@ class ChatbotBlock extends BlockBase implements ContainerFactoryPluginInterface 
       $configuration,
       $plugin_id,
       $plugin_definition,
-      $container->get('url_generator')
+      $container->get('url_generator'),
+      $container->get('drupalx_ai.ai_service')
     );
   }
 
