@@ -152,7 +152,8 @@ class MediaService {
         return NULL;
       }
 
-      // Create a placeholder file (in a real implementation, we would use a default placeholder file).
+      // Create a placeholder file (in a real implementation, we would use a
+      // default placeholder file).
       // For now, we'll use file ID 1 as a placeholder.
       $file_id = 1;
 

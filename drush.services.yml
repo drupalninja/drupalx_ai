@@ -3,11 +3,9 @@ services:
     class: \Drupal\drupalx_ai\Commands\DrupalxAiCommands
     arguments:
       - '@drupalx_ai.ai_service'
-      - '@drupalx_ai.entity_save_service'
       - '@entity_type.manager'
       - '@current_user'
       - '@logger.factory'
-      - '@drupalx_ai.output_formatter_service'
       - '@drupalx_ai.paragraph_service'
     tags:
       - { name: drush.command }

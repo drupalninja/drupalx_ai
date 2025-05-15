@@ -11,7 +11,6 @@ use GuzzleHttp\Client as GuzzleClient;
 use OpenAI\Factory;
 use OpenAI\Client as OpenAIClient;
 use Drupal\drupalx_ai\Service\ValidationService;
-use Drupal\drupalx_ai\Service\EntitySaveService;
 use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Drupal\Component\Serialization\Json;
 
@@ -80,13 +79,6 @@ class AIService {
   protected EntityTypeBundleInfoInterface $entityTypeBundleInfo;
 
   /**
-   * The entity save service.
-   *
-   * @var \Drupal\drupalx_ai\Service\EntitySaveService
-   */
-  protected EntitySaveService $entitySaveService;
-
-  /**
    * Constructs a new AIService object.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
@@ -101,8 +93,6 @@ class AIService {
    *   The DrupalX AI Validation service.
    * @param \Drupal\Core\Entity\EntityTypeBundleInfoInterface $entity_type_bundle_info
    *   The entity type bundle info service.
-   * @param \Drupal\drupalx_ai\Service\EntitySaveService $entity_save_service
-   *   The entity save service.
    */
   public function __construct(
     ConfigFactoryInterface $config_factory,
@@ -110,8 +100,7 @@ class AIService {
     FileSystemInterface $file_system,
     LoggerChannelFactoryInterface $logger_factory,
     ValidationService $validation_service,
-    EntityTypeBundleInfoInterface $entity_type_bundle_info,
-    EntitySaveService $entity_save_service
+    EntityTypeBundleInfoInterface $entity_type_bundle_info
   ) {
     $this->configFactory = $config_factory;
     $this->keyRepository = $key_repository;
@@ -119,7 +108,6 @@ class AIService {
     $this->logger = $logger_factory->get('drupalx_ai');
     $this->validationService = $validation_service;
     $this->entityTypeBundleInfo = $entity_type_bundle_info;
-    $this->entitySaveService = $entity_save_service;
   }
 
   /**
@@ -137,16 +125,13 @@ class AIService {
     $api_key_id = $config->get('api_key_id');
 
     if (empty($api_key_id)) {
-      $this->logger->error('OpenAI API Key ID is not configured in DrupalX AI settings.');
+      $this->logger->error('OpenAI API Key ID not configured.');
       return FALSE;
     }
 
     $key_entity = $this->keyRepository->getKey($api_key_id);
     if (!$key_entity || !$key_entity->getKeyValue()) {
-      $this->logger->error(
-        'Failed to load the OpenAI API Key from key module using ID: @key_id',
-        ['@key_id' => $api_key_id]
-      );
+      $this->logger->error('Failed to load OpenAI API Key: @key_id', ['@key_id' => $api_key_id]);
       return FALSE;
     }
     $this->apiKey = $key_entity->getKeyValue();
@@ -160,10 +145,6 @@ class AIService {
         $base_uri_to_use = substr($configured_url, 0, -strlen($chat_completions_suffix));
         if (empty($base_uri_to_use)) {
           $base_uri_to_use = $configured_url;
-          $this->logger->warning(
-            'Configured API endpoint was just the suffix "@suffix". Using it as is, which might be incorrect.',
-            ['@suffix' => $chat_completions_suffix]
-          );
         }
       }
 
@@ -176,28 +157,12 @@ class AIService {
 
       if (!empty($base_uri_to_use) && $base_uri_to_use !== 'https://api.openai.com/v1') {
         $factory = $factory->withBaseUri($base_uri_to_use);
-        $this->logger->info(
-          'Using API base URI: @uri (derived from configured: @configured)',
-          [
-            '@uri' => $base_uri_to_use,
-            '@configured' => $configured_url,
-          ]
-        );
-      }
-      elseif ($configured_url !== 'https://api.openai.com/v1') {
-        $this->logger->info(
-          'Configured API endpoint "@configured" results in using the default OpenAI base URI.',
-          ['@configured' => $configured_url]
-        );
       }
 
       $this->client = $factory->make();
     }
     catch (\Exception $e) {
-      $this->logger->error(
-        'Failed to initialize OpenAI client: @message',
-        ['@message' => $e->getMessage()]
-      );
+      $this->logger->error('Failed to initialize OpenAI client: @message', ['@message' => $e->getMessage()]);
       return FALSE;
     }
     return TRUE;
@@ -256,7 +221,13 @@ class AIService {
     }
 
     // Case 2: Components are wrapped in a key (e.g., "components": [...]).
-    $wrapper_keys = ['components', 'selected_components', 'result', 'data', 'items'];
+    $wrapper_keys = [
+      'components',
+      'selected_components',
+      'result',
+      'data',
+      'items',
+    ];
     foreach ($wrapper_keys as $key) {
       if (isset($data[$key]) && is_array($data[$key])) {
         $potential_components = $data[$key];
@@ -285,8 +256,6 @@ class AIService {
    *   On error, 'error' key will be set.
    */
   public function getComponents(string $user_description): array {
-    $this->logger->notice('AI Content request: @desc', ['@desc' => substr($user_description, 0, 100)]);
-
     $default_return_on_error = [
       'title' => 'Generated Page (Error)',
       'components' => [],
@@ -310,7 +279,12 @@ class AIService {
     // Load sample components using the ValidationService.
     $samples_result = $this->validationService->loadSampleComponents();
     if ($samples_result['status'] !== 'success') {
-      $this->logger->error($samples_result['message']);
+      $this->logger->error(
+        'Sample components file not loaded: @message',
+        [
+          '@message' => $samples_result['message'],
+        ]
+      );
       $default_return_on_error['error'] = 'Sample components file not loaded.';
       $default_return_on_error['validation_data']['message'] = $samples_result['message'];
       return $default_return_on_error;
@@ -319,7 +293,12 @@ class AIService {
     // Validate sample components against paragraph bundles.
     $validation_result = $this->validationService->validateAgainstParagraphBundles($samples_result['data']);
     if ($validation_result['status'] !== 'success') {
-      $this->logger->error($validation_result['message']);
+      $this->logger->error(
+        'No valid sample components: @message',
+        [
+          '@message' => $validation_result['message'],
+        ]
+      );
       $default_return_on_error['error'] = 'No valid sample components to guide the AI.';
       $default_return_on_error['validation_data']['message'] = $validation_result['message'];
       return $default_return_on_error;
@@ -361,17 +340,21 @@ EOT;
         'model' => $model_name,
         'messages' => [
           ['role' => 'system', 'content' => $system_prompt],
-          ['role' => 'user', 'content' => "User's page goal: \"{$user_description}\""],
+          [
+            'role' => 'user',
+            'content' => "User's page goal: \"" . $user_description . "\"",
+          ],
         ],
         'temperature' => 0.5,
-        // Slightly lower for more deterministic component selection.
         'max_tokens' => 4000,
       ]);
 
       if (empty($response->choices[0]->message->content)) {
         $this->logger->error(
-          'AI response is missing or has empty content. Full response: @response',
-          ['@response' => Json::encode($response->toArray())]
+          'AI response empty. Response: @response',
+          [
+            '@response' => Json::encode($response->toArray()),
+          ]
         );
         return [
           'error' => 'AI response was empty.',
@@ -394,12 +377,6 @@ EOT;
         // Remove the title line from ai_content before JSON extraction.
         $ai_content = preg_replace('/PAGE_TITLE:.*(\\r\\n|\\r|\\n)/i', '', $ai_content, 1);
       }
-      else {
-        $this->logger->warning(
-          'PAGE_TITLE not found in AI response. Using default. Raw response prefix: @prefix',
-          ['@prefix' => substr($ai_content, 0, 100)]
-        );
-      }
 
       $json_string_from_ai = $this->extractJsonFromString(trim($ai_content));
 
@@ -408,33 +385,31 @@ EOT;
 
         if (json_last_error() !== JSON_ERROR_NONE) {
           $this->logger->error(
-            'Failed to decode JSON from AI response: @error. JSON string: @json',
+            'Failed to decode JSON from AI: @error. JSON: @json',
             [
               '@error' => json_last_error_msg(),
               '@json' => $json_string_from_ai,
             ]
           );
           return [
-            'error' => 'Failed to decode JSON from AI: ' . Json::lastErrorMsg(),
+            'error' => 'Failed to decode JSON from AI: ' . json_last_error_msg(),
             'title' => $page_title,
             'components' => [],
             'validation_data' => [
               'status' => 'error',
-              'message' => 'Failed to decode JSON from AI: ' . Json::lastErrorMsg(),
+              'message' => 'Failed to decode JSON from AI: ' . json_last_error_msg(),
             ],
             'raw_response' => $ai_content,
           ];
         }
         $extracted_ai_components = $this->normalizeAiJsonResponse($decoded_json);
-        $this->logger->info(
-          'AI Response (normalized components): @json',
-          ['@json' => Json::encode($extracted_ai_components)]
-        );
       }
       else {
         $this->logger->error(
-          "No JSON found in AI response after title extraction. Raw content: @content",
-          ['@content' => $ai_content]
+          "No JSON in AI response. Raw: @content",
+          [
+            '@content' => $ai_content,
+          ]
         );
         return [
           'error' => 'No JSON data found in AI response.',
@@ -469,16 +444,13 @@ EOT;
       ];
     }
 
-    // Process components through our preprocessor to fix any issues
-    $extracted_ai_components = $this->preprocessComponents($extracted_ai_components);
-
     // Perform validation using the injected ValidationService.
     $validation_data = $this->validationService->performFullValidation($extracted_ai_components);
 
     // Log validation results.
     if (($validation_data['status'] ?? 'error') !== 'success') {
       $this->logger->error(
-        "Validation Service indicated issues: Status - @status. Message - @message. Details - @details",
+        "Validation Service issues: Status - @status. Message - @message. Details - @details",
         [
           '@status' => $validation_data['status'] ?? 'unknown',
           '@message' => $validation_data['message'] ?? 'N/A',
@@ -486,42 +458,12 @@ EOT;
         ]
       );
     }
-    elseif (!empty($validation_data['results']['errors']) || !empty($validation_data['results']['warnings'])) {
-      $this->logger->warning(
-        "Validation Service: Errors - @errors, Warnings - @warnings",
-        [
-          '@errors' => Json::encode($validation_data['results']['errors'] ?? []),
-          '@warnings' => Json::encode($validation_data['results']['warnings'] ?? []),
-        ]
-      );
-    }
-    else {
-      $this->logger->info(
-        "AI Components Validation by Service completed successfully. Status: @status",
-        ['@status' => $validation_data['status']]
-      );
-    }
-
     return [
       'title' => $page_title,
       'components' => $extracted_ai_components,
       'validation_data' => $validation_data,
+      'raw_response' => $ai_content,
     ];
-  }
-
-  /**
-   * Preprocesses components to handle common issues before passing to EntityService.
-   *
-   * Delegates to EntitySaveService.preprocessComponents for unified handling.
-   *
-   * @param array $components
-   *   The components array from the AI response.
-   *
-   * @return array
-   *   The preprocessed components.
-   */
-  protected function preprocessComponents(array $components): array {
-    return $this->entitySaveService->preprocessComponents($components);
   }
 
 }
