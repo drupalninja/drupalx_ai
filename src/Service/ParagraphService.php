@@ -288,15 +288,16 @@ class ParagraphService {
     $paragraph_type = $paragraph->bundle();
     $field_definitions = $this->entityFieldManager->getFieldDefinitions('paragraph', $paragraph_type);
 
-    // Fields managed by createChildEntities() and its sub-methods.
-    $child_entity_fields_map = [
-      'card_group' => ['field_card'],
-      // Assuming field_feature_items is the field for features on feature_list.
-      'feature_list' => ['field_feature_items'],
-      // Assuming field_accordion_items is the field for accordion items on accordion.
-      'accordion' => ['field_accordion_items'],
-      // Add other parent_paragraph_type => [child_field_names] here.
-    ];
+    $child_processing_config = $this->getChildProcessingConfiguration();
+    $child_entity_fields_map = [];
+    if (isset($child_processing_config[$paragraph_type])) {
+      foreach ($child_processing_config[$paragraph_type] as $config) {
+        // $config[0] is the drupal_target_field_name.
+        if (!in_array($config[0], $child_entity_fields_map[$paragraph_type] ?? [], TRUE)) {
+          $child_entity_fields_map[$paragraph_type][] = $config[0];
+        }
+      }
+    }
 
     foreach ($component_data as $key => $value) {
       if ($key === 'type') {
@@ -440,26 +441,7 @@ class ParagraphService {
   protected function createChildEntities(Paragraph $paragraph, array $component_data, int $owner_id): void {
     $paragraph_type = $paragraph->bundle();
 
-    // Defines how to process child entities for different parent paragraph types.
-    // Format: 'parent_bundle' => [
-    //  'ai_data_key' => ['drupal_field_name', 'expected_child_bundle_type'],
-    //  // ... other potential AI keys for the same field ... .
-    // ].
-    $child_processing_map = [
-      'card_group' => [
-        'field_card' => ['field_card', 'card'],
-        // Fallback AI keys for card_group children.
-        'cards' => ['field_card', 'card'],
-        'card' => ['field_card', 'card'],
-      ],
-      'feature_list' => [
-        'features' => ['field_feature_items', 'feature_item'],
-      ],
-      'accordion' => [
-        'items' => ['field_accordion_items', 'accordion_item'],
-      ],
-      // Add other parent paragraph types and their child configurations here.
-    ];
+    $child_processing_map = $this->getChildProcessingConfiguration();
 
     if (isset($child_processing_map[$paragraph_type])) {
       $current_type_map = $child_processing_map[$paragraph_type];
@@ -616,6 +598,37 @@ class ParagraphService {
     }
 
     return $snake_case_key;
+  }
+
+  /**
+   * Returns the configuration map for processing child entities.
+   *
+   * This map defines, for each parent paragraph type, which AI data keys
+   * correspond to child lists, their target Drupal fields, and expected child bundles.
+   *
+   * @return array
+   *   The child processing configuration map.
+   *   Format: 'parent_bundle' => [
+   *     'ai_data_key' => ['drupal_field_name', 'expected_child_bundle_type'],
+   *     // ... other potential AI keys for the same Drupal field ...
+   *   ]
+   */
+  protected function getChildProcessingConfiguration(): array {
+    return [
+      'card_group' => [
+        'field_card' => ['field_card', 'card'],
+        // Fallback AI keys for card_group children.
+        'cards' => ['field_card', 'card'],
+        'card' => ['field_card', 'card'],
+      ],
+      'feature_list' => [
+        'features' => ['field_feature_items', 'feature_item'],
+      ],
+      'accordion' => [
+        'items' => ['field_accordion_items', 'accordion_item'],
+      ],
+      // Add other parent paragraph types and their child configurations here.
+    ];
   }
 
 }
