@@ -189,26 +189,28 @@ class ParagraphService {
     }
 
     // Map the AI-generated component type to a paragraph bundle.
+    // Include both camelCase and snake_case versions for compatibility.
     $type_mapping = [
+      // Snake case keys
       'hero' => 'hero',
       'cta' => 'cta',
-      'textBlock' => 'text_block',
+      'text_block' => 'text_block',
       'quote' => 'quote',
-      'imageBlock' => 'image_block',
-      'videoBlock' => 'video_block',
-      'cardGroup' => 'card_group',
+      'image_block' => 'image_block',
+      'video_block' => 'video_block',
+      'card_group' => 'card_group',
       'features' => 'features',
       'gallery' => 'gallery',
-      'richText' => 'rich_text',
+      'rich_text' => 'rich_text',
       'testimonial' => 'testimonial',
       'banner' => 'banner',
       'faq' => 'faq',
       'accordion' => 'accordion',
       'stats' => 'stats',
-      'contentWithImage' => 'content_with_image',
-      'formBlock' => 'form_block',
+      'content_with_image' => 'content_with_image',
+      'form_block' => 'form_block',
       'map' => 'map',
-      'socialLinks' => 'social_links',
+      'social_links' => 'social_links',
       'slider' => 'slider',
       'team' => 'team',
       'timeline' => 'timeline',
@@ -220,17 +222,32 @@ class ParagraphService {
       'menu' => 'menu',
       'section' => 'section',
       'logo' => 'logo',
+      'logo_collection' => 'logo_collection',
+      'newsletter' => 'newsletter',
+      
+      // Camel case keys (for backward compatibility)
+      'textBlock' => 'text_block',
+      'imageBlock' => 'image_block',
+      'videoBlock' => 'video_block',
+      'cardGroup' => 'card_group',
+      'richText' => 'rich_text',
+      'contentWithImage' => 'content_with_image',
+      'formBlock' => 'form_block',
+      'socialLinks' => 'social_links',
+      'logoCollection' => 'logo_collection',
     ];
 
     $component_type = $component_data['type'];
-    $paragraph_bundle = $type_mapping[$component_type] ?? 'text_block';
 
-    // If the component type is not recognized, use a default and log a warning.
+    // If the component type is not recognized, log a warning and skip it.
     if (!isset($type_mapping[$component_type])) {
-      $this->logger->warning('Unrecognized component type: @type. Using text_block as default.', [
+      $this->logger->warning('Unrecognized component type: @type. Skipping this component.', [
         '@type' => $component_type,
       ]);
+      return NULL;
     }
+
+    $paragraph_bundle = $type_mapping[$component_type];
 
     // Check if the paragraph bundle exists.
     $paragraph_bundles = $this->entityTypeBundleInfo->getBundleInfo('paragraph');
