@@ -105,10 +105,6 @@ class MediaService {
    *   The media ID or NULL on failure.
    */
   public function ensureMediaEntityExists($media_data, int $owner_id, ?string $default_bundle = 'image'): ?int {
-    $this->logger->notice('Media data received for ensureMediaEntityExists: @data', [
-      '@data' => json_encode($media_data),
-    ]);
-
     $media_url = NULL;
     $alt_text = 'AI-generated media';
     $bundle = $default_bundle;
@@ -123,7 +119,6 @@ class MediaService {
     }
 
     if (empty($media_url)) {
-      $this->logger->notice('No media URL provided, creating placeholder media.');
       return $this->createPlaceholderMediaItem($bundle, $alt_text, $owner_id);
     }
 
@@ -162,13 +157,6 @@ class MediaService {
 
       // Use field_image as the source field for image media.
       $source_field = 'field_image';
-
-      // Log media creation for debugging.
-      $this->logger->notice('Creating @bundle media with source field @field and alt text: @alt', [
-        '@bundle' => $bundle,
-        '@field' => $source_field,
-        '@alt' => $alt_text,
-      ]);
 
       // Create the media entity.
       $media = Media::create([

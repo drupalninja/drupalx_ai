@@ -230,21 +230,19 @@ class ParagraphService {
     $normalized_type = strtolower(str_replace(' ', '_', $paragraph_type));
     $normalized_type = preg_replace('/[^a-z0-9_]/', '', $normalized_type);
 
-    if ($normalized_type === 'card') {
-      $this->logger->error('Attempted to create a standalone card paragraph.');
-      return NULL;
-    }
-
-    $child_only_types = [
-      'card', 'accordion_item', 'carousel_item', 'bullet', 'feature_item', 'pricing_card',
-    ];
-    if (in_array($normalized_type, $child_only_types, TRUE)) {
-      return NULL;
-    }
+    // The type is validated against existing paragraph bundles later.
+    // The decision of whether a type can be top-level is handled by saveEntitiesToNode.
+    // The decision of whether a type is a child is handled by the calling function
+    // (e.g., createCardGroupItems setting setInternalBypassMainCollection).
 
     $component_data['type'] = $normalized_type;
 
+    // Ensure field_card is initialized for card_group if it's about to be created.
+    // This is more of a data consistency check for this specific type before field setting.
     if ($normalized_type === 'card_group' && (!isset($component_data['field_card']) || !is_array($component_data['field_card']))) {
+      $this->logger->notice('Initializing empty field_card for card_group during creation. Data: @data', [
+        '@data' => json_encode($component_data),
+      ]);
       $component_data['field_card'] = [];
     }
 
@@ -266,6 +264,16 @@ class ParagraphService {
 
       $this->setParagraphFields($paragraph, $component_data, $owner_id);
       $this->createChildEntities($paragraph, $component_data, $owner_id);
+
+      // Log before saving parent paragraph.
+      if ($paragraph->bundle() === 'card_group') {
+        $this->logger->notice('Before saving card_group paragraph: ID @id, Bundle @bundle, Data: @data, Field Card Value: @field_card', [
+          '@id' => $paragraph->id(), // Will be null if new.
+          '@bundle' => $paragraph->bundle(),
+          '@data' => json_encode($paragraph->toArray()),
+          '@field_card' => json_encode($paragraph->get('field_card')->getValue()),
+        ]);
+      }
 
       $paragraph->save();
       $paragraph_id = $paragraph->id();
@@ -299,12 +307,27 @@ class ParagraphService {
     $paragraph_type = $paragraph->bundle();
     $field_definitions = $this->entityFieldManager->getFieldDefinitions('paragraph', $paragraph_type);
 
+    // Fields managed by createChildEntities() and its sub-methods.
+    $child_entity_fields_map = [
+      'card_group' => ['field_card'],
+      // Assuming field_feature_items is the field for features on feature_list.
+      'feature_list' => ['field_feature_items'],
+      // Assuming field_accordion_items is the field for accordion items on accordion.
+      'accordion' => ['field_accordion_items'],
+      // Add other parent_paragraph_type => [child_field_names] here.
+    ];
+
     foreach ($component_data as $key => $value) {
       if ($key === 'type') {
         continue;
       }
 
       $field_name = $this->normalizeFieldName($key);
+
+      // Skip if this field is handled by createChildEntities for the current paragraph type.
+      if (isset($child_entity_fields_map[$paragraph_type]) && in_array($field_name, $child_entity_fields_map[$paragraph_type], TRUE)) {
+        continue;
+      }
 
       if (!$paragraph->hasField($field_name)) {
         continue;
@@ -379,6 +402,7 @@ class ParagraphService {
               }
             }
             elseif ($target_type === 'paragraph' && is_array($value)) {
+              // This generic handling is for paragraph fields NOT managed by createChildEntities.
               $child_paragraph_ids = [];
               foreach ($value as $child_component_data) {
                 if (!is_array($child_component_data)) {
@@ -437,12 +461,21 @@ class ParagraphService {
 
     switch ($paragraph_type) {
       case 'card_group':
-        // 'cards' is the expected key for an array of card data.
-        if (isset($component_data['cards']) && is_array($component_data['cards'])) {
+        // The AI component data for a card_group should have the cards under 'field_card'.
+        if (isset($component_data['field_card']) && is_array($component_data['field_card'])) {
+          $this->createCardGroupItems($paragraph, $component_data['field_card'], $owner_id);
+        }
+        // Fallback for older/alternative AI structures if it uses 'cards' or 'card'.
+        elseif (isset($component_data['cards']) && is_array($component_data['cards'])) {
+          $this->logger->notice('Card group data found under "cards" key instead of "field_card". Proceeding with "cards". Data: @data', [
+            '@data' => json_encode($component_data),
+          ]);
           $this->createCardGroupItems($paragraph, $component_data['cards'], $owner_id);
         }
-        // AI might mistakenly use 'card' (singular) for the array.
         elseif (isset($component_data['card']) && is_array($component_data['card'])) {
+          $this->logger->notice('Card group data found under "card" key instead of "field_card". Proceeding with "card". Data: @data', [
+            '@data' => json_encode($component_data),
+          ]);
           $this->createCardGroupItems($paragraph, $component_data['card'], $owner_id);
         }
         break;
@@ -487,7 +520,7 @@ class ParagraphService {
       return;
     }
 
-    $card_paragraph_ids = [];
+    $card_paragraph_references = [];
     foreach ($cards_data as $card_data) {
       if (!is_array($card_data)) {
         continue;
@@ -503,18 +536,24 @@ class ParagraphService {
       $card_paragraph_id = $this->createNestedParagraph($card_data, $owner_id);
 
       if ($card_paragraph_id) {
-        $card_paragraph_ids[] = $card_paragraph_id;
-        // Load the just-created card paragraph to set the internal flag.
         $card_p = Paragraph::load($card_paragraph_id);
         if ($card_p) {
-          // This flag prevents the card from being added to the node's top-level field_content.
           $card_p->setInternalBypassMainCollection = TRUE;
+          // $card_p->save(); // Child card is already saved in createNestedParagraph.
+          $card_paragraph_references[] = [
+            'target_id' => $card_p->id(),
+            'target_revision_id' => $card_p->getRevisionId(),
+          ];
         }
       }
     }
 
-    if (!empty($card_paragraph_ids)) {
-      $parent_paragraph->set('field_card', $card_paragraph_ids);
+    if (!empty($card_paragraph_references)) {
+      $this->logger->notice('Setting field_card on parent card_group (@parent_id) with child card references: @child_refs', [
+        '@parent_id' => $parent_paragraph->id(), // Might be null if parent not saved yet.
+        '@child_refs' => json_encode($card_paragraph_references),
+      ]);
+      $parent_paragraph->set('field_card', $card_paragraph_references);
     }
   }
 
