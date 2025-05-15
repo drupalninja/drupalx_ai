@@ -196,18 +196,6 @@ class ParagraphService {
           continue;
         }
 
-        if (strpos(strtolower($bundle_type), 'card') !== FALSE && $bundle_type !== 'card_group') {
-          $this->logger->error(
-            'Prevented attaching card-like paragraph @id (@type) to node @nid. This might be redundant if top-level types from samples are accurate.',
-            [
-              '@id' => $pid,
-              '@type' => $bundle_type,
-              '@nid' => $nid,
-            ]
-          );
-          continue;
-        }
-
         $paragraph_references[] = [
           'target_id' => $pid,
           'target_revision_id' => $paragraph->getRevisionId(),
@@ -436,7 +424,7 @@ class ParagraphService {
   }
 
   /**
-   * Creates child entities for complex paragraphs like card groups.
+   * Creates child entities for complex paragraphs.
    *
    * @param \Drupal\paragraphs\Entity\Paragraph $paragraph
    *   The parent paragraph entity.
