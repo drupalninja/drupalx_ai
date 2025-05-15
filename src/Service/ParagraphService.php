@@ -10,6 +10,7 @@ use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
+use Drupal\drupalx_ai\Service\ValidationService;
 
 /**
  * Service for handling paragraph entities in the DrupalX AI module.
@@ -67,6 +68,13 @@ class ParagraphService {
   protected TaxonomyService $taxonomyService;
 
   /**
+   * The validation service.
+   *
+   * @var \Drupal\drupalx_ai\Service\ValidationService
+   */
+  protected ValidationService $validationService;
+
+  /**
    * Constructs a new ParagraphService object.
    *
    * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
@@ -83,6 +91,8 @@ class ParagraphService {
    *   The media service.
    * @param \Drupal\drupalx_ai\Service\TaxonomyService $taxonomy_service
    *   The taxonomy service.
+   * @param \Drupal\drupalx_ai\Service\ValidationService $validation_service
+   *   The validation service.
    */
   public function __construct(
     EntityTypeManagerInterface $entity_type_manager,
@@ -91,7 +101,8 @@ class ParagraphService {
     EntityTypeBundleInfoInterface $entity_type_bundle_info,
     EntityFieldManagerInterface $entity_field_manager,
     MediaService $media_service,
-    TaxonomyService $taxonomy_service
+    TaxonomyService $taxonomy_service,
+    ValidationService $validation_service
   ) {
     $this->entityTypeManager = $entity_type_manager;
     $this->logger = $logger_factory->get('drupalx_ai');
@@ -100,6 +111,7 @@ class ParagraphService {
     $this->entityFieldManager = $entity_field_manager;
     $this->mediaService = $media_service;
     $this->taxonomyService = $taxonomy_service;
+    $this->validationService = $validation_service;
   }
 
   /**
@@ -147,7 +159,11 @@ class ParagraphService {
 
       $paragraph_references = [];
       $paragraph_storage = $this->entityTypeManager->getStorage('paragraph');
-      $filtered_count = 0;
+      $valid_top_level_types = $this->validationService->getTopLevelSampleTypes();
+      if (empty($valid_top_level_types)) {
+        $this->logger->warning('No valid top-level sample types found. Paragraph attachment to node might be overly restrictive or permissive.');
+        $valid_top_level_types = [];
+      }
 
       foreach ($paragraph_ids as $pid) {
         $paragraph = $paragraph_storage->load($pid);
@@ -156,25 +172,17 @@ class ParagraphService {
         }
 
         $bundle_type = $paragraph->bundle();
-        $child_only_types = [
-          'card',
-          'accordion_item',
-          'carousel_item',
-          'bullet',
-          'feature_item',
-          'pricing_card',
-        ];
 
         if (isset($paragraph->setInternalBypassMainCollection) && $paragraph->setInternalBypassMainCollection === TRUE) {
           continue;
         }
 
-        if (in_array($bundle_type, $child_only_types, TRUE)) {
-          $this->logger->error(
-            'Prevented attaching child-only paragraph @id (@type) to node @nid.',
+        if (!in_array($bundle_type, $valid_top_level_types, TRUE)) {
+          $this->logger->notice(
+            'Paragraph type @type (@id) is not a valid top-level type based on samples and was skipped for node attachment.',
             [
-              '@id' => $pid,
               '@type' => $bundle_type,
+              '@id' => $pid,
               '@nid' => $nid,
             ]
           );
@@ -183,7 +191,7 @@ class ParagraphService {
 
         if (strpos(strtolower($bundle_type), 'card') !== FALSE && $bundle_type !== 'card_group') {
           $this->logger->error(
-            'Prevented attaching card-like paragraph @id (@type) to node @nid.',
+            'Prevented attaching card-like paragraph @id (@type) to node @nid. This might be redundant if top-level types from samples are accurate.',
             [
               '@id' => $pid,
               '@type' => $bundle_type,
@@ -197,7 +205,6 @@ class ParagraphService {
           'target_id' => $pid,
           'target_revision_id' => $paragraph->getRevisionId(),
         ];
-        $filtered_count++;
       }
 
       $node->set('field_content', $paragraph_references);

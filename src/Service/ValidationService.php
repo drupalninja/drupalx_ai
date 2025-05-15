@@ -56,6 +56,31 @@ class ValidationService {
   }
 
   /**
+   * Gets the types of components that appear at the top level of sample-components.json.
+   *
+   * @return array
+   *   An array of unique top-level component types found in the samples.
+   *   Returns an empty array if samples cannot be loaded or are empty.
+   */
+  public function getTopLevelSampleTypes(): array {
+    $samples_result = $this->loadSampleComponents();
+
+    if ($samples_result['status'] !== 'success' || empty($samples_result['data'])) {
+      $this->logger->warning('Could not load sample components to determine top-level types.');
+      return [];
+    }
+
+    $top_level_types = [];
+    // $samples_result['data'] is expected to be an array of component definitions.
+    foreach ($samples_result['data'] as $component_definition) {
+      if (isset($component_definition['type']) && is_string($component_definition['type'])) {
+        $top_level_types[] = $component_definition['type'];
+      }
+    }
+    return array_unique($top_level_types);
+  }
+
+  /**
    * Validates generated components against sample components.
    */
   protected function validateComponents(array $components, array $sample_components_by_type): array {
