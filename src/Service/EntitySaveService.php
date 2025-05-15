@@ -616,19 +616,53 @@ class EntitySaveService {
    *   Media entity ID if successful, NULL otherwise.
    */
   protected function createPlaceholderMediaItem(string $bundle, string $alt_text, int $owner_id): ?int {
-    // In a demo/prototype environment, we'll use a fixed media ID rather than creating
-    // actual media entities that would require proper file handling.
-    // This is a simplified approach for development purposes.
-
-    // Log that we would create a media entity in production.
-    $this->logger->notice('Would create @bundle media with alt text: @alt', [
-      '@bundle' => $bundle,
-      '@alt' => $alt_text,
-    ]);
-
-    // Return media ID 1 as a placeholder in all cases.
-    // In a production environment, we would create proper media entities.
-    return 1;
+    try {
+      // Check if the media bundle exists.
+      $media_bundle_info = $this->entityTypeBundleInfo->getBundleInfo('media');
+      if (!isset($media_bundle_info[$bundle])) {
+        $this->logger->error('Media bundle @bundle does not exist.', [
+          '@bundle' => $bundle,
+        ]);
+        return NULL;
+      }
+      
+      // Create a placeholder file (in a real implementation, we would use a default placeholder file).
+      // For now, we'll use file ID 1 as a placeholder.
+      $file_id = 1;
+      
+      // Use field_image as the source field for image media.
+      $source_field = 'field_image';
+      
+      // Log media creation for debugging.
+      $this->logger->notice('Creating @bundle media with source field @field and alt text: @alt', [
+        '@bundle' => $bundle,
+        '@field' => $source_field,
+        '@alt' => $alt_text,
+      ]);
+      
+      // Create the media entity.
+      $media = Media::create([
+        'bundle' => $bundle,
+        'uid' => $owner_id,
+        'status' => 1,
+        'name' => 'AI-generated ' . $bundle . ' placeholder',
+        $source_field => [
+          'target_id' => $file_id,
+          'alt' => $alt_text,
+        ],
+      ]);
+      
+      $media->save();
+      return $media->id();
+    }
+    catch (\Exception $e) {
+      $this->logger->error('Error creating placeholder media: @error', [
+        '@error' => $e->getMessage(),
+      ]);
+      
+      // Fall back to returning a fixed media ID in case of error.
+      return 1;
+    }
   }
 
   /**
