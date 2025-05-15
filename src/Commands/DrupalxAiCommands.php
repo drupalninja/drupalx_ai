@@ -6,6 +6,7 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\drupalx_ai\Service\AIService;
 use Drupal\drupalx_ai\Service\ParagraphService;
 use Drupal\node\Entity\Node;
+use Drupal\Core\Url;
 use Drush\Commands\DrushCommands;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\Session\AccountProxyInterface;
@@ -159,12 +160,22 @@ class DrupalxAiCommands extends DrushCommands {
           ]
         );
         $this->drupalxAiLogger->error(
-          'EntitySaveService failed for node @nid: @error',
+          'Error saving paragraphs to node @nid: @error',
           [
             '@nid' => $node->id(),
             '@error' => $result['error'],
           ]
         );
+      }
+      else {
+        $edit_url = Url::fromRoute('entity.node.edit_form', ['node' => $node->id()], ['absolute' => TRUE])->toString();
+        $this->output()->writeln(dt('Successfully created page "@title" (NID: @nid).', [
+          '@title' => $page_title,
+          '@nid' => $node->id(),
+        ]));
+        $this->output()->writeln(dt('Edit at: @url', [
+          '@url' => $edit_url,
+        ]));
       }
     }
     catch (\Exception $e) {

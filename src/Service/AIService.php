@@ -318,12 +318,13 @@ INSTRUCTIONS:
 1.  First, on a line by itself, suggest a clear and compelling title for this landing page. Format it exactly as: "PAGE_TITLE: Your Suggested Page Title Here".
 2.  Then, on subsequent lines, provide the JSON data for the recommended UI components. This JSON should be enclosed in a standard markdown code block (```json ... ```).
 3.  The JSON must be an array of component objects.
-4.  Each component object in your response MUST include a `type` field.
-5.  IMPORTANT: The value of the `type` field for each component MUST be one of the following allowed Drupal Paragraph bundle machine names: {$allowed_types_string}.
+4.  Aim to provide between 5 and 6 components in total to construct the page.
+5.  Each component object in your response MUST include a `type` field.
+6.  IMPORTANT: The value of the `type` field for each component MUST be one of the following allowed Drupal Paragraph bundle machine names: {$allowed_types_string}.
     Do not invent new `type` values. Only use types from this list.
-6.  Each component in your response must match the structure and fields shown in the example components provided below (respecting the `type`). Do not change other field names (keys).
-7.  For any fields representing images (e.g., fields with "image" or "media" in their name), the 'alt' text MUST be a brief, thematic, and descriptive phrase for the image. Avoid generic placeholders.
-8.  CRITICAL: Cards must only be included inside a 'card_group' component. Never provide a standalone 'card' component at the top level.
+7.  Each component in your response must match the structure and fields shown in the example components provided below (respecting the `type`). Do not change other field names (keys).
+8.  For any fields representing images (e.g., fields with "image" or "media" in their name), the 'alt' text MUST be a brief, thematic, and descriptive phrase for the image. Avoid generic placeholders.
+9.  CRITICAL: Cards must only be included inside a 'card_group' component. Never provide a standalone 'card' component at the top level.
 
 Here is the library of available Drupal UI components (use their `type` field and structure):
 ```json
@@ -370,6 +371,9 @@ EOT;
 
       $ai_content = $response->choices[0]->message->content;
 
+      // Log the raw AI content before attempting to extract JSON.
+      $this->logger->notice('Raw content from AI: @content', ['@content' => $ai_content]);
+
       // Extract Page Title.
       $title_match = [];
       if (preg_match('/PAGE_TITLE:(.*)/i', $ai_content, $title_match)) {
@@ -381,6 +385,7 @@ EOT;
       $json_string_from_ai = $this->extractJsonFromString(trim($ai_content));
 
       if ($json_string_from_ai) {
+        $this->logger->notice('Raw JSON string extracted from AI: @json', ['@json' => $json_string_from_ai]);
         $decoded_json = Json::decode($json_string_from_ai);
 
         if (json_last_error() !== JSON_ERROR_NONE) {

@@ -195,7 +195,7 @@ class ParagraphService {
 
         $paragraph_references[] = [
           'target_id' => $pid,
-          'target_revision_id' => $pid,
+          'target_revision_id' => $paragraph->getRevisionId(),
         ];
         $filtered_count++;
       }
@@ -244,26 +244,11 @@ class ParagraphService {
 
     $component_data['type'] = $normalized_type;
 
-    $allowed_top_level_types = [
-      'text_block', 'image_component', 'card_group', 'quote_block', 'feature_list',
-      'accordion', 'video_component', 'faq_group', 'cta_banner', 'testimonial_slider',
-    ];
-
-    if (!in_array($normalized_type, $allowed_top_level_types, TRUE)) {
-      return NULL;
-    }
-
     if ($normalized_type === 'card_group' && (!isset($component_data['field_card']) || !is_array($component_data['field_card']))) {
       $component_data['field_card'] = [];
     }
 
-    $type_mapping = [
-      'text_block' => 'text_block',
-      'image_component' => 'image_component',
-      'card_group' => 'card_group',
-    ];
-    // Fallback to normalized_type if not in mapping.
-    $paragraph_bundle = $type_mapping[$normalized_type] ?? $normalized_type;
+    $paragraph_bundle = $normalized_type;
 
     $paragraph_bundles = $this->entityTypeBundleInfo->getBundleInfo('paragraph');
     if (!isset($paragraph_bundles[$paragraph_bundle])) {
@@ -363,7 +348,26 @@ class ParagraphService {
           case 'entity_reference':
             $target_type = $field_definition->getSetting('target_type');
             if ($target_type === 'media' && !empty($value)) {
-              $media_ids = $this->mediaService->ensureMediaEntitiesExist($value, $owner_id, $paragraph_type, $field_name);
+              $media_ids = [];
+              // Check if $value is an array of arrays (list of media items)
+              // or a single media item array (or even just a URL string).
+              if (is_array($value) && isset($value[0]) && is_array($value[0])) {
+                // Multiple media items.
+                foreach ($value as $media_item_data) {
+                  $media_id = $this->mediaService->ensureMediaEntityExists($media_item_data, $owner_id, 'image');
+                  if ($media_id) {
+                    $media_ids[] = $media_id;
+                  }
+                }
+              }
+              elseif (!empty($value)) {
+                // Single media item (or URL string).
+                $media_id = $this->mediaService->ensureMediaEntityExists($value, $owner_id, 'image');
+                if ($media_id) {
+                  $media_ids[] = $media_id;
+                }
+              }
+
               if (!empty($media_ids)) {
                 $paragraph->set($field_name, $media_ids);
               }

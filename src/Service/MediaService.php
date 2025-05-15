@@ -92,39 +92,42 @@ class MediaService {
   }
 
   /**
-   * Creates or loads a media item.
+   * Creates or loads a single media item.
    *
-   * @param array $media_data
-   *   Array containing media information.
-   *   Expected keys:
-   *     'media_url' (string): The URL of the media.
-   *     'media_alt' (string): The alt text for the media.
-   *     'bundle' (string): The media bundle type.
+   * @param array|string $media_data
+   *   Array containing media information (e.g., url, alt, bundle) or a URL string.
    * @param int $owner_id
    *   The user ID to set as the owner of the media item.
+   * @param string|null $default_bundle
+   *   The default media bundle to use if not specified in $media_data.
    *
    * @return int|null
    *   The media ID or NULL on failure.
    */
-  public function createOrLoadMediaItem(array $media_data, int $owner_id): ?int {
-    // Log the request.
-    $this->logger->notice('Media data received: @data', [
+  public function ensureMediaEntityExists($media_data, int $owner_id, ?string $default_bundle = 'image'): ?int {
+    $this->logger->notice('Media data received for ensureMediaEntityExists: @data', [
       '@data' => json_encode($media_data),
     ]);
 
-    // Extract values from media data.
-    $media_url = $media_data['media_url'] ?? ($media_data['url'] ?? NULL);
-    $alt_text = $media_data['media_alt'] ?? ($media_data['alt'] ?? 'AI-generated media');
-    $bundle = $media_data['bundle'] ?? 'image';
+    $media_url = NULL;
+    $alt_text = 'AI-generated media';
+    $bundle = $default_bundle;
 
-    // If we don't have a URL, use a placeholder.
+    if (is_string($media_data)) {
+      $media_url = $media_data;
+    }
+    elseif (is_array($media_data)) {
+      $media_url = $media_data['media_url'] ?? ($media_data['url'] ?? NULL);
+      $alt_text = $media_data['media_alt'] ?? ($media_data['alt'] ?? $alt_text);
+      $bundle = $media_data['bundle'] ?? $bundle;
+    }
+
     if (empty($media_url)) {
-      $this->logger->notice('No media URL provided, using placeholder media.');
+      $this->logger->notice('No media URL provided, creating placeholder media.');
       return $this->createPlaceholderMediaItem($bundle, $alt_text, $owner_id);
     }
 
-    // In a prototype/demo environment, we'll use placeholder media instead of
-    // actually downloading and creating new media entities.
+    // For now, always create a placeholder. Future: implement actual download/check.
     return $this->createPlaceholderMediaItem($bundle, $alt_text, $owner_id);
   }
 
