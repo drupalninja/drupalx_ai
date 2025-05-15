@@ -219,7 +219,7 @@ class EntitySaveService {
    * @return array
    *   The preprocessed component data.
    */
-  protected function preprocessComponents(array $components_data, bool $detailed_logging = true): array {
+  public function preprocessComponents(array $components_data, bool $detailed_logging = true): array {
     // Debug the incoming components structure
     if ($detailed_logging) {
       $this->logger->notice('EntitySaveService: Preprocessing components: @data', [

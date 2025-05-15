@@ -11,6 +11,7 @@ use GuzzleHttp\Client as GuzzleClient;
 use OpenAI\Factory;
 use OpenAI\Client as OpenAIClient;
 use Drupal\drupalx_ai\Service\ValidationService;
+use Drupal\drupalx_ai\Service\EntitySaveService;
 use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Drupal\Component\Serialization\Json;
 
@@ -79,6 +80,13 @@ class AIService {
   protected EntityTypeBundleInfoInterface $entityTypeBundleInfo;
 
   /**
+   * The entity save service.
+   *
+   * @var \Drupal\drupalx_ai\Service\EntitySaveService
+   */
+  protected EntitySaveService $entitySaveService;
+
+  /**
    * Constructs a new AIService object.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
@@ -93,6 +101,8 @@ class AIService {
    *   The DrupalX AI Validation service.
    * @param \Drupal\Core\Entity\EntityTypeBundleInfoInterface $entity_type_bundle_info
    *   The entity type bundle info service.
+   * @param \Drupal\drupalx_ai\Service\EntitySaveService $entity_save_service
+   *   The entity save service.
    */
   public function __construct(
     ConfigFactoryInterface $config_factory,
@@ -100,7 +110,8 @@ class AIService {
     FileSystemInterface $file_system,
     LoggerChannelFactoryInterface $logger_factory,
     ValidationService $validation_service,
-    EntityTypeBundleInfoInterface $entity_type_bundle_info
+    EntityTypeBundleInfoInterface $entity_type_bundle_info,
+    EntitySaveService $entity_save_service
   ) {
     $this->configFactory = $config_factory;
     $this->keyRepository = $key_repository;
@@ -108,6 +119,7 @@ class AIService {
     $this->logger = $logger_factory->get('drupalx_ai');
     $this->validationService = $validation_service;
     $this->entityTypeBundleInfo = $entity_type_bundle_info;
+    $this->entitySaveService = $entity_save_service;
   }
 
   /**
@@ -497,10 +509,10 @@ EOT;
     ];
   }
 
-  // The main getComponents method is already implemented above
-
   /**
    * Preprocesses components to handle common issues before passing to EntityService.
+   *
+   * Delegates to EntitySaveService.preprocessComponents for unified handling.
    *
    * @param array $components
    *   The components array from the AI response.
@@ -509,90 +521,7 @@ EOT;
    *   The preprocessed components.
    */
   protected function preprocessComponents(array $components): array {
-    $processed_components = [];
-    $standalone_cards = [];
-
-    // First pass to identify any cards at the top level
-    foreach ($components as $index => $component) {
-      // Skip if no type
-      if (!isset($component['type'])) {
-        continue;
-      }
-
-      $type = strtolower($component['type']);
-
-      // Handle standalone cards
-      if ($type === 'card') {
-        $standalone_cards[] = $component;
-        $this->logger->warning('Found standalone card at index @index in AI response', [
-          '@index' => $index,
-        ]);
-      }
-      // Special handling for card_group
-      else if ($type === 'card_group') {
-        // Ensure field_card exists and is an array
-        if (!isset($component['field_card']) && isset($component['card'])) {
-          // "card" property instead of "field_card" - fix it
-          $component['field_card'] = $component['card'];
-          unset($component['card']);
-          $this->logger->notice('Fixed card_group: moved "card" property to "field_card"');
-        }
-
-        // Make sure field_card is an array
-        if (!isset($component['field_card'])) {
-          $component['field_card'] = [];
-        }
-        else if (!is_array($component['field_card'])) {
-          $component['field_card'] = [$component['field_card']];
-        }
-
-        // Ensure all cards in field_card have type=card
-        if (!empty($component['field_card'])) {
-          foreach ($component['field_card'] as $i => $card) {
-            if (!isset($card['type'])) {
-              $component['field_card'][$i]['type'] = 'card';
-            }
-          }
-        }
-
-        $processed_components[] = $component;
-      }
-      else {
-        $processed_components[] = $component;
-      }
-    }
-
-    // If we found standalone cards, create a card_group for them
-    if (!empty($standalone_cards)) {
-      // Create a new card_group with the standalone cards
-      $card_group = [
-        'type' => 'card_group',
-        'field_title' => 'Additional Information',
-        'field_card' => $standalone_cards,
-      ];
-
-      $processed_components[] = $card_group;
-
-      $this->logger->notice('Created new card_group for @count standalone cards: @data', [
-        '@count' => count($standalone_cards),
-        '@data' => json_encode($card_group),
-      ]);
-    }
-
-    // Final check for any "card" type paragraphs at top level
-    foreach ($processed_components as $index => $component) {
-      if (isset($component['type']) && strtolower($component['type']) === 'card') {
-        $this->logger->emergency('Still found a top-level card paragraph after preprocessing at index @index - removing it!', [
-          '@index' => $index,
-        ]);
-        unset($processed_components[$index]);
-      }
-    }
-
-    // Reset array indexes
-    $processed_components = array_values($processed_components);
-    
-    return $processed_components;
+    return $this->entitySaveService->preprocessComponents($components);
   }
 
 }
