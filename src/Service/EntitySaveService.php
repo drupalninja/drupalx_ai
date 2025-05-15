@@ -127,7 +127,7 @@ class EntitySaveService {
       $node->set('field_content', []);
       $node->save();
     }
-    
+
     // Quick check if we need to do any preprocessing
     if (!$already_preprocessed) {
       $need_preprocessing = FALSE;
@@ -137,7 +137,7 @@ class EntitySaveService {
           break;
         }
       }
-      
+
       // Only preprocess if needed (to avoid duplicate preprocessing)
       if ($need_preprocessing) {
         $this->logger->notice('EntitySaveService: Detected potential card structure issues, performing preprocessing...');
@@ -204,11 +204,11 @@ class EntitySaveService {
 
     return $created_entity_ids;
   }
-  
+
   /**
    * Preprocesses component data to ensure proper nesting structure.
    *
-   * This function reorganizes standalone card components by moving them into 
+   * This function reorganizes standalone card components by moving them into
    * appropriate card_group containers.
    *
    * @param array $components_data
@@ -220,18 +220,11 @@ class EntitySaveService {
    *   The preprocessed component data.
    */
   public function preprocessComponents(array $components_data, bool $detailed_logging = true): array {
-    // Debug the incoming components structure
-    if ($detailed_logging) {
-      $this->logger->notice('EntitySaveService: Preprocessing components: @data', [
-        '@data' => json_encode($components_data, JSON_PRETTY_PRINT),
-      ]);
-    }
-    
     // Check if we have any standalone card components
     $card_components = [];
     $non_card_components = [];
     $card_group_needed = FALSE;
-    
+
     // First pass - identify problematic components
     foreach ($components_data as $index => $component) {
       // Missing type is a major issue
@@ -242,17 +235,17 @@ class EntitySaveService {
         ]);
         continue;
       }
-      
+
       $component_type = strtolower($component['type']);
-      
+
       // Only log details for each component if detailed logging is enabled
       if ($detailed_logging) {
         $this->logger->notice('EntitySaveService: Processing component type: @type at index @index', [
           '@type' => $component_type,
-          '@index' => $index, 
+          '@index' => $index,
         ]);
       }
-      
+
       // Handle cards
       if ($component_type === 'card') {
         $card_components[] = $component;
@@ -261,26 +254,26 @@ class EntitySaveService {
           '@index' => $index,
           '@data' => json_encode($component),
         ]);
-      } 
+      }
       // Special handling for card_group to ensure it has proper structure
       elseif ($component_type === 'card_group') {
         // Ensure field_card is properly populated
         if (!isset($component['field_card']) || !is_array($component['field_card'])) {
           $this->logger->warning('Card group at index @index has missing or invalid field_card: @data', [
-            '@index' => $index, 
+            '@index' => $index,
             '@data' => json_encode($component),
           ]);
-          
+
           // Initialize field_card as empty array if missing
           $component['field_card'] = [];
-        } 
+        }
         elseif ($detailed_logging) {
           $this->logger->notice('Card group at index @index has @count cards', [
             '@index' => $index,
             '@count' => count($component['field_card']),
           ]);
         }
-        
+
         // Verify that all field_card items have type=card
         if (!empty($component['field_card'])) {
           foreach ($component['field_card'] as $card_index => $card) {
@@ -289,13 +282,13 @@ class EntitySaveService {
                 '@card_index' => $card_index,
                 '@data' => json_encode($card),
               ]);
-              
+
               // Fix by explicitly setting type
               $component['field_card'][$card_index]['type'] = 'card';
             }
           }
         }
-        
+
         $non_card_components[] = $component;
       }
       // Handle specific cases where cards might be in the wrong field
@@ -304,7 +297,7 @@ class EntitySaveService {
           '@type' => $component_type,
           '@data' => json_encode($component),
         ]);
-        
+
         // Check if these are indeed cards we can reuse
         $valid_cards = TRUE;
         foreach ($component['card'] as $card) {
@@ -313,7 +306,7 @@ class EntitySaveService {
             break;
           }
         }
-        
+
         if ($valid_cards && !empty($component['card'])) {
           // Create a proper card_group with these cards
           $card_group = [
@@ -321,39 +314,39 @@ class EntitySaveService {
             'field_title' => $component['title'] ?? $component['field_title'] ?? 'Related Items',
             'field_card' => $component['card'],
           ];
-          
+
           if ($detailed_logging) {
             $this->logger->notice('Created card_group from component with "card" field: @data', [
               '@data' => json_encode($card_group),
             ]);
           }
-          
+
           $non_card_components[] = $card_group;
         } else {
           // If not valid cards, just keep the component as is
           $non_card_components[] = $component;
         }
-      } 
+      }
       else {
         $non_card_components[] = $component;
       }
     }
-    
+
     // If we have standalone cards, create a card group for them
     if ($card_group_needed && !empty($card_components)) {
       $this->logger->warning('Found @count standalone card components that need to be grouped.', [
         '@count' => count($card_components),
       ]);
-      
+
       // Create a new card_group component
       $card_group = [
         'type' => 'card_group',
         'field_title' => 'Additional Information',
         'field_card' => $card_components,
       ];
-      
+
       $non_card_components[] = $card_group;
-      
+
       if ($detailed_logging) {
         $this->logger->notice('Created a new card_group component to contain @count standalone cards: @data', [
           '@count' => count($card_components),
@@ -361,7 +354,7 @@ class EntitySaveService {
         ]);
       }
     }
-    
+
     return $non_card_components;
   }
 

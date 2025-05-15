@@ -219,7 +219,7 @@ class DrupalxAiCommands extends DrushCommands {
       $this->output()->writeln(dt('Error creating landing page: @error', ['@error' => $e->getMessage()]));
     }
   }
-  
+
   /**
    * Preprocesses AI-generated components to fix common structural issues.
    *
@@ -240,12 +240,7 @@ class DrupalxAiCommands extends DrushCommands {
 
     // Delegate preprocessing to EntitySaveService for consistency
     $preprocessed = $this->entitySaveService->preprocessComponents($components, TRUE);
-    
-    // Log the final structure
-    $this->drupalxAiLogger->notice('DrushCommand: Final preprocessed components structure: @data', [
-      '@data' => json_encode($preprocessed, JSON_PRETTY_PRINT),
-    ]);
-    
+
     return $preprocessed;
   }
 
