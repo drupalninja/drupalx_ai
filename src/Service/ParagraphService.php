@@ -10,13 +10,17 @@ use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
-use Drupal\drupalx_ai\Service\ValidationService;
 
 /**
  * Service for handling paragraph entities in the DrupalX AI module.
  */
 class ParagraphService {
   use StringTranslationTrait;
+
+  /**
+   * The machine name of the node field used to store top-level paragraphs.
+   */
+  private const TARGET_NODE_CONTENT_FIELD_NAME = 'field_content';
 
   /**
    * The entity type manager.
@@ -142,9 +146,9 @@ class ParagraphService {
       return [];
     }
 
-    if (!$node->hasField('field_content') ||
-        $node->field_content->getFieldDefinition()->getType() !== 'entity_reference_revisions') {
-      $this->logger->error('Node does not have field_content for paragraphs.');
+    if (!$node->hasField(self::TARGET_NODE_CONTENT_FIELD_NAME) ||
+        $node->{self::TARGET_NODE_CONTENT_FIELD_NAME}->getFieldDefinition()->getType() !== 'entity_reference_revisions') {
+      $this->logger->error('Node does not have the required field for paragraphs (' . self::TARGET_NODE_CONTENT_FIELD_NAME . ').');
       return [];
     }
 
@@ -159,8 +163,8 @@ class ParagraphService {
     }
 
     if (!empty($paragraph_ids)) {
-      if ($node->hasField('field_content')) {
-        $node->set('field_content', []);
+      if ($node->hasField(self::TARGET_NODE_CONTENT_FIELD_NAME)) {
+        $node->set(self::TARGET_NODE_CONTENT_FIELD_NAME, []);
         $node->save();
       }
 
@@ -202,7 +206,7 @@ class ParagraphService {
         ];
       }
 
-      $node->set('field_content', $paragraph_references);
+      $node->set(self::TARGET_NODE_CONTENT_FIELD_NAME, $paragraph_references);
       $node->save();
     }
 
