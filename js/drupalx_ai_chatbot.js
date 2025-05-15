@@ -134,7 +134,7 @@
         // Welcome message now appears every time the behavior attaches.
         // Give a slight delay for a more natural feeling.
         setTimeout(function () {
-          addMessage("👋 Hello! I'm your DrupalX AI assistant. How can I help you today? Ask me to create a landing page or help with other content!", "bot");
+          addMessage("👋 Hello! I'm your AI Page Builder. Describe the landing page you\'d like me to create!", "bot");
         }, 500);
 
         // Add typing indicator functionality
