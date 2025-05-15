@@ -13,9 +13,12 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
+use Drupal\Core\Session\AccountInterface;
+use Psr\Log\LoggerInterface;
+use Drupal\Component\Serialization\Json;
 
 /**
- * Controller for chatbot interactions.
+ * Provides a controller for chatbot interactions.
  */
 class ChatbotController extends ControllerBase {
 
@@ -34,14 +37,14 @@ class ChatbotController extends ControllerBase {
   protected EntitySaveService $entitySaveService;
 
   /**
-   * The logger channel.
+   * A logger instance.
    *
-   * @var \Drupal\Core\Logger\LoggerChannelInterface
+   * @var \Psr\Log\LoggerInterface
    */
-  protected LoggerChannelInterface $logger;
+  protected LoggerInterface $logger;
 
   /**
-   * Constructs a new ChatbotController object.
+   * Constructs a ChatbotController object.
    *
    * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
    *   The entity type manager.
@@ -76,92 +79,97 @@ class ChatbotController extends ControllerBase {
   }
 
   /**
-   * Processes chatbot messages and returns a response.
+   * Processes a message from the chatbot.
    *
    * @param \Symfony\Component\HttpFoundation\Request $request
-   *   The current request.
+   *   The request object.
    *
    * @return \Symfony\Component\HttpFoundation\JsonResponse
-   *   A JSON response containing the chatbot's reply.
+   *   A JSON response.
    */
   public function processMessage(Request $request): JsonResponse {
-    $data = json_decode($request->getContent(), TRUE);
-    $message = $data['message'] ?? NULL;
+    $data = Json::decode($request->getContent());
+    $description = $data['message'] ?? NULL;
 
-    if (empty($message)) {
-      return new JsonResponse([
-        'reply' => $this->t('No message received. Please provide a description.')->render(),
-      ], 400);
+    if (empty($description)) {
+      return new JsonResponse(['error' => 'No description provided.'], 400);
     }
 
-    $components = $this->aiService->getComponents($message);
+    $ai_response = $this->aiService->getComponents($description);
 
-    if ($components === NULL) {
-      $this->logger->error('AI service failed to return components for message: @message', ['@message' => $message]);
-      return new JsonResponse([
-        'reply' => $this->t('Sorry, I had trouble understanding that or connecting to the AI service. Please try again later.')->render(),
-      ], 500);
+    if (!empty($ai_response['error'])) {
+      $this->logger->error(
+        'Error from AIService: @error. Raw: @raw',
+        [
+          '@error' => $ai_response['error'],
+          '@raw' => $ai_response['raw_response'] ?? 'N/A',
+        ]
+      );
+      return new JsonResponse(['error' => $ai_response['error']], 500);
     }
+
+    $page_title = $ai_response['title'] ?? 'Generated Page by Chatbot';
+    $components = $ai_response['components'] ?? [];
 
     if (empty($components)) {
+      $this->logger->warning(
+        'AIService returned no components for description: @desc',
+        ['@desc' => $description]
+      );
       return new JsonResponse([
-        'reply' => $this->t('I understood your message: "@message", but I couldn\'t find any suitable components to build that. Try describing it differently?', [
-          '@message' => htmlspecialchars($message),
-        ])->render(),
-      ]);
+        'message' => 'No components were generated. Try a different description.',
+        'title' => $page_title,
+      ], 200);
     }
+
+    // Create a new node.
+    // Use the current user or a default user if needed.
+    $current_user = $this->currentUser();
+    $uid = $current_user->id() ?: 1;
 
     try {
-      $node_title = $this->t('AI Generated Page: @snippet', [
-        '@snippet' => substr(htmlspecialchars($message), 0, 50),
-      ])->render();
-
-      $node_storage = $this->entityTypeManager->getStorage('node');
-      // Assuming 'landing' is the target node type.
-      // Assign to current user or admin (user 1) if current user is anonymous.
-      $current_user_id = $this->currentUser()->id() ?: 1;
-      $node = $node_storage->create([
+      $node = Node::create([
         'type' => 'landing',
-        'title' => $node_title,
-        'status' => Node::PUBLISHED,
-        'uid' => $current_user_id,
+        // Your landing page content type.
+        'title' => $page_title,
+        'uid' => $uid,
+        'status' => 1,
+        // Published.
       ]);
       $node->save();
-      $nid = $node->id();
+      $this->logger->info(
+        'Created new landing page node @nid with title "@title".',
+        [
+          '@nid' => $node->id(),
+          '@title' => $page_title,
+        ]
+      );
 
-      $this->logger->info('Created initial landing page node @nid for AI components.', ['@nid' => $nid]);
+      // Save entities to the node.
+      $result = $this->entitySaveService->saveEntitiesToNode($node, $components);
 
-      $saved_paragraphs = $this->entitySaveService->saveEntitiesToNode($nid, $components);
-
-      if (empty($saved_paragraphs)) {
-        // Node was created, but no components/paragraphs were successfully saved.
-        // Log this and inform the user.
-        $this->logger->warning('Node @nid was created, but no components/paragraphs were successfully saved to it from the AI response.', ['@nid' => $nid]);
-        $page_url = $node->toUrl('canonical', ['absolute' => TRUE])->toString();
-        $reply = $this->t('I created a page based on your message, but had trouble adding specific components. You can find the page here: @link', [
-          '@link' => $page_url,
-        ])->render();
-      }
-      else {
-        $page_url = $node->toUrl('canonical', ['absolute' => TRUE])->toString();
-        $reply = $this->t('I have created a new landing page for you with @count component(s)! You can view it here: @link', [
-          '@count' => count($saved_paragraphs),
-          '@link' => $page_url,
-        ])->render();
+      if (isset($result['error'])) {
+        $this->logger->error('Error saving entities: @error', ['@error' => $result['error']]);
+        // Node was created, but paragraphs failed.
+        // Decide on cleanup or user message.
+        return new JsonResponse([
+          'error' => 'Page created, but content generation failed: ' . $result['error'],
+        ], 500);
       }
 
+      $page_link = $node->toUrl('canonical', ['absolute' => TRUE])->toString();
       return new JsonResponse([
-        'reply' => $reply,
-        'nid' => $nid,
-        'node_url' => $node->toUrl('canonical', ['absolute' => TRUE])->toString(),
+        'message' => 'Landing page created successfully!',
+        'page_link' => $page_link,
+        'title' => $page_title,
       ]);
-
     }
     catch (\Exception $e) {
-      $this->logger->error('Failed to create landing page or process components: @message', ['@message' => $e->getMessage()]);
-      return new JsonResponse([
-        'reply' => $this->t('Sorry, I encountered an error trying to create a page and add components.')->render(),
-      ], 500);
+      $this->logger->error(
+        'Failed to create node or save entities: @message',
+        ['@message' => $e->getMessage()]
+      );
+      return new JsonResponse(['error' => 'Failed to create page: ' . $e->getMessage()], 500);
     }
   }
 

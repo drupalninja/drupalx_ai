@@ -4,6 +4,9 @@ namespace Drupal\drupalx_ai\Service;
 
 use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
+use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
+use Drupal\Core\Logger\LoggerChannelFactoryInterface;
+use Drupal\Core\Logger\LoggerChannelInterface;
 
 /**
  * Service for validating AI-generated components.
@@ -19,13 +22,37 @@ class ValidationService {
   protected ModuleHandlerInterface $moduleHandler;
 
   /**
+   * The entity type bundle info service.
+   *
+   * @var \Drupal\Core\Entity\EntityTypeBundleInfoInterface
+   */
+  protected EntityTypeBundleInfoInterface $entityTypeBundleInfo;
+
+  /**
+   * The logger channel.
+   *
+   * @var \Drupal\Core\Logger\LoggerChannelInterface
+   */
+  protected LoggerChannelInterface $logger;
+
+  /**
    * Constructs a ValidationService object.
    *
    * @param \Drupal\Core\Extension\ModuleHandlerInterface $module_handler
    *   The module handler service.
+   * @param \Drupal\Core\Entity\EntityTypeBundleInfoInterface $entity_type_bundle_info
+   *   The entity type bundle info service.
+   * @param \Drupal\Core\Logger\LoggerChannelFactoryInterface $logger_factory
+   *   The logger factory service.
    */
-  public function __construct(ModuleHandlerInterface $module_handler) {
+  public function __construct(
+    ModuleHandlerInterface $module_handler,
+    EntityTypeBundleInfoInterface $entity_type_bundle_info,
+    LoggerChannelFactoryInterface $logger_factory
+  ) {
     $this->moduleHandler = $module_handler;
+    $this->entityTypeBundleInfo = $entity_type_bundle_info;
+    $this->logger = $logger_factory->get('drupalx_ai');
   }
 
   /**
@@ -175,17 +202,25 @@ class ValidationService {
    */
   protected function detectHallucinatedFields(array $component, array $sample, array $path, array &$results, int $component_number, string $type, int $index, array $component_for_reporting): void {
     foreach ($component as $field => $value) {
-      if (!isset($sample[$field])) {
-        $hallucination_path_string = implode(' -> ', array_merge($path, [$field]));
-        $results['errors'][] = [
-          'error_type' => 'hallucinated',
-          'component_index' => $index,
-          'path' => $path,
-          'field' => $field,
-          'message' => $this->t("Component #@num (type: '@type'): found unexpected field '@path_string'.", ['@num' => $component_number, '@type' => $type, '@path_string' => $hallucination_path_string]),
-          'component' => $component_for_reporting,
-        ];
+      if ($field === 'type') {
+        continue;
       }
+      $current_path = array_merge($path, [$field]);
+      $path_string = implode('.', $current_path);
+      // Skip empty/non-hallucinated fields.
+      if (isset($sample[$field])) {
+        if (is_array($value) && is_array($sample[$field])) {
+          $this->detectHallucinatedFields($value, $sample[$field], $current_path, $results, $component_number, $type, $index, $component_for_reporting);
+        }
+        continue;
+      }
+      $results['warnings'][] = [
+        'error_type' => 'hallucinated_field',
+        'component_index' => $index,
+        'field_path' => $path_string,
+        'message' => $this->t("Component #@num (type: '@type') contains a field '@field' that is not defined in sample components.", ['@num' => $component_number, '@type' => $type, '@field' => $path_string]),
+        'component' => $component_for_reporting,
+      ];
     }
   }
 
@@ -217,6 +252,40 @@ class ValidationService {
   }
 
   /**
+   * Provides mapping of AI component types to Drupal paragraph bundle types.
+   *
+   * @return array
+   *   The type mapping array where keys are AI component types and values are
+   *   corresponding Drupal paragraph bundle machine names.
+   */
+  protected function getComponentTypeMapping(): array {
+    return [
+      // Direct component type mappings based on sample-components.json.
+      'hero' => 'hero',
+      'card_group' => 'card_group',
+      'quote' => 'quote',
+      'logo_collection' => 'logo_collection',
+      'newsletter' => 'newsletter',
+      'accordion' => 'accordion',
+      'carousel' => 'carousel',
+      'gallery' => 'gallery',
+      'pricing' => 'pricing',
+      'sidebyside' => 'sidebyside',
+
+      // Additional mappings for potential AI-generated variants.
+      'banner' => 'hero',
+      'slider' => 'carousel',
+      'cards' => 'card_group',
+      'testimonial' => 'quote',
+      'partners' => 'logo_collection',
+      'subscribe' => 'newsletter',
+      'faq' => 'accordion',
+      'image_gallery' => 'gallery',
+      'side_by_side' => 'sidebyside',
+    ];
+  }
+
+  /**
    * Prepares sample components indexed by their type.
    * (Previously drupalx_ai_prepare_samples_by_type in validation.inc)
    */
@@ -234,7 +303,138 @@ class ValidationService {
   }
 
   /**
+   * Loads sample components from the specified file.
+   *
+   * @param string $sample_path
+   *   Path to the sample components JSON file. If not provided, will use the default path.
+   *
+   * @return array
+   *   An array containing 'status', 'message', and 'data'.
+   *   Status can be 'success' or an error code.
+   *   Data contains the loaded components if successful.
+   */
+  public function loadSampleComponents(string $sample_path = NULL): array {
+    $result = [
+      'status' => 'success',
+      'message' => $this->t('Sample components loaded successfully.'),
+      'data' => [],
+    ];
+    if ($sample_path === NULL) {
+      $module_extension = $this->moduleHandler->getModule('drupalx_ai');
+      if (!$module_extension) {
+        $result['status'] = 'error_module_path';
+        $result['message'] = $this->t('Could not load drupalx_ai module extension.');
+        return $result;
+      }
+      $module_path = $module_extension->getPath();
+      $sample_path = DRUPAL_ROOT . DIRECTORY_SEPARATOR . $module_path . '/files/sample-components.json';
+    }
+    if (!file_exists($sample_path)) {
+      $result['status'] = 'error_loading_samples';
+      $result['message'] = $this->t('Sample components JSON file not found at @path', ['@path' => $sample_path]);
+      return $result;
+    }
+    $sample_json_content = @file_get_contents($sample_path);
+    if ($sample_json_content === FALSE) {
+      $result['status'] = 'error_loading_samples';
+      $result['message'] = $this->t('Failed to read sample components JSON file from @path', ['@path' => $sample_path]);
+      return $result;
+    }
+    $all_sample_components = json_decode($sample_json_content, TRUE);
+    if (json_last_error() !== JSON_ERROR_NONE) {
+      $result['status'] = 'error_decoding_samples';
+      $result['message'] = $this->t('Failed to decode sample components JSON: @error (Path: @path)',
+        ['@error' => json_last_error_msg(), '@path' => $sample_path]);
+      return $result;
+    }
+    $result['data'] = $all_sample_components;
+    return $result;
+  }
+
+  /**
+   * Validates sample components against existing paragraph bundles.
+   *
+   * @param array $sample_components
+   *   The loaded sample components to validate.
+   *
+   * @return array
+   *   An array with validation results.
+   */
+  public function validateAgainstParagraphBundles(array $sample_components): array {
+    $result = [
+      'status' => 'success',
+      'valid_components' => [],
+      'allowed_types' => [],
+      'message' => $this->t('Sample components validated successfully.'),
+    ];
+
+    // Get available paragraph bundles.
+    $paragraph_bundles = $this->entityTypeBundleInfo->getBundleInfo('paragraph');
+    if (empty($paragraph_bundles)) {
+      $result['status'] = 'no_paragraph_bundles';
+      $result['message'] = $this->t('No paragraph bundles available.');
+      $this->logger->warning('Failed to validate components: No paragraph bundles available.');
+      return $result;
+    }
+
+    // Get component type mapping for fixing component names.
+    $component_type_mapping = $this->getComponentTypeMapping();
+
+    foreach ($sample_components as $key => $component_data) {
+      // Handle both associative arrays with type as key and numeric arrays where type
+      // is specified in the component data.
+      $component_type = '';
+
+      // If the component data is an array and has a 'type' key, use that as the component type.
+      if (is_array($component_data) && isset($component_data['type'])) {
+        $component_type = $component_data['type'];
+      }
+      // If the key is not numeric, it might be the component type.
+      elseif (!is_numeric($key)) {
+        $component_type = $key;
+      }
+      // Otherwise, use the numeric key as a fallback.
+      else {
+        $component_type = $key;
+      }
+
+      // Check if we need to map this component type to a valid paragraph bundle.
+      $mapped_type = $component_type;
+      if (isset($component_type_mapping[$component_type])) {
+        $mapped_type = $component_type_mapping[$component_type];
+      }
+
+      // Check if the mapped type exists as a paragraph bundle.
+      if (!isset($paragraph_bundles[$mapped_type])) {
+        $this->logger->error(
+          'Paragraph bundle @type does not exist. Skipping component: @name',
+          ['@type' => $mapped_type, '@name' => $component_type]
+        );
+        continue;
+      }
+
+      // Store with the original key to maintain the same structure.
+      $result['valid_components'][$key] = $component_data;
+      // If component data has a type field, update it to the mapped type.
+      if (is_array($component_data) && isset($component_data['type'])) {
+        $result['valid_components'][$key]['type'] = $mapped_type;
+      }
+      // Store the mapped type in allowed_types for further processing.
+      $result['allowed_types'][] = $mapped_type;
+    }
+
+    if (empty($result['valid_components'])) {
+      $result['status'] = 'no_valid_components';
+      $result['message'] = $this->t('No valid components found.');
+      $this->logger->warning('Failed to validate components: No valid components found.');
+    }
+
+    return $result;
+  }
+
+  /**
    * Performs a full validation of AI-generated components.
+   *
    * (Previously drupalx_ai_perform_full_validation in validation.inc)
    * This is the main public method to be called by other services.
    */
@@ -245,36 +445,16 @@ class ValidationService {
       'results' => ['errors' => [], 'warnings' => []],
     ];
 
-    $module_extension = $this->moduleHandler->getModule('drupalx_ai');
-    if (!$module_extension) {
-        $default_return['status'] = 'error_module_path';
-        $default_return['message'] = $this->t('Could not load drupalx_ai module extension.');
-        return $default_return;
-    }
-    $module_path = $module_extension->getPath();
-
-    $sample_json_path = DRUPAL_ROOT . DIRECTORY_SEPARATOR . $module_path . '/files/sample-components.json';
-
-    if (!file_exists($sample_json_path)) {
-      $default_return['status'] = 'error_loading_samples';
-      $default_return['message'] = $this->t('Sample components JSON file not found at @path', ['@path' => $sample_json_path]);
-      return $default_return;
-    }
-    $sample_json_content = @file_get_contents($sample_json_path);
-    if ($sample_json_content === FALSE) {
-      $default_return['status'] = 'error_loading_samples';
-      $default_return['message'] = $this->t('Failed to read sample components JSON file from @path', ['@path' => $sample_json_path]);
-      return $default_return;
-    }
-    $all_sample_components_array = json_decode($sample_json_content, TRUE);
-    if (json_last_error() !== JSON_ERROR_NONE) {
-      $default_return['status'] = 'error_decoding_samples';
-      $default_return['message'] = $this->t('Failed to decode sample components JSON: @error (Path: @path)', ['@error' => json_last_error_msg(), '@path' => $sample_json_path]);
+    // Use the loadSampleComponents method instead of duplicating the logic.
+    $samples_result = $this->loadSampleComponents();
+    if ($samples_result['status'] !== 'success') {
+      $default_return['status'] = $samples_result['status'];
+      $default_return['message'] = $samples_result['message'];
       return $default_return;
     }
 
-    $sample_components_by_type = $this->prepareSamplesByType($all_sample_components_array);
-    if (empty($sample_components_by_type) && !empty($all_sample_components_array)) {
+    $sample_components_by_type = $this->prepareSamplesByType($samples_result['data']);
+    if (empty($sample_components_by_type) && !empty($samples_result['data'])) {
       $default_return['status'] = 'error_preparing_samples';
       $default_return['message'] = $this->t('Sample components could not be prepared (e.g., missing type fields in sample JSON), though the file was loaded and decoded.');
     }

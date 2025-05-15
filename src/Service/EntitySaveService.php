@@ -161,14 +161,9 @@ class EntitySaveService {
         continue;
       }
 
-      // Convert a descriptive name like "Hero Section" to "component_hero_section".
-      // Or use directly if it already matches the pattern like "component_hero_section".
-      if (!str_starts_with($paragraph_bundle_key_name, 'component_')) {
-        $paragraph_type = 'component_' . strtolower(str_replace(' ', '_', $paragraph_bundle_key_name));
-      }
-      else {
-        $paragraph_type = $paragraph_bundle_key_name;
-      }
+      // Use the paragraph bundle type directly as found in sample-components.json.
+      // Convert spaces to underscores and ensure it's lowercase.
+      $paragraph_type = strtolower(str_replace(' ', '_', $paragraph_bundle_key_name));
 
       $this->logger->info('Attempting to create paragraph of type: @type for component: @key_name', [
         '@type' => $paragraph_type,
@@ -189,7 +184,8 @@ class EntitySaveService {
         $paragraph = Paragraph::create([
           'type' => $paragraph_type,
           'uid' => $owner_id,
-          'status' => Paragraph::PUBLISHED,
+          // 1 = published, 0 = unpublished
+          'status' => 1,
         ]);
 
         foreach ($component_data['data'] as $field_name => $field_value) {

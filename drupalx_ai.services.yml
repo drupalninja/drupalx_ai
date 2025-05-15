@@ -1,7 +1,7 @@
 services:
   drupalx_ai.ai_service:
     class: Drupal\drupalx_ai\Service\AIService
-    arguments: ['@config.factory', '@key.repository', '@file_system', '@logger.factory', '@drupalx_ai.validation_service']
+    arguments: ['@config.factory', '@key.repository', '@file_system', '@logger.factory', '@drupalx_ai.validation_service', '@entity_type.bundle.info']
 
   drupalx_ai.entity_save_service:
     class: Drupal\drupalx_ai\Service\EntitySaveService
@@ -9,4 +9,4 @@ services:
 
   drupalx_ai.validation_service:
     class: Drupal\drupalx_ai\Service\ValidationService
-    arguments: ['@module_handler']
+    arguments: ['@module_handler', '@entity_type.bundle.info', '@logger.factory']
