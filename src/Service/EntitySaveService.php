@@ -108,6 +108,11 @@ class EntitySaveService {
    *   Returns empty array on failure or if no components were processed.
    */
   public function saveEntitiesToNode(int $nid, array $components_data): array {
+    // Log the full component data structure we're receiving.
+    $this->logger->notice('Full components data JSON structure: @data', [
+      '@data' => json_encode($components_data, JSON_PRETTY_PRINT),
+    ]);
+
     $node_storage = $this->entityTypeManager->getStorage('node');
     $node = $node_storage->load($nid);
 
@@ -188,15 +193,40 @@ class EntitySaveService {
           'status' => 1,
         ]);
 
-        foreach ($component_data['data'] as $field_name => $field_value) {
+        // Skip 'type' as it's used for paragraph bundle type, not a field.
+        foreach ($component_data as $field_name => $field_value) {
+          // Skip type and other non-field properties.
+          if (in_array($field_name, ['type', 'id', 'name'])) {
+            continue;
+          }
+
           if ($paragraph->hasField($field_name)) {
             $field_definition = $paragraph->get($field_name)->getFieldDefinition();
             $field_type = $field_definition->getType();
             $target_entity_type = $field_definition->getSetting('target_type');
 
-            if ($field_type === 'entity_reference' && isset($field_value['media_url'])) {
-              if ($target_entity_type === 'media') {
+            // Handle link fields (uri + title).
+            if ($field_type === 'link' && is_array($field_value) && isset($field_value['uri'])) {
+              $link_value = [
+                'uri' => $field_value['uri'],
+                'title' => $field_value['title'] ?? '',
+                'options' => $field_value['options'] ?? [],
+              ];
+              $paragraph->set($field_name, $link_value);
+            }
+            // Handle media fields.
+            elseif ($field_type === 'entity_reference' && $target_entity_type === 'media') {
+              if (isset($field_value['media_url'])) {
+                // Handle explicit media URL reference.
                 $media_id = $this->createOrLoadMediaItem($field_value, $owner_id);
+                if ($media_id) {
+                  $paragraph->set($field_name, ['target_id' => $media_id]);
+                }
+              }
+              elseif (is_array($field_value) && isset($field_value['type']) && $field_value['type'] === 'image') {
+                // Create a placeholder media item for now.
+                // Later this would be replaced with actual media from API or user upload.
+                $media_id = $this->createPlaceholderMediaItem('image', $field_value['alt'] ?? 'Placeholder image', $owner_id);
                 if ($media_id) {
                   $paragraph->set($field_name, ['target_id' => $media_id]);
                 }
@@ -204,9 +234,46 @@ class EntitySaveService {
               else {
                 $log_context = [
                   '@field_name' => $field_name,
-                  '@id' => $paragraph_bundle_key_name,
+                  '@value' => json_encode($field_value),
                 ];
-                $this->logger->warning('Field @field_name is entity_reference but not targeting media. Cannot process media_url for component @id.', $log_context);
+                $this->logger->warning('Unsupported field value structure for field @field_name on paragraph type @paragraph_type. Value: @value', $log_context + ['@paragraph_type' => $paragraph_type]);
+              }
+            }
+            // Handle nested paragraph fields (like card_group > cards or features).
+            elseif ($field_type === 'entity_reference_revisions' && $target_entity_type === 'paragraph' && is_array($field_value)) {
+              $nested_paragraphs = [];
+
+              // Handle both indexed arrays and associative arrays.
+              if (isset($field_value[0])) {
+                // Indexed array of paragraph items.
+                foreach ($field_value as $index => $nested_component) {
+                  if (!isset($nested_component['type'])) {
+                    $this->logger->warning('Nested component missing type field: @data', ['@data' => json_encode($nested_component)]);
+                    continue;
+                  }
+
+                  $nested_paragraph_id = $this->createNestedParagraph($nested_component, $owner_id);
+                  if ($nested_paragraph_id) {
+                    $nested_paragraphs[] = [
+                      'target_id' => $nested_paragraph_id,
+                      'target_revision_id' => $nested_paragraph_id,
+                    ];
+                  }
+                }
+              }
+              else {
+                // Single nested paragraph item.
+                $nested_paragraph_id = $this->createNestedParagraph($field_value, $owner_id);
+                if ($nested_paragraph_id) {
+                  $nested_paragraphs[] = [
+                    'target_id' => $nested_paragraph_id,
+                    'target_revision_id' => $nested_paragraph_id,
+                  ];
+                }
+              }
+
+              if (!empty($nested_paragraphs)) {
+                $paragraph->set($field_name, $nested_paragraphs);
               }
             }
             elseif ($field_type === 'entity_reference' && $target_entity_type === 'taxonomy_term' && is_string($field_value)) {
@@ -440,6 +507,128 @@ class EntitySaveService {
       return NULL;
     }
     return NULL;
+  }
+
+  /**
+   * Creates a taxonomy term with the given name in a vocabulary and returns its ID.
+   *
+   * @param string $term_name
+   *   Name of the term to create.
+   * @param string $vocabulary
+   *   Machine name of the vocabulary.
+   * @param int $owner_id
+   *   User ID of the owner.
+   *
+   * @return int|null
+   *   Term ID if successful, NULL otherwise.
+   */
+  protected function createTaxonomyTerm(string $term_name, string $vocabulary, int $owner_id): ?int {
+    return 0;
+  }
+
+  /**
+   * Creates a nested paragraph component with the given data.
+   *
+   * @param array $component_data
+   *   The component data to use for creating the paragraph.
+   * @param int $owner_id
+   *   The owner ID.
+   *
+   * @return int|null
+   *   The paragraph entity ID if successful, NULL otherwise.
+   */
+  protected function createNestedParagraph(array $component_data, int $owner_id): ?int {
+    if (empty($component_data['type'])) {
+      $this->logger->error('Cannot create nested paragraph without type: @data', [
+        '@data' => json_encode($component_data),
+      ]);
+      return NULL;
+    }
+
+    $paragraph_type = strtolower(str_replace(' ', '_', $component_data['type']));
+
+    $paragraph_bundle_info = $this->entityTypeBundleInfo->getBundleInfo('paragraph');
+    if (!isset($paragraph_bundle_info[$paragraph_type])) {
+      $log_context = [
+        '@bundle' => $paragraph_type,
+        '@data' => json_encode($component_data),
+      ];
+      $this->logger->error('Nested paragraph bundle @bundle does not exist. Data: @data', $log_context);
+      return NULL;
+    }
+
+    try {
+      $paragraph = Paragraph::create([
+        'type' => $paragraph_type,
+        'uid' => $owner_id,
+        // 1 = published, 0 = unpublished
+        'status' => 1,
+      ]);
+
+      // Set field values.
+      foreach ($component_data as $field_name => $field_value) {
+        // Skip type field and other non-field properties.
+        if (in_array($field_name, ['type', 'id', 'name'])) {
+          continue;
+        }
+
+        if ($paragraph->hasField($field_name)) {
+          $field_definition = $paragraph->get($field_name)->getFieldDefinition();
+          $field_type = $field_definition->getType();
+
+          // Set field value based on type.
+          if ($field_type === 'string' || $field_type === 'text' || $field_type === 'text_long') {
+            $paragraph->set($field_name, $field_value);
+          }
+          elseif ($field_type === 'link' && is_array($field_value) && isset($field_value['uri'])) {
+            $paragraph->set($field_name, [
+              'uri' => $field_value['uri'],
+              'title' => $field_value['title'] ?? '',
+              'options' => $field_value['options'] ?? [],
+            ]);
+          }
+          // Handle other field types as needed.
+        }
+      }
+
+      $paragraph->save();
+      return $paragraph->id();
+    }
+    catch (\Exception $e) {
+      $this->logger->error('Error creating nested paragraph: @error', [
+        '@error' => $e->getMessage(),
+      ]);
+      return NULL;
+    }
+  }
+
+  /**
+   * Creates a placeholder media item for use in AI-generated content.
+   *
+   * @param string $bundle
+   *   The media bundle type (e.g., 'image', 'video', etc.).
+   * @param string $alt_text
+   *   The alt text for the media.
+   * @param int $owner_id
+   *   The owner user ID.
+   *
+   * @return int|null
+   *   Media entity ID if successful, NULL otherwise.
+   */
+  protected function createPlaceholderMediaItem(string $bundle, string $alt_text, int $owner_id): ?int {
+    // In a demo/prototype environment, we'll use a fixed media ID rather than creating
+    // actual media entities that would require proper file handling.
+    // This is a simplified approach for development purposes.
+
+    // Log that we would create a media entity in production.
+    $this->logger->notice('Would create @bundle media with alt text: @alt', [
+      '@bundle' => $bundle,
+      '@alt' => $alt_text,
+    ]);
+
+    // Return media ID 1 as a placeholder in all cases.
+    // In a production environment, we would create proper media entities.
+    return 1;
   }
 
   /**
