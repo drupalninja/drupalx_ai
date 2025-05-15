@@ -173,8 +173,13 @@ class MediaService {
       $media->save();
       $media_id = $media->id();
 
+      // Define color and icon for this log message.
+      $color_blue = "\033[0;34m";
+      $icon_media = "🖼️";
+      $color_reset = "\033[0m";
+
       $this->logger->notice(
-        'Successfully saved Media entity (bundle: "@bundle", ID: @id, alt: "@alt").',
+        $color_blue . $icon_media . ' Successfully saved Media entity (bundle: "@bundle", ID: @id, alt: "@alt").' . $color_reset,
         [
           '@bundle' => $bundle,
           '@id' => $media_id,

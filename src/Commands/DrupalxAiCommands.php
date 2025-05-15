@@ -168,11 +168,17 @@ class DrupalxAiCommands extends DrushCommands {
         );
       }
       else {
+        // Define color and icon for this log message.
+        $color_green = "\033[0;32m";
+        $icon_success = "✅";
+        $color_reset = "\033[0m";
+
         $edit_url = Url::fromRoute('entity.node.edit_form', ['node' => $node->id()], ['absolute' => TRUE])->toString();
-        $this->output()->writeln(dt('Successfully created page "@title" (NID: @nid).', [
+        $this->output()->writeln(dt($color_green . $icon_success . ' Successfully created page "@title" (NID: @nid).' . $color_reset, [
           '@title' => $page_title,
           '@nid' => $node->id(),
         ]));
+        // It might be best to leave the "Edit at:" URL without color/icon to keep it clean for copying.
         $this->output()->writeln(dt('Edit at: @url', [
           '@url' => $edit_url,
         ]));

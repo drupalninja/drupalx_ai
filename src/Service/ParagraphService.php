@@ -267,8 +267,13 @@ class ParagraphService {
       $paragraph_id = $paragraph->id();
 
       // Log successful paragraph creation.
+      // Define color and icon for this log message.
+      $color_green = "\033[0;32m";
+      $icon_paragraph = "📄";
+      $color_reset = "\033[0m";
+
       $this->logger->notice(
-        'Successfully saved Paragraph entity (bundle: "@bundle", ID: @id).',
+        $color_green . $icon_paragraph . ' Successfully saved Paragraph entity (bundle: "@bundle", ID: @id).' . $color_reset,
         [
           '@bundle' => $paragraph->bundle(),
           '@id' => $paragraph_id,

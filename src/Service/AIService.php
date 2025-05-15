@@ -337,6 +337,11 @@ EOT;
     $ai_content = '';
 
     try {
+      $this->logger->debug('Sending request to AI with system prompt: @system_prompt and user prompt: @user_prompt', [
+        '@system_prompt' => $system_prompt,
+        '@user_prompt' => "User's page goal: \"" . $user_description . "\"",
+      ]);
+
       $response = $this->client->chat()->create([
         'model' => $model_name,
         'messages' => [
@@ -382,7 +387,16 @@ EOT;
       $json_string_from_ai = $this->extractJsonFromString(trim($ai_content));
 
       if ($json_string_from_ai) {
-        $this->logger->notice('Raw JSON string extracted from AI: @json', ['@json' => $json_string_from_ai]);
+        // Define color and icon for this log message.
+        $color_yellow = "\033[0;33m";
+        $icon_idea = "💡";
+        $color_reset = "\033[0m";
+
+        $this->logger->notice(
+          $color_yellow . $icon_idea . ' Raw JSON string extracted from AI: ' . $color_reset . '@json',
+          ['@json' => $json_string_from_ai]
+        );
+
         $decoded_json = Json::decode($json_string_from_ai);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
