@@ -130,6 +130,11 @@ class DrupalxAiCommands extends DrushCommands {
       '@title' => $page_title,
       '@count' => count($components),
     ]));
+    
+    // Log the component data as JSON for debugging
+    $this->drupalxAiLogger->notice('Full components data JSON structure: @data', [
+      '@data' => json_encode($components, JSON_PRETTY_PRINT),
+    ]);
 
     $uid = $options['uid'];
     if ($uid !== NULL) {

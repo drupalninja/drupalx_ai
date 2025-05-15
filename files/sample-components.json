@@ -223,5 +223,19 @@
       "alt": "Informative image complementing the text content",
       "field_caption": "Optional caption for the media"
     }
+  },
+  {
+    "type": "text",
+    "field_title": "Rich Text Content",
+    "field_eyebrow": "Discover More",
+    "field_text_layout": "left",
+    "field_body": {
+      "value": "<p>This is a sample text component that can be used for general content. It supports <strong>rich text formatting</strong>, lists, and other HTML elements.</p><ul><li>Bullet point 1</li><li>Bullet point 2</li><li>Bullet point 3</li></ul><p>It's perfect for blocks of formatted content that don't require additional components.</p>",
+      "format": "restricted_html"
+    },
+    "field_link": {
+      "uri": "internal:/about-us",
+      "title": "Learn More About Our Approach"
+    }
   }
 ]

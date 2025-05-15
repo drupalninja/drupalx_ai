@@ -147,13 +147,6 @@ class ParagraphService {
     }
 
     if (!empty($paragraph_ids)) {
-      // Clear any existing paragraphs from the node
-      if ($node->hasField('field_content')) {
-        $this->logger->notice('Clearing existing paragraphs from node @nid.', ['@nid' => $nid]);
-        $node->set('field_content', []);
-        $node->save();
-      }
-
       // Attach paragraph references to the node.
       $paragraph_references = [];
       $paragraph_storage = $this->entityTypeManager->getStorage('paragraph');
@@ -168,13 +161,13 @@ class ParagraphService {
 
         // Get the bundle type
         $bundle_type = $paragraph->bundle();
-
+        
         // Log the processing of this paragraph
         $this->logger->notice('Processing paragraph @id of type @type for field_content attachment.', [
           '@id' => $pid,
           '@type' => $bundle_type,
         ]);
-
+        
         // Define child-only paragraph types that should never be at the top level
         $child_only_types = [
           'card',
@@ -184,7 +177,7 @@ class ParagraphService {
           'feature_item',
           'pricing_card',
         ];
-
+        
         // Skip paragraphs that are marked to bypass the main collection (child paragraphs)
         if (isset($paragraph->setInternalBypassMainCollection) && $paragraph->setInternalBypassMainCollection === TRUE) {
           $this->logger->warning('FILTERING: Skipping paragraph @id of type @type from field_content as it is marked as a child-only paragraph.', [
@@ -193,9 +186,9 @@ class ParagraphService {
           ]);
           continue;
         }
-
+        
         // CRITICAL CHECK: Ensure no child-only paragraphs get attached directly to node
-        if (in_array($bundle_type, $child_only_types, TRUE)) {
+        if (in_array($bundle_type, $child_only_types)) {
           $this->logger->emergency('BLOCKING: Prevented attaching child-only paragraph @id of type @type directly to node @nid.', [
             '@id' => $pid,
             '@type' => $bundle_type,
@@ -203,9 +196,9 @@ class ParagraphService {
           ]);
           continue;
         }
-
+        
         // Additional safety check for any variations of card type that might slip through
-        if (strpos(strtolower($bundle_type), 'card') !== FALSE && $bundle_type !== 'card_group') {
+        if (strpos($bundle_type, 'card') !== FALSE && $bundle_type !== 'card_group') {
           $this->logger->emergency('BLOCKING: Prevented attaching card-like paragraph @id of type @type directly to node @nid.', [
             '@id' => $pid,
             '@type' => $bundle_type,
@@ -254,9 +247,6 @@ class ParagraphService {
       return NULL;
     }
 
-    // Normalize the component type to handle case variations (e.g., card, Card)
-    $normalized_type = strtolower($component_data['type']);
-
     // Define child-only component types (these should never be top-level).
     $child_only_types = [
       'card',
@@ -266,17 +256,8 @@ class ParagraphService {
       'feature_item',
       'pricing_card',
     ];
-
-    // Check if this is a child-only component type - strict check to avoid matching card_group
-    if (in_array($normalized_type, $child_only_types, TRUE)) {
-      $this->logger->warning('Component type @type is a child-only component and cannot be created at the top level. Skipping.', [
-        '@type' => $component_data['type'],
-      ]);
-      return NULL;
-    }
-
+    
     // Define allowed top-level component types (these can be at the top level)
-    // These are based on component types that actually exist in sample-components.json
     $allowed_top_level_types = [
       'accordion',
       'card_group',
@@ -285,12 +266,19 @@ class ParagraphService {
       'hero',
       'logo_collection',
       'newsletter',
-      'pricing',
       'quote',
       'sidebyside',
-      'text',
+      'slider',
+      'slideshow',
+      'tabs',
+      'textmedia',
+      'wysiwyg',
     ];
-
+    
+    // Convert component type to lowercase and strip any CamelCase or other variations.
+    $normalized_type = strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', $component_data['type']));
+    $normalized_type = str_replace('-', '_', $normalized_type);
+    
     // Log the type normalization for debugging.
     $this->logger->notice('Component type normalization: @original -> @normalized', [
       '@original' => $component_data['type'],
@@ -308,7 +296,7 @@ class ParagraphService {
         return NULL;
       }
     }
-
+    
     // Verify this is an allowed top-level component type
     if (!in_array($normalized_type, $allowed_top_level_types)) {
       $this->logger->warning('Component type @type (@normalized) is not in the list of allowed top-level components. Skipping.', [
@@ -318,25 +306,57 @@ class ParagraphService {
       return NULL;
     }
 
+      ]);
+      return NULL;
+    }
+
     // Map the AI-generated component type to a paragraph bundle.
     // Include both camelCase and snake_case versions for compatibility.
-    // Only include components that exist in sample-components.json.
     $type_mapping = [
-      // Snake case keys - these map directly to paragraph bundles.
-      'accordion' => 'accordion',
-      'card_group' => 'card_group',
-      'carousel' => 'carousel',
-      'gallery' => 'gallery',
+      // Snake case keys.
       'hero' => 'hero',
+      'cta' => 'cta',
+      'text_block' => 'text_block',
+      'quote' => 'quote',
+      'image_block' => 'image_block',
+      'video_block' => 'video_block',
+      'card_group' => 'card_group',
+      'features' => 'features',
+      'gallery' => 'gallery',
+      'rich_text' => 'rich_text',
+      'testimonial' => 'testimonial',
+      'banner' => 'banner',
+      'faq' => 'faq',
+      'accordion' => 'accordion',
+      'stats' => 'stats',
+      'content_with_image' => 'content_with_image',
+      'form_block' => 'form_block',
+      'map' => 'map',
+      'social_links' => 'social_links',
+      'slider' => 'slider',
+      'team' => 'team',
+      'timeline' => 'timeline',
+      'tabs' => 'tabs',
+      'pricing' => 'pricing',
+      'callout' => 'callout',
+      'header' => 'header',
+      'footer' => 'footer',
+      'menu' => 'menu',
+      'section' => 'section',
+      'logo' => 'logo',
       'logo_collection' => 'logo_collection',
       'newsletter' => 'newsletter',
-      'pricing' => 'pricing',
-      'quote' => 'quote',
       'sidebyside' => 'sidebyside',
-      'text' => 'text',
 
-      // Camel case keys (for backward compatibility).
+      // Camel case keys (for backward compatibility)
+      'textBlock' => 'text_block',
+      'imageBlock' => 'image_block',
+      'videoBlock' => 'video_block',
       'cardGroup' => 'card_group',
+      'richText' => 'rich_text',
+      'contentWithImage' => 'content_with_image',
+      'formBlock' => 'form_block',
+      'socialLinks' => 'social_links',
       'logoCollection' => 'logo_collection',
     ];
 
@@ -641,14 +661,8 @@ class ParagraphService {
           $card->set('field_link', $link_data);
         }
 
-        // CRITICAL: Mark this as an internal paragraph that should not be added to the node's field_content directly.
-        // This property will be checked in saveEntitiesToNode() to prevent cards from being attached to nodes directly.
+        // Mark this as an internal paragraph that should not be added to the node's field_content directly
         $card->setInternalBypassMainCollection = TRUE;
-
-        // Log that we're creating a card as a child paragraph only
-        $this->logger->notice('Created card paragraph @id as a child-only component.', [
-          '@id' => $card->id(),
-        ]);
 
         $card->save();
         $card_items[] = [

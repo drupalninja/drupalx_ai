@@ -117,6 +117,13 @@ class EntitySaveService {
       return [];
     }
 
+    // Clear any existing paragraphs from the node
+    if ($node->hasField('field_content')) {
+      $this->logger->notice('Clearing existing paragraphs from node @nid.', ['@nid' => $nid]);
+      $node->set('field_content', []);
+      $node->save();
+    }
+
     $created_entity_ids = [];
 
     // Process each component and add to the node.
@@ -133,12 +140,29 @@ class EntitySaveService {
 
     // Attach paragraphs to the node's field_content.
     if (!empty($created_entity_ids) && $node->hasField('field_content')) {
+      // Load all paragraphs to check their bundle types before attaching
+      $paragraph_storage = $this->entityTypeManager->getStorage('paragraph');
       $paragraph_references = [];
+      $added_count = 0;
+
       foreach ($created_entity_ids as $pid) {
+        $paragraph = $paragraph_storage->load($pid);
+        if (!$paragraph) {
+          $this->logger->warning('Could not load paragraph with ID @id', ['@id' => $pid]);
+          continue;
+        }
+
+        // Skip any 'card' paragraphs at the top level - they should only be children of card_group
+        if ($paragraph->bundle() === 'card') {
+          $this->logger->warning('Skipping attaching card paragraph @id to node directly - cards should only be in card_groups', ['@id' => $pid]);
+          continue;
+        }
+
         $paragraph_references[] = [
           'target_id' => $pid,
           'target_revision_id' => $pid,
         ];
+        $added_count++;
       }
 
       $node->set('field_content', $paragraph_references);
