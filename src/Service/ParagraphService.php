@@ -236,23 +236,7 @@ class ParagraphService {
 
     $normalized_type = strtolower(str_replace(' ', '_', $paragraph_type));
     $normalized_type = preg_replace('/[^a-z0-9_]/', '', $normalized_type);
-
-    // The type is validated against existing paragraph bundles later.
-    // The decision of whether a type can be top-level is handled by saveEntitiesToNode.
-    // The decision of whether a type is a child is handled by the calling function
-    // (e.g., createCardGroupItems setting setInternalBypassMainCollection).
-
     $component_data['type'] = $normalized_type;
-
-    // Ensure field_card is initialized for card_group if it's about to be created.
-    // This is more of a data consistency check for this specific type before field setting.
-    if ($normalized_type === 'card_group' && (!isset($component_data['field_card']) || !is_array($component_data['field_card']))) {
-      $this->logger->notice('Initializing empty field_card for card_group during creation. Data: @data', [
-        '@data' => json_encode($component_data),
-      ]);
-      $component_data['field_card'] = [];
-    }
-
     $paragraph_bundle = $normalized_type;
 
     $paragraph_bundles = $this->entityTypeBundleInfo->getBundleInfo('paragraph');
@@ -271,16 +255,6 @@ class ParagraphService {
 
       $this->setParagraphFields($paragraph, $component_data, $owner_id);
       $this->createChildEntities($paragraph, $component_data, $owner_id);
-
-      // Log before saving parent paragraph.
-      if ($paragraph->bundle() === 'card_group') {
-        $this->logger->notice('Before saving card_group paragraph: ID @id, Bundle @bundle, Data: @data, Field Card Value: @field_card', [
-          '@id' => $paragraph->id(), // Will be null if new.
-          '@bundle' => $paragraph->bundle(),
-          '@data' => json_encode($paragraph->toArray()),
-          '@field_card' => json_encode($paragraph->get('field_card')->getValue()),
-        ]);
-      }
 
       $paragraph->save();
       $paragraph_id = $paragraph->id();
@@ -466,163 +440,63 @@ class ParagraphService {
   protected function createChildEntities(Paragraph $paragraph, array $component_data, int $owner_id): void {
     $paragraph_type = $paragraph->bundle();
 
-    switch ($paragraph_type) {
-      case 'card_group':
-        // The AI component data for a card_group should have the cards under 'field_card'.
-        if (isset($component_data['field_card']) && is_array($component_data['field_card'])) {
-          $this->createCardGroupItems($paragraph, $component_data['field_card'], $owner_id);
-        }
-        // Fallback for older/alternative AI structures if it uses 'cards' or 'card'.
-        elseif (isset($component_data['cards']) && is_array($component_data['cards'])) {
-          $this->logger->notice('Card group data found under "cards" key instead of "field_card". Proceeding with "cards". Data: @data', [
-            '@data' => json_encode($component_data),
-          ]);
-          $this->createCardGroupItems($paragraph, $component_data['cards'], $owner_id);
-        }
-        elseif (isset($component_data['card']) && is_array($component_data['card'])) {
-          $this->logger->notice('Card group data found under "card" key instead of "field_card". Proceeding with "card". Data: @data', [
-            '@data' => json_encode($component_data),
-          ]);
-          $this->createCardGroupItems($paragraph, $component_data['card'], $owner_id);
-        }
-        break;
+    // Defines how to process child entities for different parent paragraph types.
+    // Format: 'parent_bundle' => [
+    //  'ai_data_key' => ['drupal_field_name', 'expected_child_bundle_type'],
+    //  // ... other potential AI keys for the same field ... .
+    // ].
+    $child_processing_map = [
+      'card_group' => [
+        'field_card' => ['field_card', 'card'],
+        // Fallback AI keys for card_group children.
+        'cards' => ['field_card', 'card'],
+        'card' => ['field_card', 'card'],
+      ],
+      'feature_list' => [
+        'features' => ['field_feature_items', 'feature_item'],
+      ],
+      'accordion' => [
+        'items' => ['field_accordion_items', 'accordion_item'],
+      ],
+      // Add other parent paragraph types and their child configurations here.
+    ];
 
-      case 'feature_list':
-        // Assuming 'feature_list' paragraph type and 'features' key for items.
-        if (isset($component_data['features']) && is_array($component_data['features'])) {
-          // 'field_feature_items' is the target field on the parent.
-          // 'feature_item' is the paragraph type of each child item.
-          $this->createFeatureItems($paragraph, $component_data['features'], $owner_id, 'field_feature_items', 'feature_item');
-        }
-        break;
+    if (isset($child_processing_map[$paragraph_type])) {
+      $current_type_map = $child_processing_map[$paragraph_type];
 
-      case 'accordion':
-        // Assuming 'accordion' paragraph type and 'items' key for accordion items.
-        if (isset($component_data['items']) && is_array($component_data['items'])) {
-          // 'field_accordion_items' is the target field on the parent.
-          // 'accordion_item' is the paragraph type of each child accordion panel.
-          $this->createGenericChildItems($paragraph, $component_data['items'], $owner_id, 'field_accordion_items', 'accordion_item');
-        }
-        break;
+      foreach ($current_type_map as $ai_data_key => $config) {
+        [$drupal_target_field, $expected_child_bundle] = $config;
 
-      default:
-        // No specific child entity handling configured for other paragraph types.
-        break;
-    }
-  }
+        if (isset($component_data[$ai_data_key]) && is_array($component_data[$ai_data_key])) {
+          if ($ai_data_key !== $this->normalizeFieldName($ai_data_key) && $ai_data_key !== $drupal_target_field) {
+            if ($paragraph_type === 'card_group' && ($ai_data_key === 'cards' || $ai_data_key === 'card')) {
+              $this->logger->notice(
+                'Child data for @parent_type found under AI key "@ai_key" instead of the expected "@expected_key". Proceeding.',
+                [
+                  '@parent_type' => $paragraph_type,
+                  '@ai_key' => $ai_data_key,
+                  '@expected_key' => 'field_card',
+                  'component_data' => json_encode($component_data[$ai_data_key]),
+                ]
+              );
+            }
+          }
 
-  /**
-   * Creates card items for a card_group paragraph.
-   *
-   * @param \Drupal\paragraphs\Entity\Paragraph $parent_paragraph
-   *   The parent card_group paragraph.
-   * @param array $cards_data
-   *   Array of card data.
-   * @param int $owner_id
-   *   The owner ID.
-   */
-  protected function createCardGroupItems(Paragraph $parent_paragraph, array $cards_data, int $owner_id): void {
-    if (!$parent_paragraph->hasField('field_card')) {
-      $this->logger->error('Parent card_group missing field_card.');
-      return;
-    }
-
-    $card_paragraph_references = [];
-    foreach ($cards_data as $card_data) {
-      if (!is_array($card_data)) {
-        continue;
-      }
-      if (empty($card_data['type'])) {
-        $card_data['type'] = 'card';
-      }
-      elseif ($card_data['type'] !== 'card') {
-        // Type mismatch, but proceed.
-      }
-
-      $card_data['drupalx_ai_is_child_component'] = TRUE;
-      $card_paragraph_id = $this->createNestedParagraph($card_data, $owner_id);
-
-      if ($card_paragraph_id) {
-        $card_p = Paragraph::load($card_paragraph_id);
-        if ($card_p) {
-          $card_p->setInternalBypassMainCollection = TRUE;
-          // $card_p->save(); // Child card is already saved in createNestedParagraph.
-          $card_paragraph_references[] = [
-            'target_id' => $card_p->id(),
-            'target_revision_id' => $card_p->getRevisionId(),
-          ];
+          // Important: Once children are processed for a given Drupal field using one AI key,
+          // break to avoid processing another AI key that maps to the same Drupal field.
+          // E.g., if 'field_card' is found, don't also process 'cards' for the same 'field_card' target.
+          $this->createGenericChildItems(
+            $paragraph,
+            $component_data[$ai_data_key],
+            $owner_id,
+            $drupal_target_field,
+            $expected_child_bundle
+          );
+          break;
         }
       }
     }
-
-    if (!empty($card_paragraph_references)) {
-      $this->logger->notice('Setting field_card on parent card_group (@parent_id) with child card references: @child_refs', [
-        '@parent_id' => $parent_paragraph->id(), // Might be null if parent not saved yet.
-        '@child_refs' => json_encode($card_paragraph_references),
-      ]);
-      $parent_paragraph->set('field_card', $card_paragraph_references);
-    }
-  }
-
-  /**
-   * Creates feature items for a feature_list paragraph.
-   *
-   * @param \Drupal\paragraphs\Entity\Paragraph $parent_paragraph
-   *   The parent paragraph (e.g., feature_list).
-   * @param array $features_data
-   *   Array of feature item data.
-   * @param int $owner_id
-   *   The owner ID.
-   * @param string $field_name
-   *   The field name on the parent paragraph to store feature items.
-   * @param string $item_paragraph_type
-   *   The paragraph type for individual feature items.
-   */
-  protected function createFeatureItems(
-      Paragraph $parent_paragraph,
-      array $features_data,
-      int $owner_id,
-      string $field_name = 'field_feature_items',
-      string $item_paragraph_type = 'feature_item'
-  ): void {
-    if (!$parent_paragraph->hasField($field_name)) {
-      $this->logger->error(
-        'Parent paragraph (@type) missing field @field_name.',
-        [
-          '@type' => $parent_paragraph->bundle(),
-          '@field_name' => $field_name,
-        ]
-      );
-      return;
-    }
-
-    $item_paragraph_ids = [];
-    foreach ($features_data as $item_data) {
-      if (!is_array($item_data)) {
-        continue;
-      }
-      if (empty($item_data['type'])) {
-        $item_data['type'] = $item_paragraph_type;
-      }
-      elseif ($item_data['type'] !== $item_paragraph_type) {
-        // Type mismatch, but proceed.
-      }
-
-      $item_data['drupalx_ai_is_child_component'] = TRUE;
-      $item_paragraph_id = $this->createNestedParagraph($item_data, $owner_id);
-
-      if ($item_paragraph_id) {
-        $item_paragraph_ids[] = $item_paragraph_id;
-        $item_p = Paragraph::load($item_paragraph_id);
-        if ($item_p) {
-          $item_p->setInternalBypassMainCollection = TRUE;
-        }
-      }
-    }
-
-    if (!empty($item_paragraph_ids)) {
-      $parent_paragraph->set($field_name, $item_paragraph_ids);
-    }
+    // No specific child entity handling configured for other paragraph types.
   }
 
   /**
@@ -630,62 +504,85 @@ class ParagraphService {
    *
    * @param \Drupal\paragraphs\Entity\Paragraph $parent_paragraph
    *   The parent paragraph.
-   * @param array $items_data
-   *   Array of child item data.
+   * @param array $child_items_data_list
+   *   Array of child item data objects (e.g., the content of component_data['field_card']).
    * @param int $owner_id
    *   The owner ID.
-   * @param string $field_name
-   *   The field name on the parent paragraph to store child items.
-   * @param string $item_paragraph_type
-   *   The paragraph type for individual child items.
+   * @param string $drupal_target_field_name
+   *   The machine name of the field on the parent_paragraph that will store these children.
+   * @param string $expected_child_bundle_type
+   *   The expected paragraph bundle type for the children.
    */
   protected function createGenericChildItems(
       Paragraph $parent_paragraph,
-      array $items_data,
+      array $child_items_data_list,
       int $owner_id,
-      string $field_name,
-      string $item_paragraph_type
+      string $drupal_target_field_name,
+      string $expected_child_bundle_type
   ): void {
-    if (!$parent_paragraph->hasField($field_name)) {
+    if (!$parent_paragraph->hasField($drupal_target_field_name)) {
       $this->logger->error(
         'Parent paragraph (@type) is missing field @field_name for generic child items.',
         [
           '@type' => $parent_paragraph->bundle(),
-          '@field_name' => $field_name,
+          '@field_name' => $drupal_target_field_name,
         ]
       );
       return;
     }
 
-    $item_paragraph_ids = [];
-    foreach ($items_data as $item_data) {
+    $item_paragraph_references = [];
+    foreach ($child_items_data_list as $item_data) {
       if (!is_array($item_data)) {
+        $this->logger->warning(
+          'Skipping non-array item in child_items_data_list for field @field_name on parent @type.',
+          [
+            '@field_name' => $drupal_target_field_name,
+            '@type' => $parent_paragraph->bundle(),
+            'item_data' => json_encode($item_data),
+          ]
+        );
         continue;
       }
 
-      // Default type if not specified for the child item.
+      // Determine the type for the child paragraph.
+      $child_paragraph_type = $item_data['type'] ?? $expected_child_bundle_type;
       if (empty($item_data['type'])) {
-        $item_data['type'] = $item_paragraph_type;
+        $this->logger->notice(
+          'Child item data for field @field on parent @parent_type did not specify a type. Defaulting to @default_type.',
+          [
+            '@field' => $drupal_target_field_name,
+            '@parent_type' => $parent_paragraph->bundle(),
+            '@default_type' => $expected_child_bundle_type,
+            'item_data' => json_encode($item_data),
+          ]
+        );
       }
-      // Type is different from expected.
-      elseif ($item_data['type'] !== $item_paragraph_type) {
-        // Type mismatch, but proceed. createNestedParagraph will validate.
-      }
+      // Ensure the 'type' in item_data is what we're going to create.
+      $item_data['type'] = $child_paragraph_type;
 
-      $item_data['drupalx_ai_is_child_component'] = TRUE;
-      $item_paragraph_id = $this->createNestedParagraph($item_data, $owner_id);
+      // The drupalx_ai_is_child_component flag is no longer needed here,
+      // as createGenericChildItems inherently handles child logic.
+      unset($item_data['drupalx_ai_is_child_component']);
 
-      if ($item_paragraph_id) {
-        $item_paragraph_ids[] = $item_paragraph_id;
-        $item_p = Paragraph::load($item_paragraph_id);
-        if ($item_p) {
-          $item_p->setInternalBypassMainCollection = TRUE;
+      $child_paragraph_id = $this->createNestedParagraph($item_data, $owner_id);
+
+      if ($child_paragraph_id) {
+        $child_p = Paragraph::load($child_paragraph_id);
+        if ($child_p) {
+          $child_p->setInternalBypassMainCollection = TRUE;
+          // Child paragraph is already saved by createNestedParagraph.
+          // We don't need to save it again here.
+          $item_paragraph_references[] = [
+            'target_id' => $child_p->id(),
+            'target_revision_id' => $child_p->getRevisionId(),
+          ];
         }
       }
     }
 
-    if (!empty($item_paragraph_ids)) {
-      $parent_paragraph->set($field_name, $item_paragraph_ids);
+    if (!empty($item_paragraph_references)) {
+      $parent_paragraph->set($drupal_target_field_name, $item_paragraph_references);
     }
   }
 
