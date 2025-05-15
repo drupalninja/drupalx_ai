@@ -126,15 +126,13 @@ class DrupalxAiCommands extends DrushCommands {
       return;
     }
 
+    // Preprocess components to detect common structural issues
+    $components = $this->preprocessAIGeneratedComponents($components);
+
     $this->output()->writeln(dt('AI suggested page title: "@title" and @count components.', [
       '@title' => $page_title,
       '@count' => count($components),
     ]));
-    
-    // Log the component data as JSON for debugging
-    $this->drupalxAiLogger->notice('Full components data JSON structure: @data', [
-      '@data' => json_encode($components, JSON_PRETTY_PRINT),
-    ]);
 
     $uid = $options['uid'];
     if ($uid !== NULL) {
@@ -170,7 +168,8 @@ class DrupalxAiCommands extends DrushCommands {
         '@title' => $page_title,
       ]));
 
-      $result = $this->entitySaveService->saveEntitiesToNode($node->id(), $components);
+      // Pass the already_preprocessed flag to avoid redundant logging
+      $result = $this->entitySaveService->saveEntitiesToNode($node->id(), $components, true);
 
       if (isset($result['error'])) {
         $this->logger()->error(
@@ -201,15 +200,160 @@ class DrupalxAiCommands extends DrushCommands {
             '@nid' => $node->id(),
           ]
         );
-        $page_link = $node->toUrl('canonical', ['absolute' => TRUE])->toString();
-        $this->output()->writeln(dt('Landing page created/updated successfully at @link', ['@link' => $page_link]));
       }
     }
     catch (\Exception $e) {
-      $this->logger()->error('Failed to create node or save entities: @message', ['@message' => $e->getMessage()]);
-      $this->drupalxAiLogger->error('Exception during node creation/saving: @message', ['@message' => $e->getMessage()]);
-      $this->output()->writeln(dt('An error occurred: @message', ['@message' => $e->getMessage()]));
+      $this->logger()->error(
+        'Error creating landing page: @error',
+        [
+          '@error' => $e->getMessage(),
+        ]
+      );
+      $this->drupalxAiLogger->error(
+        'Error creating landing page: @error',
+        [
+          '@error' => $e->getMessage(),
+          '@trace' => $e->getTraceAsString(),
+        ]
+      );
+      $this->output()->writeln(dt('Error creating landing page: @error', ['@error' => $e->getMessage()]));
     }
+  }
+  
+  /**
+   * Preprocesses AI-generated components to fix common structural issues.
+   *
+   * @param array $components
+   *   The raw components data from the AI service.
+   *
+   * @return array
+   *   The preprocessed components data.
+   */
+  protected function preprocessAIGeneratedComponents(array $components): array {
+    // Log original components for debugging
+    $this->drupalxAiLogger->notice('DrushCommand: Starting preprocessAIGeneratedComponents with @count components', [
+      '@count' => count($components),
+    ]);
+
+    // Check for and fix any standalone card components
+    $standalone_cards = [];
+    $other_components = [];
+    
+    // First pass: identify and separate cards, also check for nested card_group issues
+    foreach ($components as $index => $component) {
+      if (!isset($component['type'])) {
+        // Skip components without a type
+        $this->drupalxAiLogger->warning('DrushCommand: Found component without type at index @index: @data', [
+          '@index' => $index,
+          '@data' => json_encode($component),
+        ]);
+        continue;
+      }
+
+      $component_type = strtolower($component['type']);
+      
+      // Debug each component type
+      $this->drupalxAiLogger->notice('DrushCommand: Processing component type: @type at index @index', [
+        '@type' => $component_type,
+        '@index' => $index,
+      ]);
+      
+      if ($component_type === 'card') {
+        $standalone_cards[] = $component;
+        $this->drupalxAiLogger->warning('DrushCommand: Found standalone card component at index @index that will be grouped: @data', [
+          '@index' => $index,
+          '@data' => json_encode($component),
+        ]);
+      }
+      else if ($component_type === 'card_group') {
+        // Check if this card_group has field_card property properly set as an array
+        if (!isset($component['field_card']) || !is_array($component['field_card'])) {
+          $this->drupalxAiLogger->warning('DrushCommand: Card group at index @index is missing field_card array: @data', [
+            '@index' => $index,
+            '@data' => json_encode($component),
+          ]);
+          
+          // If no field_card, initialize an empty array
+          $component['field_card'] = [];
+        }
+        
+        // Add to other components with potentially fixed field_card
+        $other_components[] = $component;
+        
+        // Debug the card group's contents
+        $this->drupalxAiLogger->notice('DrushCommand: Card group contains @count cards: @data', [
+          '@count' => count($component['field_card']),
+          '@data' => json_encode($component['field_card']),
+        ]);
+      }
+      else {
+        // For non-card components, also check if they might have improperly nested card fields
+        if (isset($component['card']) && is_array($component['card']) && $component_type !== 'card_group') {
+          $this->drupalxAiLogger->warning('DrushCommand: Found component @type at index @index with "card" property that should be in a card_group: @data', [
+            '@type' => $component_type,
+            '@index' => $index,
+            '@data' => json_encode($component),
+          ]);
+          
+          // Special case: If this is a "card" array in a non-card_group component, try to fix it
+          if (count($component['card']) > 0) {
+            // See if these are supposed to be nested card components
+            $create_new_card_group = FALSE;
+            foreach ($component['card'] as $potential_card) {
+              if (isset($potential_card['type']) && strtolower($potential_card['type']) === 'card') {
+                $create_new_card_group = TRUE;
+                break;
+              }
+            }
+            
+            if ($create_new_card_group) {
+              // Create a new card_group with these cards
+              $card_group = [
+                'type' => 'card_group',
+                'field_title' => $component['field_title'] ?? $component['title'] ?? 'Related Cards',
+                'field_card' => $component['card'],
+              ];
+              
+              $this->drupalxAiLogger->notice('Created new card_group from component with "card" property: @data', [
+                '@data' => json_encode($card_group),
+              ]);
+              
+              $other_components[] = $card_group;
+              continue;
+            }
+          }
+        }
+        
+        $other_components[] = $component;
+      }
+    }
+    
+    // If we found standalone cards, create a card_group for them
+    if (!empty($standalone_cards)) {
+      $this->drupalxAiLogger->notice('DrushCommand: Creating a new card_group to contain @count standalone cards.', [
+        '@count' => count($standalone_cards),
+      ]);
+      
+      // Create a new card_group
+      $card_group = [
+        'type' => 'card_group',
+        'field_title' => 'Related Information',
+        'field_card' => $standalone_cards,
+      ];
+      
+      $other_components[] = $card_group;
+      
+      $this->drupalxAiLogger->notice('DrushCommand: Created card_group with structure: @data', [
+        '@data' => json_encode($card_group, JSON_PRETTY_PRINT),
+      ]);
+    }
+    
+    // Log the final structure
+    $this->drupalxAiLogger->notice('DrushCommand: Final preprocessed components structure: @data', [
+      '@data' => json_encode($other_components, JSON_PRETTY_PRINT),
+    ]);
+    
+    return $other_components;
   }
 
 }

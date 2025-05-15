@@ -246,6 +246,11 @@ class ParagraphService {
    *   The paragraph entity ID if successful, NULL otherwise.
    */
   public function createNestedParagraph(array $component_data, int $owner_id): ?int {
+    // Enhanced logging of incoming component data
+    $this->logger->notice('Creating nested paragraph from component: @data', [
+      '@data' => json_encode($component_data),
+    ]);
+    
     // Validate component data.
     if (empty($component_data['type']) || !is_string($component_data['type'])) {
       $this->logger->error('Component data missing required type or type is not a string.', [
@@ -256,6 +261,13 @@ class ParagraphService {
 
     // Normalize the component type to handle case variations (e.g., card, Card)
     $normalized_type = strtolower($component_data['type']);
+    
+    // CRITICAL GUARD: Ensure card components are never processed directly
+    if ($normalized_type === 'card') {
+      $this->logger->emergency('BLOCKING: Attempted to create a standalone card paragraph. Cards must only be created as part of a card_group.', []);
+      // Return without creating the paragraph
+      return NULL;
+    }
 
     // Define child-only component types (these should never be top-level).
     $child_only_types = [
@@ -316,6 +328,12 @@ class ParagraphService {
         '@normalized' => $normalized_type,
       ]);
       return NULL;
+    }
+
+    // Special handling for card_group to ensure it has field_card properly set
+    if ($normalized_type === 'card_group' && (!isset($component_data['field_card']) || !is_array($component_data['field_card']))) {
+      $this->logger->warning('Card group component is missing field_card array. Creating with empty array.');
+      $component_data['field_card'] = [];
     }
 
     // Map the AI-generated component type to a paragraph bundle.
@@ -523,21 +541,51 @@ class ParagraphService {
    *   The owner ID.
    */
   protected function createCardGroupItems(Paragraph $paragraph, array $component_data, int $owner_id): void {
-    // Look for cards under either 'cards' or 'field_card' key.
+    // Look for cards under either 'cards', 'field_card', or as individual items in 'card' key.
     $cards = [];
+    
     if (!empty($component_data['field_card']) && is_array($component_data['field_card'])) {
       $cards = $component_data['field_card'];
+      $this->logger->notice('Found @count cards in field_card array.', ['@count' => count($cards)]);
     }
     elseif (!empty($component_data['cards']) && is_array($component_data['cards'])) {
       $cards = $component_data['cards'];
+      $this->logger->notice('Found @count cards in cards array.', ['@count' => count($cards)]);
     }
-    else {
+    // Special case: if there's a single card specified with field_title, field_summary, etc.
+    elseif (!empty($component_data['field_title']) || !empty($component_data['title'])) {
+      // Create a synthetic card data structure from the current component
+      $this->logger->notice('Converting direct card properties to a card item in card_group.');
+      $card_data = [];
+      
+      // Map commonly expected fields
+      foreach (['field_title', 'title', 'field_summary', 'summary', 'field_media', 'media', 'field_link', 'link'] as $field) {
+        if (isset($component_data[$field])) {
+          $card_data[$field] = $component_data[$field];
+        }
+      }
+      
+      if (!empty($card_data)) {
+        $cards = [$card_data];
+        $this->logger->notice('Created a synthetic card from component properties.');
+      }
+    }
+    
+    if (empty($cards)) {
       $this->logger->notice('No cards found in card_group component data.');
       return;
     }
 
     $card_items = [];
+    $processed_count = 0;
+    
     foreach ($cards as $card_data) {
+      // If the card data has a 'type' field that isn't 'card', add it
+      if (!isset($card_data['type']) || $card_data['type'] !== 'card') {
+        $card_data['type'] = 'card';
+        $this->logger->notice('Added missing type=card to card data in card_group.');
+      }
+      
       // Create a card paragraph for each item.
       try {
         $card = Paragraph::create([
@@ -651,6 +699,8 @@ class ParagraphService {
         ]);
 
         $card->save();
+        $processed_count++;
+        
         $card_items[] = [
           'target_id' => $card->id(),
           'target_revision_id' => $card->getRevisionId(),
@@ -665,6 +715,10 @@ class ParagraphService {
 
     if (!empty($card_items)) {
       $paragraph->set('field_card', $card_items);
+      $this->logger->notice('Added @count card paragraphs to card_group paragraph @id.', [
+        '@count' => $processed_count,
+        '@id' => $paragraph->id(),
+      ]);
     }
   }
 

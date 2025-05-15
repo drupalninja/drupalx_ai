@@ -273,6 +273,8 @@ class AIService {
    *   On error, 'error' key will be set.
    */
   public function getComponents(string $user_description): array {
+    $this->logger->notice('AI Content request: @desc', ['@desc' => substr($user_description, 0, 100)]);
+
     $default_return_on_error = [
       'title' => 'Generated Page (Error)',
       'components' => [],
@@ -330,6 +332,7 @@ INSTRUCTIONS:
     Do not invent new `type` values. Only use types from this list.
 6.  Each component in your response must match the structure and fields shown in the example components provided below (respecting the `type`). Do not change other field names (keys).
 7.  For any fields representing images (e.g., fields with "image" or "media" in their name), the 'alt' text MUST be a brief, thematic, and descriptive phrase for the image. Avoid generic placeholders.
+8.  CRITICAL: Cards must only be included inside a 'card_group' component. Never provide a standalone 'card' component at the top level.
 
 Here is the library of available Drupal UI components (use their `type` field and structure):
 ```json
@@ -454,6 +457,9 @@ EOT;
       ];
     }
 
+    // Process components through our preprocessor to fix any issues
+    $extracted_ai_components = $this->preprocessComponents($extracted_ai_components);
+    
     // Perform validation using the injected ValidationService.
     $validation_data = $this->validationService->performFullValidation($extracted_ai_components);
 
@@ -490,5 +496,104 @@ EOT;
       'validation_data' => $validation_data,
     ];
   }
+
+  // The main getComponents method is already implemented above
+
+  /**
+   * Preprocesses components to handle common issues before passing to EntityService.
+   *
+   * @param array $components
+   *   The components array from the AI response.
+   *
+   * @return array
+   *   The preprocessed components.
+   */
+  protected function preprocessComponents(array $components): array {
+    $processed_components = [];
+    $standalone_cards = [];
+
+    // First pass to identify any cards at the top level
+    foreach ($components as $index => $component) {
+      // Skip if no type
+      if (!isset($component['type'])) {
+        continue;
+      }
+
+      $type = strtolower($component['type']);
+
+      // Handle standalone cards
+      if ($type === 'card') {
+        $standalone_cards[] = $component;
+        $this->logger->warning('Found standalone card at index @index in AI response', [
+          '@index' => $index,
+        ]);
+      }
+      // Special handling for card_group
+      else if ($type === 'card_group') {
+        // Ensure field_card exists and is an array
+        if (!isset($component['field_card']) && isset($component['card'])) {
+          // "card" property instead of "field_card" - fix it
+          $component['field_card'] = $component['card'];
+          unset($component['card']);
+          $this->logger->notice('Fixed card_group: moved "card" property to "field_card"');
+        }
+
+        // Make sure field_card is an array
+        if (!isset($component['field_card'])) {
+          $component['field_card'] = [];
+        }
+        else if (!is_array($component['field_card'])) {
+          $component['field_card'] = [$component['field_card']];
+        }
+
+        // Ensure all cards in field_card have type=card
+        if (!empty($component['field_card'])) {
+          foreach ($component['field_card'] as $i => $card) {
+            if (!isset($card['type'])) {
+              $component['field_card'][$i]['type'] = 'card';
+            }
+          }
+        }
+
+        $processed_components[] = $component;
+      }
+      else {
+        $processed_components[] = $component;
+      }
+    }
+
+    // If we found standalone cards, create a card_group for them
+    if (!empty($standalone_cards)) {
+      // Create a new card_group with the standalone cards
+      $card_group = [
+        'type' => 'card_group',
+        'field_title' => 'Additional Information',
+        'field_card' => $standalone_cards,
+      ];
+
+      $processed_components[] = $card_group;
+
+      $this->logger->notice('Created new card_group for @count standalone cards: @data', [
+        '@count' => count($standalone_cards),
+        '@data' => json_encode($card_group),
+      ]);
+    }
+
+    // Final check for any "card" type paragraphs at top level
+    foreach ($processed_components as $index => $component) {
+      if (isset($component['type']) && strtolower($component['type']) === 'card') {
+        $this->logger->emergency('Still found a top-level card paragraph after preprocessing at index @index - removing it!', [
+          '@index' => $index,
+        ]);
+        unset($processed_components[$index]);
+      }
+    }
+
+    // Reset array indexes
+    $processed_components = array_values($processed_components);
+    
+    return $processed_components;
+  }
+
 }
 
