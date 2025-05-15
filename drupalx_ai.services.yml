@@ -5,11 +5,11 @@ services:
 
   drupalx_ai.entity_save_service:
     class: Drupal\drupalx_ai\Service\EntitySaveService
-    arguments: ['@entity_type.manager', '@logger.factory', '@drupalx_ai.paragraph_service', '@drupalx_ai.media_service', '@drupalx_ai.taxonomy_service', '@drupalx_ai.file_service']
+    arguments: ['@entity_type.manager', '@logger.factory', '@drupalx_ai.paragraph_service', '@drupalx_ai.media_service', '@drupalx_ai.taxonomy_service', '@drupalx_ai.file_service', '@drupalx_ai.output_formatter_service']
 
   drupalx_ai.paragraph_service:
     class: Drupal\drupalx_ai\Service\ParagraphService
-    arguments: ['@entity_type.manager', '@logger.factory', '@current_user', '@entity_type.bundle.info', '@entity_field.manager', '@drupalx_ai.media_service', '@drupalx_ai.taxonomy_service']
+    arguments: ['@entity_type.manager', '@logger.factory', '@current_user', '@entity_type.bundle.info', '@entity_field.manager', '@drupalx_ai.media_service', '@drupalx_ai.taxonomy_service', '@drupalx_ai.output_formatter_service']
 
   drupalx_ai.media_service:
     class: Drupal\drupalx_ai\Service\MediaService
@@ -26,3 +26,7 @@ services:
   drupalx_ai.validation_service:
     class: Drupal\drupalx_ai\Service\ValidationService
     arguments: ['@module_handler', '@entity_type.bundle.info', '@logger.factory']
+    
+  drupalx_ai.output_formatter_service:
+    class: Drupal\drupalx_ai\Service\OutputFormatterService
+    arguments: []

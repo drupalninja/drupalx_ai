@@ -152,21 +152,21 @@ class MediaService {
         ]);
         return NULL;
       }
-      
+
       // Create a placeholder file (in a real implementation, we would use a default placeholder file).
       // For now, we'll use file ID 1 as a placeholder.
       $file_id = 1;
-      
+
       // Use field_image as the source field for image media.
       $source_field = 'field_image';
-      
+
       // Log media creation for debugging.
       $this->logger->notice('Creating @bundle media with source field @field and alt text: @alt', [
         '@bundle' => $bundle,
         '@field' => $source_field,
         '@alt' => $alt_text,
       ]);
-      
+
       // Create the media entity.
       $media = Media::create([
         'bundle' => $bundle,
@@ -178,7 +178,7 @@ class MediaService {
           'alt' => $alt_text,
         ],
       ]);
-      
+
       $media->save();
       return $media->id();
     }
@@ -186,9 +186,10 @@ class MediaService {
       $this->logger->error('Error creating placeholder media: @error', [
         '@error' => $e->getMessage(),
       ]);
-      
+
       // Fall back to returning a fixed media ID in case of error.
       return 1;
     }
   }
+
 }

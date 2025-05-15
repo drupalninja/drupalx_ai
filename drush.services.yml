@@ -7,5 +7,6 @@ services:
       - '@entity_type.manager'
       - '@current_user'
       - '@logger.factory'
+      - '@drupalx_ai.output_formatter_service'
     tags:
       - { name: drush.command }

@@ -116,7 +116,8 @@ class FileService {
     $this->logger->notice('Would create a placeholder file with owner ID: @owner_id', [
       '@owner_id' => $owner_id,
     ]);
-    
+
     return 1;
   }
+
 }

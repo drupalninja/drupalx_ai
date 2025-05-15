@@ -11,6 +11,7 @@ use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
+use Drupal\drupalx_ai\Service\OutputFormatterService;
 
 /**
  * Service for handling paragraph entities in the DrupalX AI module.
@@ -61,6 +62,13 @@ class ParagraphService {
   protected MediaService $mediaService;
 
   /**
+   * The output formatter service.
+   *
+   * @var \Drupal\drupalx_ai\Service\OutputFormatterService
+   */
+  protected OutputFormatterService $outputFormatter;
+
+  /**
    * The taxonomy service.
    *
    * @var \Drupal\drupalx_ai\Service\TaxonomyService
@@ -84,6 +92,8 @@ class ParagraphService {
    *   The media service.
    * @param \Drupal\drupalx_ai\Service\TaxonomyService $taxonomy_service
    *   The taxonomy service.
+   * @param \Drupal\drupalx_ai\Service\OutputFormatterService $output_formatter
+   *   The output formatter service.
    */
   public function __construct(
     EntityTypeManagerInterface $entity_type_manager,
@@ -92,7 +102,8 @@ class ParagraphService {
     EntityTypeBundleInfoInterface $entity_type_bundle_info,
     EntityFieldManagerInterface $entity_field_manager,
     MediaService $media_service,
-    TaxonomyService $taxonomy_service
+    TaxonomyService $taxonomy_service,
+    OutputFormatterService $output_formatter
   ) {
     $this->entityTypeManager = $entity_type_manager;
     $this->logger = $logger_factory->get('drupalx_ai');
@@ -101,6 +112,7 @@ class ParagraphService {
     $this->entityFieldManager = $entity_field_manager;
     $this->mediaService = $media_service;
     $this->taxonomyService = $taxonomy_service;
+    $this->outputFormatter = $output_formatter;
   }
 
   /**
@@ -250,7 +262,7 @@ class ParagraphService {
     $this->logger->notice('Creating nested paragraph from component: @data', [
       '@data' => json_encode($component_data),
     ]);
-    
+
     // Validate component data.
     if (empty($component_data['type']) || !is_string($component_data['type'])) {
       $this->logger->error('Component data missing required type or type is not a string.', [
@@ -261,7 +273,7 @@ class ParagraphService {
 
     // Normalize the component type to handle case variations (e.g., card, Card)
     $normalized_type = strtolower($component_data['type']);
-    
+
     // CRITICAL GUARD: Ensure card components are never processed directly
     if ($normalized_type === 'card') {
       $this->logger->emergency('BLOCKING: Attempted to create a standalone card paragraph. Cards must only be created as part of a card_group.', []);
@@ -543,7 +555,7 @@ class ParagraphService {
   protected function createCardGroupItems(Paragraph $paragraph, array $component_data, int $owner_id): void {
     // Look for cards under either 'cards', 'field_card', or as individual items in 'card' key.
     $cards = [];
-    
+
     if (!empty($component_data['field_card']) && is_array($component_data['field_card'])) {
       $cards = $component_data['field_card'];
       $this->logger->notice('Found @count cards in field_card array.', ['@count' => count($cards)]);
@@ -557,20 +569,20 @@ class ParagraphService {
       // Create a synthetic card data structure from the current component
       $this->logger->notice('Converting direct card properties to a card item in card_group.');
       $card_data = [];
-      
+
       // Map commonly expected fields
       foreach (['field_title', 'title', 'field_summary', 'summary', 'field_media', 'media', 'field_link', 'link'] as $field) {
         if (isset($component_data[$field])) {
           $card_data[$field] = $component_data[$field];
         }
       }
-      
+
       if (!empty($card_data)) {
         $cards = [$card_data];
         $this->logger->notice('Created a synthetic card from component properties.');
       }
     }
-    
+
     if (empty($cards)) {
       $this->logger->notice('No cards found in card_group component data.');
       return;
@@ -578,14 +590,14 @@ class ParagraphService {
 
     $card_items = [];
     $processed_count = 0;
-    
+
     foreach ($cards as $card_data) {
       // If the card data has a 'type' field that isn't 'card', add it
       if (!isset($card_data['type']) || $card_data['type'] !== 'card') {
         $card_data['type'] = 'card';
         $this->logger->notice('Added missing type=card to card data in card_group.');
       }
-      
+
       // Create a card paragraph for each item.
       try {
         $card = Paragraph::create([
@@ -700,7 +712,7 @@ class ParagraphService {
 
         $card->save();
         $processed_count++;
-        
+
         $card_items[] = [
           'target_id' => $card->id(),
           'target_revision_id' => $card->getRevisionId(),
@@ -778,4 +790,5 @@ class ParagraphService {
       $paragraph->set('field_items', $feature_items);
     }
   }
+
 }

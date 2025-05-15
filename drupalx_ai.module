@@ -36,3 +36,51 @@ function drupalx_ai_theme($existing, $type, $theme, $path) {
   ];
 }
 
+/**
+ * Implements hook_drupalx_ai_format_notice().
+ * 
+ * Format log notices for prettier output in the Drush command.
+ */
+function drupalx_ai_format_notice(string $message, array $context = []): string {
+  /** @var \Drupal\drupalx_ai\Service\OutputFormatterService $formatter */
+  $formatter = \Drupal::service('drupalx_ai.output_formatter_service');
+  
+  if (!$formatter) {
+    return $message;
+  }
+  
+  return $formatter->formatLogMessage($message, 'notice', $context);
+}
+
+/**
+ * Implements hook_drupalx_ai_format_warning().
+ * 
+ * Format log warnings for prettier output in the Drush command.
+ */
+function drupalx_ai_format_warning(string $message, array $context = []): string {
+  /** @var \Drupal\drupalx_ai\Service\OutputFormatterService $formatter */
+  $formatter = \Drupal::service('drupalx_ai.output_formatter_service');
+  
+  if (!$formatter) {
+    return $message;
+  }
+  
+  return $formatter->formatLogMessage($message, 'warning', $context);
+}
+
+/**
+ * Implements hook_drupalx_ai_format_error().
+ * 
+ * Format log errors for prettier output in the Drush command.
+ */
+function drupalx_ai_format_error(string $message, array $context = []): string {
+  /** @var \Drupal\drupalx_ai\Service\OutputFormatterService $formatter */
+  $formatter = \Drupal::service('drupalx_ai.output_formatter_service');
+  
+  if (!$formatter) {
+    return $message;
+  }
+  
+  return $formatter->formatLogMessage($message, 'error', $context);
+}
+

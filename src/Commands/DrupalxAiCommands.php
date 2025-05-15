@@ -6,6 +6,7 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\drupalx_ai\Service\AIService;
 use Drupal\drupalx_ai\Service\EntitySaveService;
+use Drupal\drupalx_ai\Service\OutputFormatterService;
 use Drupal\node\Entity\Node;
 use Drush\Commands\DrushCommands;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
@@ -55,6 +56,13 @@ class DrupalxAiCommands extends DrushCommands {
   protected LoggerInterface $drupalxAiLogger;
 
   /**
+   * The output formatter service.
+   *
+   * @var \Drupal\drupalx_ai\Service\OutputFormatterService
+   */
+  protected OutputFormatterService $outputFormatter;
+
+  /**
    * Constructs a DrupalxAiCommands object.
    *
    * @param \Drupal\drupalx_ai\Service\AIService $ai_service
@@ -73,7 +81,8 @@ class DrupalxAiCommands extends DrushCommands {
     EntitySaveService $entity_save_service,
     EntityTypeManagerInterface $entity_type_manager,
     AccountProxyInterface $current_user,
-    LoggerChannelFactoryInterface $logger_factory
+    LoggerChannelFactoryInterface $logger_factory,
+    OutputFormatterService $output_formatter
   ) {
     parent::__construct();
     $this->aiService = $ai_service;
@@ -81,6 +90,7 @@ class DrupalxAiCommands extends DrushCommands {
     $this->entityTypeManager = $entity_type_manager;
     $this->currentUser = $current_user;
     $this->drupalxAiLogger = $logger_factory->get('drupalx_ai');
+    $this->outputFormatter = $output_formatter;
   }
 
   /**
@@ -101,6 +111,7 @@ class DrupalxAiCommands extends DrushCommands {
     );
 
     $this->output()->writeln(dt('<fg=cyan;options=bold>🗨 Prompt:</> <fg=green>"@desc"</>', ['@desc' => $description]));
+    $this->output()->writeln("");
     $this->output()->writeln("");
 
     $this->drupalxAiLogger->info('Attempting to generate page with description: "@desc" [...]', ['@desc' => substr($description, 0, 50)]);
@@ -199,8 +210,16 @@ Suggested title was: <fg=green>"{@title}"</>.
         '@title' => $page_title,
       ]));
 
-      // Pass the already_preprocessed flag to avoid redundant logging
-      $result = $this->entitySaveService->saveEntitiesToNode($node->id(), $components, true);
+      // Display a nice formatted component preview before saving.
+      $this->showFormattedComponentLogs($components);
+
+      // Pass the already_preprocessed flag to avoid redundant logging.
+      $this->output()->writeln(dt('<fg=cyan;options=bold>🧩 Adding components to node:</> <fg=yellow>@nid</>', ['@nid' => $node->id()]));
+
+      // Show a nice colorful progress bar.
+      $this->formatProgressBar(count($components));
+
+      $result = $this->entitySaveService->saveEntitiesToNode($node->id(), $components, TRUE);
 
       if (isset($result['error'])) {
         $this->logger()->error(
@@ -230,7 +249,7 @@ Suggested title was: <fg=green>"{@title}"</>.
             '@nid' => $node->id(),
           ]
         );
-        
+
         // Add a fancy completion banner.
         $this->output()->writeln("");
         $this->output()->writeln(
@@ -298,38 +317,115 @@ Suggested title was: <fg=green>"{@title}"</>.
    *   An emoji icon representing the component type.
    */
   protected function getComponentIcon(string $type): string {
-    // Map of component types to appropriate icons
-    $icons = [
-      'hero' => '🏔️',
-      'card' => '🃏',
-      'card_group' => '🗂️',
-      'text' => '📄',
-      'blockquote' => '💬',
-      'quote' => '💬',
-      'banner' => '🚩',
-      'image' => '🖼️',
-      'accordion' => '🪗',
-      'tabs' => '📑',
-      'video' => '🎥',
-      'webform' => '📝',
-      'newsletter' => '📨',
-      'cta' => '🔔',
-      'logo_collection' => '🏢',
-      'stats' => '📊',
-      'stat_item' => '📊',
-      'icon_text' => '🔤',
-      'gallery' => '🖼️',
-      'timeline' => '⏱️',
-      'social_links' => '🔗',
-      'slider' => '▶️',
-      'map' => '🗺️',
-      'faq' => '❓',
-      'table' => '📋',
-      'testimonial' => '👤',
-      'feature' => '✨',
-    ];
+    return $this->outputFormatter->getComponentIcon($type);
+  }
 
-    return $icons[$type] ?? '📦';
+  /**
+   * Override the standard logger to use our formatted output for the console.
+   *
+   * This will intercept messages that would normally go to the Drupal logger
+   * and display them with colorful formatting in the console.
+   *
+   * @param string $channel
+   *   The logger channel to use.
+   * @param string $message
+   *   The message to log.
+   * @param array $context
+   *   The context for the message.
+   * @param string $level
+   *   The log level (notice, warning, error, etc).
+   */
+  protected function logWithFormatting(string $channel, string $message, array $context = [], string $level = 'notice'): void {
+    // Still log to Drupal's logger for database logging.
+    $this->drupalxAiLogger->$level($message, $context);
+
+    // Apply our custom formatting for console output.
+    $formatted = $this->outputFormatter->formatLogMessage($message, $level, $context);
+    $this->output()->writeln($formatted);
+  }
+
+  /**
+   * Displays component creation logs with formatting.
+   *
+   * This method formats the output of the component creation process with
+   * colorful, icon-based formatting for better readability.
+   *
+   * @param array $components
+   *   The components data to log.
+   */
+  protected function showFormattedComponentLogs(array $components): void {
+    // Start with a header.
+    $this->output()->writeln('');
+    $this->output()->writeln('<fg=cyan;options=bold>📦 Component Creation Details:</>');
+
+    foreach ($components as $component) {
+      if (isset($component['type'])) {
+        $type = $component['type'];
+        $icon = $this->outputFormatter->getComponentIcon($type);
+
+        // Format the component header.
+        $this->output()->writeln(
+          "<fg=green>$icon <fg=yellow;options=bold>$type</> component:</>"
+        );
+
+        // Show key fields with proper formatting.
+        if (isset($component['field_title'])) {
+          $this->output()->writeln("  <fg=blue>🔤 Title:</> <fg=white>{$component['field_title']}</>");
+        }
+
+        if (isset($component['field_media'])) {
+          $mediaType = $component['field_media']['type'] ?? 'unknown';
+          $mediaIcon = $this->outputFormatter->getComponentIcon($mediaType);
+          $this->output()->writeln("  <fg=blue>$mediaIcon Media:</> <fg=white>$mediaType</>");
+        }
+
+        if (isset($component['field_card']) && is_array($component['field_card'])) {
+          $cardCount = count($component['field_card']);
+          $this->output()->writeln("  <fg=blue>🃏 Cards:</> <fg=yellow>$cardCount</>");
+        }
+
+        $this->output()->writeln('');
+      }
+    }
+  }
+
+  /**
+   * Displays a colorful progress bar for component creation.
+   *
+   * @param int $totalComponents
+   *   The total number of components to be processed.
+   */
+  protected function formatProgressBar(int $totalComponents): void {
+    $this->output()->writeln('');
+    $this->output()->writeln('<fg=blue;options=bold>⏳ Creating components...</>');
+
+    // Simple progress bar
+    $barWidth = 50;
+    $colors = ['red', 'yellow', 'green', 'cyan', 'blue', 'magenta'];
+
+    for ($i = 0; $i <= $barWidth; $i++) {
+      $percent = floor(($i / $barWidth) * 100);
+      $colorIndex = $i % count($colors);
+      $color = $colors[$colorIndex];
+
+      // Create the progress bar
+      $progress = str_repeat('=', $i);
+      $remaining = str_repeat(' ', $barWidth - $i);
+
+      // Add some dynamic icons based on progress
+      $icons = ['📌', '🏢', '🏔️', '🃏', '💬', '✨'];
+      $icon = $icons[$i % count($icons)];
+
+      // Display the progress bar with color
+      $this->output()->write("\r<fg=$color>$icon [$progress>$remaining] $percent%</>");
+
+      // Simulate the process for the progress bar
+      usleep(20000); // 20ms delay
+    }
+
+    $this->output()->writeln('');
+    $this->output()->writeln('<fg=green;options=bold>✅ Ready to add components!</>');
+    $this->output()->writeln('');
   }
 
 }
