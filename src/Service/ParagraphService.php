@@ -227,9 +227,17 @@ class ParagraphService {
   public function createNestedParagraph(array $component_data, int $owner_id): ?int {
     $paragraph_type = $component_data['type'] ?? NULL;
     if (!$paragraph_type) {
-      $this->logger->error('Paragraph type missing: @data', [
+      $this->logger->error('Paragraph type missing in component data: @data', [
         '@data' => json_encode($component_data),
       ]);
+      return NULL;
+    }
+
+    // If the component type from AI explicitly suggests a non-paragraph entity
+    // type that should be handled by a different service, do not attempt to
+    // create a paragraph.
+    $lower_paragraph_type = strtolower($paragraph_type);
+    if ($lower_paragraph_type === 'media') {
       return NULL;
     }
 
@@ -257,6 +265,15 @@ class ParagraphService {
 
       $paragraph->save();
       $paragraph_id = $paragraph->id();
+
+      // Log successful paragraph creation.
+      $this->logger->notice(
+        'Successfully saved Paragraph entity (bundle: "@bundle", ID: @id).',
+        [
+          '@bundle' => $paragraph->bundle(),
+          '@id' => $paragraph_id,
+        ]
+      );
 
       return $paragraph_id;
     }

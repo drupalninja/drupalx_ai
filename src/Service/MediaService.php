@@ -171,7 +171,18 @@ class MediaService {
       ]);
 
       $media->save();
-      return $media->id();
+      $media_id = $media->id();
+
+      $this->logger->notice(
+        'Successfully saved Media entity (bundle: "@bundle", ID: @id, alt: "@alt").',
+        [
+          '@bundle' => $bundle,
+          '@id' => $media_id,
+          '@alt' => $alt_text,
+        ]
+      );
+
+      return $media_id;
     }
     catch (\Exception $e) {
       $this->logger->error('Error creating placeholder media: @error', [

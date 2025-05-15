@@ -371,9 +371,6 @@ EOT;
 
       $ai_content = $response->choices[0]->message->content;
 
-      // Log the raw AI content before attempting to extract JSON.
-      $this->logger->notice('Raw content from AI: @content', ['@content' => $ai_content]);
-
       // Extract Page Title.
       $title_match = [];
       if (preg_match('/PAGE_TITLE:(.*)/i', $ai_content, $title_match)) {
