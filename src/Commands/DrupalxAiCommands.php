@@ -150,6 +150,10 @@ class DrupalxAiCommands extends DrushCommands {
         'uid' => $uid,
         'status' => Node::PUBLISHED,
       ]);
+      // Set field_hide_page_title to TRUE for 'landing' nodes.
+      if ($node->bundle() === 'landing' && $node->hasField('field_hide_page_title')) {
+        $node->set('field_hide_page_title', TRUE);
+      }
       $node->save();
 
       $result = $this->paragraphService->saveEntitiesToNode($node->id(), $components);
