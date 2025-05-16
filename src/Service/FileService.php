@@ -8,6 +8,7 @@ use Drupal\Core\Logger\LoggerChannelInterface;
 use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
+use Drupal\file\FileInterface;
 
 /**
  * Service for handling files in the DrupalX AI module.
@@ -99,6 +100,40 @@ class FileService {
       return 'unnamed_file';
     }
     return $filename;
+  }
+
+  /**
+   * Creates a Drupal file entity from a given URI.
+   *
+   * @param string $file_uri
+   *   The URI of the file (e.g., 'public://image.png').
+   * @param int $owner_id
+   *   The user ID to set as the owner of the file.
+   *
+   * @return \Drupal\file\FileInterface|null
+   *   The created file entity, or NULL on failure.
+   */
+  public function createFileEntity(string $file_uri, int $owner_id): ?FileInterface {
+    try {
+      $file_storage = $this->entityTypeManager->getStorage('file');
+      $filename = basename($file_uri);
+      $file = $file_storage->create([
+        'uri' => $file_uri,
+        'uid' => $owner_id,
+        'filename' => $filename,
+        // 1 for permanent, 0 for temporary.
+        'status' => 1,
+      ]);
+      $file->save();
+      return $file;
+    }
+    catch (\Exception $e) {
+      $this->logger->error('Failed to create file entity for URI @uri: @error', [
+        '@uri' => $file_uri,
+        '@error' => $e->getMessage(),
+      ]);
+      return NULL;
+    }
   }
 
   /**

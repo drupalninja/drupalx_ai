@@ -12,7 +12,7 @@ use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 
 /**
- * Service for handling media entities in the DrupalX AI module.
+ * Service for handling image media entities in the DrupalX AI module.
  */
 class MediaService {
   use StringTranslationTrait;
@@ -92,22 +92,21 @@ class MediaService {
   }
 
   /**
-   * Creates or loads a single media item.
+   * Creates or loads a single image media item.
    *
    * @param array|string $media_data
-   *   Array containing media information (e.g., url, alt, bundle) or a URL string.
+   *   Array containing media information (e.g., url, alt) or a URL string.
    * @param int $owner_id
    *   The user ID to set as the owner of the media item.
-   * @param string|null $default_bundle
-   *   The default media bundle to use if not specified in $media_data.
    *
    * @return int|null
    *   The media ID or NULL on failure.
    */
-  public function ensureMediaEntityExists($media_data, int $owner_id, ?string $default_bundle = 'image'): ?int {
+  public function ensureMediaEntityExists($media_data, int $owner_id): ?int {
     $media_url = NULL;
-    $alt_text = 'AI-generated media';
-    $bundle = $default_bundle;
+    $alt_text = 'AI-generated image';
+    // For this service, we only handle 'image' bundle.
+    $bundle = 'image';
 
     if (is_string($media_data)) {
       $media_url = $media_data;
@@ -115,24 +114,26 @@ class MediaService {
     elseif (is_array($media_data)) {
       $media_url = $media_data['media_url'] ?? ($media_data['url'] ?? NULL);
       $alt_text = $media_data['media_alt'] ?? ($media_data['alt'] ?? $alt_text);
-      $bundle = $media_data['bundle'] ?? $bundle;
+      // Bundle is always 'image', ignore $media_data['bundle'].
     }
 
     if (empty($media_url)) {
+      // If no URL is provided, create a placeholder image.
       return $this->createPlaceholderMediaItem($bundle, $alt_text, $owner_id);
     }
 
-    // For now, always create a placeholder. Future: implement actual download/check.
+    // For now, always create a placeholder even if a URL is provided.
+    // Future: implement actual download/check for the given URL.
     return $this->createPlaceholderMediaItem($bundle, $alt_text, $owner_id);
   }
 
   /**
-   * Creates a placeholder media item for use in AI-generated content.
+   * Creates a placeholder image media item.
    *
    * @param string $bundle
-   *   The media bundle type (e.g., 'image', 'video', etc.).
+   *   The media bundle type, should always be 'image'.
    * @param string $alt_text
-   *   The alt text for the media.
+   *   The alt text for the image.
    * @param int $owner_id
    *   The owner user ID.
    *
@@ -140,40 +141,79 @@ class MediaService {
    *   Media entity ID if successful, NULL otherwise.
    */
   public function createPlaceholderMediaItem(string $bundle, string $alt_text, int $owner_id): ?int {
+    // Ensure the bundle is 'image' for this simplified service.
+    if ($bundle !== 'image') {
+      $this->logger->warning('MediaService is configured to only handle "image" bundle, but "@bundle" was requested. Attempting to create an image anyway.', [
+        '@bundle' => $bundle,
+      ]);
+      $bundle = 'image';
+    }
+
     try {
-      // Check if the media bundle exists.
       $media_bundle_info = $this->entityTypeBundleInfo->getBundleInfo('media');
       if (!isset($media_bundle_info[$bundle])) {
-        $this->logger->error('Media bundle @bundle does not exist.', [
+        $this->logger->error('Image media bundle "@bundle" does not exist.', [
           '@bundle' => $bundle,
         ]);
         return NULL;
       }
 
-      // Create a placeholder file (in a real implementation, we would use a
-      // default placeholder file).
-      // For now, we'll use file ID 1 as a placeholder.
+      $module_path = DRUPAL_ROOT . '/' . \Drupal::service('extension.list.module')->getPath('drupalx_ai');
+      $placeholder_image_path = $module_path . '/files/card.png';
+      // Default fallback file ID.
       $file_id = 1;
 
-      // Use field_image as the source field for image media.
+      if (!file_exists($placeholder_image_path)) {
+        $this->logger->error('Placeholder image not found at @path. Using fallback file ID.', ['@path' => $placeholder_image_path]);
+      }
+      else {
+        $destination_filename = basename($placeholder_image_path);
+        $destination_uri = 'public://' . $destination_filename;
+
+        $file_uri = $this->fileSystem->copy($placeholder_image_path, $destination_uri, FileSystemInterface::EXISTS_REPLACE);
+
+        if (!$file_uri) {
+          $this->logger->error('Failed to copy placeholder image to @destination. Using fallback file ID.', ['@destination' => $destination_uri]);
+        }
+        else {
+          $file_entity = $this->fileService->createFileEntity($file_uri, $owner_id);
+          if ($file_entity) {
+            $file_id = $file_entity->id();
+          }
+          else {
+            $this->logger->error('Failed to create file entity for placeholder image at @uri. Using fallback file ID.', ['@uri' => $file_uri]);
+          }
+        }
+      }
+
+      // Hardcoded for image media bundle.
       $source_field = 'field_image';
 
-      // Create the media entity.
-      $media = Media::create([
+      $bundle_fields = \Drupal::service('entity_field.manager')->getFieldDefinitions('media', $bundle);
+      if (!isset($bundle_fields[$source_field])) {
+        $this->logger->error('Source field @source_field does not exist on image media bundle @bundle.', [
+          '@source_field' => $source_field,
+          '@bundle' => $bundle,
+        ]);
+        return NULL;
+      }
+
+      $media_values = [
         'bundle' => $bundle,
         'uid' => $owner_id,
-        'status' => 1,
+        // Use TRUE for boolean values.
+        'status' => TRUE,
         'name' => 'AI-generated ' . $bundle . ' placeholder',
         $source_field => [
           'target_id' => $file_id,
           'alt' => $alt_text,
         ],
-      ]);
+      ];
 
+      $media = Media::create($media_values);
       $media->save();
       $media_id = $media->id();
 
-      // Define color and icon for this log message.
       $color_blue = "\033[0;34m";
       $icon_media = "🖼️";
       $color_reset = "\033[0m";
@@ -193,7 +233,6 @@ class MediaService {
       $this->logger->error('Error creating placeholder media: @error', [
         '@error' => $e->getMessage(),
       ]);
-
       // Fall back to returning a fixed media ID in case of error.
       return 1;
     }
