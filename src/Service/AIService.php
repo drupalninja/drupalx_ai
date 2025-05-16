@@ -376,6 +376,8 @@ EOT;
 
       $ai_content = $response->choices[0]->message->content;
 
+      $this->logger->debug('AIService: Full AI response content: @content', ['@content' => $ai_content]);
+
       // Extract Page Title.
       $title_match = [];
       if (preg_match('/PAGE_TITLE:(.*)/i', $ai_content, $title_match)) {
@@ -387,13 +389,8 @@ EOT;
       $json_string_from_ai = $this->extractJsonFromString(trim($ai_content));
 
       if ($json_string_from_ai) {
-        // Define color and icon for this log message.
-        $color_yellow = "\033[0;33m";
-        $icon_idea = "💡";
-        $color_reset = "\033[0m";
-
-        $this->logger->notice(
-          $color_yellow . $icon_idea . ' Raw JSON string extracted from AI: ' . $color_reset . '@json',
+        $this->logger->debug(
+          'AIService: Raw JSON string extracted from AI: @json',
           ['@json' => $json_string_from_ai]
         );
 

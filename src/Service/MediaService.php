@@ -102,7 +102,7 @@ class MediaService {
    * @return int|null
    *   The media ID or NULL on failure.
    */
-  public function ensureMediaEntityExists($media_data, int $owner_id): ?int {
+  public function ensureMediaEntityExists($media_data, int $owner_id): ?array {
     $media_url = NULL;
     $alt_text = 'AI-generated image';
     // For this service, we only handle 'image' bundle.
@@ -140,7 +140,7 @@ class MediaService {
    * @return int|null
    *   Media entity ID if successful, NULL otherwise.
    */
-  public function createPlaceholderMediaItem(string $bundle, string $alt_text, int $owner_id): ?int {
+  public function createPlaceholderMediaItem(string $bundle, string $alt_text, int $owner_id): ?array {
     // Ensure the bundle is 'image' for this simplified service.
     if ($bundle !== 'image') {
       $this->logger->warning('MediaService is configured to only handle "image" bundle, but "@bundle" was requested. Attempting to create an image anyway.', [
@@ -165,6 +165,16 @@ class MediaService {
 
       if (!file_exists($placeholder_image_path)) {
         $this->logger->error('Placeholder image not found at @path. Using fallback file ID.', ['@path' => $placeholder_image_path]);
+        // Attempt to load media 1 and get its revision if we are falling back.
+        $fallback_media = $this->entityTypeManager->getStorage('media')->load(1);
+        if ($fallback_media) {
+          return [
+            'id' => 1,
+            'revision_id' => $fallback_media->getRevisionId(),
+          ];
+        }
+        // Cannot provide a valid revision for fallback ID 1.
+        return NULL;
       }
       else {
         $destination_filename = basename($placeholder_image_path);
@@ -173,29 +183,83 @@ class MediaService {
         $file_uri = $this->fileSystem->copy($placeholder_image_path, $destination_uri, FileSystemInterface::EXISTS_REPLACE);
 
         if (!$file_uri) {
-          $this->logger->error('Failed to copy placeholder image to @destination. Using fallback file ID.', ['@destination' => $destination_uri]);
+          $this->logger->error(
+            'Failed to copy placeholder image to @destination. Using fallback file ID.',
+            [
+              '@destination' => $destination_uri,
+            ]
+          );
+          $fallback_media = $this->entityTypeManager->getStorage('media')->load(1);
+          if ($fallback_media) {
+            return [
+              'id' => 1,
+              'revision_id' => $fallback_media->getRevisionId()
+            ];
+          }
+          return NULL;
         }
         else {
-          $file_entity = $this->fileService->createFileEntity($file_uri, $owner_id);
+          $file_entity = $this->fileService->createFileEntity($file_uri, $owner_id, $destination_filename);
           if ($file_entity) {
             $file_id = $file_entity->id();
           }
           else {
-            $this->logger->error('Failed to create file entity for placeholder image at @uri. Using fallback file ID.', ['@uri' => $file_uri]);
+            $this->logger->error(
+              'Failed to create file entity for placeholder image at @uri. Using fallback file ID.',
+              [
+                '@uri' => $file_uri,
+              ]
+            );
+            $fallback_media = $this->entityTypeManager->getStorage('media')->load(1);
+            if ($fallback_media) {
+              return [
+                'id' => 1,
+                'revision_id' => $fallback_media->getRevisionId()
+              ];
+            }
+            return NULL;
           }
         }
       }
 
       // Hardcoded for image media bundle.
       $source_field = 'field_image';
+      $this->logger->debug('MediaService: Attempting to use source field: @source_field for bundle: @bundle', [
+        '@source_field' => $source_field,
+        '@bundle' => $bundle,
+      ]);
 
       $bundle_fields = \Drupal::service('entity_field.manager')->getFieldDefinitions('media', $bundle);
       if (!isset($bundle_fields[$source_field])) {
-        $this->logger->error('Source field @source_field does not exist on image media bundle @bundle.', [
+        $this->logger->error('MediaService: Source field @source_field does NOT exist on image media bundle @bundle. Available fields: @fields', [
+          '@source_field' => $source_field,
+          '@bundle' => $bundle,
+          '@fields' => implode(', ', array_keys($bundle_fields)),
+        ]);
+        // Let's try the common alternative if the current one fails.
+        $alternative_source_field = ($source_field === 'field_image') ? 'field_media_image' : 'field_image';
+        if (isset($bundle_fields[$alternative_source_field])) {
+          $this->logger->warning('MediaService: Falling back to using @alt_field for bundle @bundle.', [
+            '@alt_field' => $alternative_source_field,
+            '@bundle' => $bundle,
+          ]);
+          $source_field = $alternative_source_field;
+        }
+        else {
+          // This would be the original user-set one if fallback also failed.
+          $this->logger->error('MediaService: Neither @source_field nor @alt_field found on bundle @bundle.', [
+            '@source_field' => $source_field,
+            '@alt_field' => $alternative_source_field,
+            '@bundle' => $bundle,
+          ]);
+          return NULL;
+        }
+      }
+      else {
+        $this->logger->debug('MediaService: Successfully found source field @source_field on bundle @bundle.', [
           '@source_field' => $source_field,
           '@bundle' => $bundle,
         ]);
-        return NULL;
       }
 
       $media_values = [
@@ -209,17 +273,20 @@ class MediaService {
           'alt' => $alt_text,
         ],
       ];
+      $this->logger->debug('MediaService: Creating media with values: @values', ['@values' => json_encode($media_values)]);
 
       $media = Media::create($media_values);
       $media->save();
       $media_id = $media->id();
+      $media_revision_id = $media->getRevisionId();
 
       $color_blue = "\033[0;34m";
       $icon_media = "🖼️";
       $color_reset = "\033[0m";
 
       $this->logger->notice(
-        $color_blue . $icon_media . ' Successfully saved Media entity (bundle: "@bundle", ID: @id, alt: "@alt").' . $color_reset,
+        // $color_blue . $icon_media . ' Successfully saved Media entity (bundle: "@bundle", ID: @id, alt: "@alt").' . $color_reset,
+        'MediaService: Successfully saved Media entity (bundle: "@bundle", ID: @id, alt: "@alt").',
         [
           '@bundle' => $bundle,
           '@id' => $media_id,
@@ -227,14 +294,21 @@ class MediaService {
         ]
       );
 
-      return $media_id;
+      return ['id' => $media_id, 'revision_id' => $media_revision_id];
     }
     catch (\Exception $e) {
       $this->logger->error('Error creating placeholder media: @error', [
         '@error' => $e->getMessage(),
       ]);
-      // Fall back to returning a fixed media ID in case of error.
-      return 1;
+      // Fall back to returning a fixed media ID in case of error, but try to get its revision.
+      $fallback_media = $this->entityTypeManager->getStorage('media')->load(1);
+      if ($fallback_media) {
+        return [
+          'id' => 1,
+          'revision_id' => $fallback_media->getRevisionId()
+        ];
+      }
+      return NULL;
     }
   }
 

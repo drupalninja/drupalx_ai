@@ -99,6 +99,9 @@ class DrupalxAiCommands extends DrushCommands {
    * @usage dxp "A promotional page for a new tech startup focused on AI-driven analytics." --uid=1
    */
   public function generatePage(string $description, array $options = ['uid' => NULL]): void {
+    // Revert to debug, as command entry is confirmed.
+    $this->drupalxAiLogger->debug('DrupalxAiCommands: Entered generatePage method with description: "@desc"', ['@desc' => $description]);
+
     $ai_response = $this->aiService->getComponents($description);
 
     if (!empty($ai_response['error'])) {

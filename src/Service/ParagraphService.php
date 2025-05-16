@@ -313,7 +313,6 @@ class ParagraphService {
     $child_entity_fields_map = [];
     if (isset($child_processing_config[$paragraph_type])) {
       foreach ($child_processing_config[$paragraph_type] as $config) {
-        // $config[0] is the drupal_target_field_name.
         if (!in_array($config[0], $child_entity_fields_map[$paragraph_type] ?? [], TRUE)) {
           $child_entity_fields_map[$paragraph_type][] = $config[0];
         }
@@ -333,16 +332,42 @@ class ParagraphService {
       }
 
       if (!$paragraph->hasField($field_name)) {
+        $this->logger->warning(
+          'ParagraphService: Paragraph type @ptype does not have field @field_name (normalized from AI key @key). AI Value: @value',
+          [
+            '@ptype' => $paragraph_type,
+            '@field_name' => $field_name,
+            '@key' => $key,
+            '@value' => json_encode($value),
+          ]
+        );
         continue;
       }
 
       try {
         $field_definition = $field_definitions[$field_name] ?? NULL;
         if (!$field_definition) {
+          $this->logger->warning('ParagraphService: Field @field_name (normalized from @key) not found on paragraph type @ptype. AI Value: @value', [
+            '@field_name' => $field_name,
+            '@key' => $key,
+            '@ptype' => $paragraph_type,
+            '@value' => json_encode($value),
+          ]);
           continue;
         }
 
         $field_type = $field_definition->getType();
+        // May be NULL if not an entity reference.
+        $target_type_setting = $field_definition->getSetting('target_type');
+
+        $this->logger->debug('ParagraphService: Processing field @field_name (from AI key @key) on @ptype. FieldType: @ftype, TargetType: @ttype, Value: @val', [
+          '@field_name' => $field_name,
+          '@key' => $key,
+          '@ptype' => $paragraph_type,
+          '@ftype' => $field_type,
+          '@ttype' => $target_type_setting ?? 'N/A',
+          '@val' => json_encode($value),
+        ]);
 
         switch ($field_type) {
           case 'string':
@@ -374,28 +399,34 @@ class ParagraphService {
           case 'entity_reference':
             $target_type = $field_definition->getSetting('target_type');
             if ($target_type === 'media' && !empty($value)) {
-              $media_ids = [];
+              $media_references = [];
               // Check if $value is an array of arrays (list of media items)
               // or a single media item array (or even just a URL string).
               if (is_array($value) && isset($value[0]) && is_array($value[0])) {
                 // Multiple media items.
                 foreach ($value as $media_item_data) {
-                  $media_id = $this->mediaService->ensureMediaEntityExists($media_item_data, $owner_id, 'image');
-                  if ($media_id) {
-                    $media_ids[] = $media_id;
+                  $media_info = $this->mediaService->ensureMediaEntityExists($media_item_data, $owner_id, 'image');
+                  if ($media_info && isset($media_info['id']) && isset($media_info['revision_id'])) {
+                    $media_references[] = [
+                      'target_id' => $media_info['id'],
+                      'target_revision_id' => $media_info['revision_id'],
+                    ];
                   }
                 }
               }
               elseif (!empty($value)) {
                 // Single media item (or URL string).
-                $media_id = $this->mediaService->ensureMediaEntityExists($value, $owner_id, 'image');
-                if ($media_id) {
-                  $media_ids[] = $media_id;
+                $media_info = $this->mediaService->ensureMediaEntityExists($value, $owner_id, 'image');
+                if ($media_info && isset($media_info['id']) && isset($media_info['revision_id'])) {
+                  $media_references[] = [
+                    'target_id' => $media_info['id'],
+                    'target_revision_id' => $media_info['revision_id'],
+                  ];
                 }
               }
 
-              if (!empty($media_ids)) {
-                $paragraph->set($field_name, $media_ids);
+              if (!empty($media_references)) {
+                $paragraph->set($field_name, $media_references);
               }
             }
             elseif ($target_type === 'taxonomy_term' && !empty($value)) {
@@ -647,6 +678,38 @@ class ParagraphService {
             $first_child_sample = $field_value[0];
             if (isset($first_child_sample['type']) && is_string($first_child_sample['type'])) {
               $expected_child_bundle_type = $first_child_sample['type'];
+
+              // **** MODIFIED CHECK ****
+              // First, specifically exclude "media" type from being treated as a child paragraph bundle
+              // within the context of this module's AI-driven content creation.
+              if ($expected_child_bundle_type === 'media') {
+                $this->logger->debug(
+                  'ParagraphService: Child processing config: Field @field_name in @parent_bundle has children of explicit type "media". Treating as media entities, not child paragraphs, regardless of paragraph bundle existence.',
+                  [
+                    '@field_name' => $field_name,
+                    '@parent_bundle' => $parent_bundle_type,
+                  ]
+                );
+                // Skip adding this field to the child paragraph processing map.
+                continue;
+              }
+
+              // If it's not "media", then check if it's a real paragraph bundle.
+              $paragraph_bundles = $this->entityTypeBundleInfo->getBundleInfo('paragraph');
+              if (!isset($paragraph_bundles[$expected_child_bundle_type])) {
+                // This child type is not "media" and also not a known paragraph bundle.
+                $this->logger->debug(
+                  'ParagraphService: Child processing config: Field @field_name in @parent_bundle has children of type @child_type, which is not "media" and not a known paragraph bundle. Will not be processed as child paragraphs.',
+                  [
+                    '@field_name' => $field_name,
+                    '@parent_bundle' => $parent_bundle_type,
+                    '@child_type' => $expected_child_bundle_type,
+                  ]
+                );
+                continue;
+              }
+              // **** END MODIFIED CHECK ****
+
               // Use the field name from the sample as the AI data key and
               // Drupal field name. Normalization is applied when setting
               // fields, but samples should ideally use snake_case.

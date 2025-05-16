@@ -109,14 +109,17 @@ class FileService {
    *   The URI of the file (e.g., 'public://image.png').
    * @param int $owner_id
    *   The user ID to set as the owner of the file.
+   * @param string|null $filename_override
+   *   Optional. If provided, this filename will be used directly.
+   *   Otherwise, the filename is derived from $file_uri.
    *
    * @return \Drupal\file\FileInterface|null
    *   The created file entity, or NULL on failure.
    */
-  public function createFileEntity(string $file_uri, int $owner_id): ?FileInterface {
+  public function createFileEntity(string $file_uri, int $owner_id, ?string $filename_override = NULL): ?FileInterface {
     try {
       $file_storage = $this->entityTypeManager->getStorage('file');
-      $filename = basename($file_uri);
+      $filename = $filename_override ?? basename($file_uri);
       $file = $file_storage->create([
         'uri' => $file_uri,
         'uid' => $owner_id,
