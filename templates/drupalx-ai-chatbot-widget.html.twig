@@ -15,7 +15,12 @@
     </div>
     <div class="drupalx-ai-chatbot-input">
       <input type="text" placeholder="{{ 'Ask to create a landing page...'|t }}" aria-label="{{ 'Chatbot message input'|t }}" />
-      <button type="button">{{ 'Send'|t }}</button>
+      <button type="button" aria-label="{{ 'Send message'|t }}">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m22 2-7 20-4-9-9-4Z"/>
+          <path d="M22 2 11 13"/>
+        </svg>
+      </button>
     </div>
   </div>
 </div>

@@ -159,4 +159,67 @@ class FileService {
     return 1;
   }
 
+  /**
+   * Downloads an image from a URL and creates a Drupal file entity.
+   *
+   * @param string $url
+   *   The URL of the image to download.
+   * @param int $owner_id
+   *   The user ID to set as the owner of the file.
+   *
+   * @return \Drupal\file\FileInterface|null
+   *   The created file entity, or NULL on failure.
+   */
+  public function createFileEntityFromUrl(string $url, int $owner_id): ?FileInterface {
+    try {
+      // Extract filename from URL.
+      $path_info = pathinfo(parse_url($url, PHP_URL_PATH));
+      $extension = $path_info['extension'] ?? 'jpg';
+      $base_name = $path_info['filename'] ?? 'image';
+
+      // Create a unique filename.
+      $filename = $this->sanitizeFilename($base_name) . '_' . time() . '.' . $extension;
+      $destination_uri = 'public://ai_images/' . $filename;
+
+      // Ensure the directory exists.
+      $directory = dirname($destination_uri);
+      if (!$this->fileSystem->prepareDirectory($directory, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS)) {
+        $this->logger->error('Failed to create directory: @directory', ['@directory' => $directory]);
+        return NULL;
+      }
+
+      // Download the file.
+      $file_contents = file_get_contents($url);
+      if ($file_contents === FALSE) {
+        $this->logger->error('Failed to download image from URL: @url', ['@url' => $url]);
+        return NULL;
+      }
+
+      // Save the file.
+      $file_uri = $this->fileSystem->saveData($file_contents, $destination_uri, FileSystemInterface::EXISTS_REPLACE);
+      if (!$file_uri) {
+        $this->logger->error('Failed to save downloaded image to: @destination', ['@destination' => $destination_uri]);
+        return NULL;
+      }
+
+      // Create the file entity.
+      $file_entity = $this->createFileEntity($file_uri, $owner_id, $filename);
+      if ($file_entity) {
+        $this->logger->info('Successfully downloaded and created file entity from URL: @url -> @uri', [
+          '@url' => $url,
+          '@uri' => $file_uri,
+        ]);
+      }
+
+      return $file_entity;
+    }
+    catch (\Exception $e) {
+      $this->logger->error('Error downloading image from URL @url: @error', [
+        '@url' => $url,
+        '@error' => $e->getMessage(),
+      ]);
+      return NULL;
+    }
+  }
+
 }

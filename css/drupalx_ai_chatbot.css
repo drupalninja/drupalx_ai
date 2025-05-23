@@ -179,6 +179,16 @@
   border-radius: 20px;
   cursor: pointer;
   transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+}
+
+.drupalx-ai-chatbot-input button svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
 }
 
 .drupalx-ai-chatbot-input button:hover {

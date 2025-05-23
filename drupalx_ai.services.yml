@@ -9,7 +9,7 @@ services:
 
   drupalx_ai.media_service:
     class: Drupal\drupalx_ai\Service\MediaService
-    arguments: ['@entity_type.manager', '@logger.factory', '@file_system', '@current_user', '@entity_type.bundle.info', '@drupalx_ai.file_service']
+    arguments: ['@entity_type.manager', '@logger.factory', '@file_system', '@current_user', '@entity_type.bundle.info', '@drupalx_ai.file_service', '@config.factory', '@drupalx_ai.pexels_api_service', '@drupalx_ai.unsplash_api_service']
 
   drupalx_ai.taxonomy_service:
     class: Drupal\drupalx_ai\Service\TaxonomyService
@@ -22,3 +22,11 @@ services:
   drupalx_ai.validation_service:
     class: Drupal\drupalx_ai\Service\ValidationService
     arguments: ['@module_handler', '@entity_type.bundle.info', '@logger.factory']
+
+  drupalx_ai.pexels_api_service:
+    class: Drupal\drupalx_ai\Service\PexelsApiService
+    arguments: ['@key.repository', '@http_client', '@logger.factory', '@config.factory']
+
+  drupalx_ai.unsplash_api_service:
+    class: Drupal\drupalx_ai\Service\UnsplashApiService
+    arguments: ['@key.repository', '@http_client', '@logger.factory', '@config.factory']
