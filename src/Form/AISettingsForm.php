@@ -95,6 +95,24 @@ class AISettingsForm extends ConfigFormBase {
       '#empty_option' => $this->t('- Select a key -'),
     ];
 
+    // AI prompt settings.
+    $form['prompt_settings'] = [
+      '#type' => 'details',
+      '#title' => $this->t('AI Prompt Settings'),
+      '#open' => FALSE,
+    ];
+
+    $default_prompt = $this->getDefaultSystemPrompt();
+    $form['prompt_settings']['system_prompt'] = [
+      '#type' => 'textarea',
+      '#title' => $this->t('System Prompt'),
+      '#default_value' => $config->get('system_prompt') ?: $default_prompt,
+      '#description' => $this->t('The system prompt used to instruct the AI on how to generate components. Use {allowed_types} as a placeholder for the list of allowed component types and {components_json} as a placeholder for the JSON data of sample components. The default prompt is loaded from files/default-system-prompt.txt in the module directory.'),
+      '#rows' => 20,
+      '#cols' => 80,
+      '#required' => TRUE,
+    ];
+
     // Image service settings.
     $form['image_settings'] = [
       '#type' => 'details',
@@ -160,12 +178,55 @@ class AISettingsForm extends ConfigFormBase {
       ->set('api_endpoint', $form_state->getValue('api_endpoint'))
       ->set('model_name', $form_state->getValue('model_name'))
       ->set('api_key_id', $form_state->getValue('api_key_id'))
+      ->set('system_prompt', $form_state->getValue('system_prompt'))
       ->set('image_generator', $form_state->getValue('image_generator'))
       ->set('pexels_api_key', $form_state->getValue('pexels_api_key'))
       ->set('unsplash_api_key', $form_state->getValue('unsplash_api_key'))
       ->save();
 
     parent::submitForm($form, $form_state);
+  }
+
+  /**
+   * Returns the default system prompt.
+   *
+   * @return string
+   *   The default system prompt template.
+   */
+  protected function getDefaultSystemPrompt(): string {
+    $module_path = \Drupal::service('extension.list.module')->getPath('drupalx_ai');
+    $prompt_file_path = DRUPAL_ROOT . '/' . $module_path . '/files/default-system-prompt.txt';
+
+    if (file_exists($prompt_file_path)) {
+      $prompt_content = file_get_contents($prompt_file_path);
+      if ($prompt_content !== FALSE) {
+        return $prompt_content;
+      }
+    }
+
+    // Fallback to hardcoded prompt if file cannot be read.
+    return <<<EOT
+You are an AI assistant helping to build a webpage using predefined UI components.
+Your primary goal is to select appropriate components based on the user's description and the provided library of components.
+
+INSTRUCTIONS:
+1.  First, on a line by itself, suggest a clear and compelling title for this landing page. Format it exactly as: "PAGE_TITLE: Your Suggested Page Title Here".
+2.  Then, on subsequent lines, provide the JSON data for the recommended UI components. This JSON should be enclosed in a standard markdown code block (```json ... ```).
+3.  The JSON must be an array of component objects.
+4.  Aim to provide between 5 and 6 components in total to construct the page.
+5.  Each component object in your response MUST include a `type` field.
+6.  IMPORTANT: The value of the `type` field for each component MUST be one of the following allowed Drupal Paragraph bundle machine names: {allowed_types}.
+    Do not invent new `type` values. Only use types from this list.
+7.  Each component in your response must match the structure and fields shown in the example components provided below (respecting the `type`). Do not change other field names (keys).
+8.  For any fields representing images (e.g., fields with "image" or "media" in their name), the 'alt' text MUST be a brief, thematic, and descriptive phrase for the image. Avoid generic placeholders.
+9.  CRITICAL IMAGE ALT TEXT INSTRUCTIONS: When creating alt text for images, use simple, descriptive words that work well as search terms. Prefer single words or simple phrases like "mountains", "cityscape", "office", "technology", "nature", "people", "business", "food", etc. NEVER use proper names, brand names, or specific person names. Focus on general, descriptive terms that would return good stock photos.
+10. CRITICAL: Cards must only be included inside a 'card_group' component. Never provide a standalone 'card' component at the top level.
+
+Here is the library of available Drupal UI components (use their `type` field and structure):
+```json
+{components_json}
+```
+EOT;
   }
 
 }
