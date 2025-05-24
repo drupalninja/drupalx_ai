@@ -34,9 +34,9 @@ The DrupalX AI module provides comprehensive AI-powered content generation featu
 2.  **Install dependencies:**
     Navigate to your Drupal root directory in the terminal and run:
     ```bash
-    ddev composer require openai-php/client drupal/key
+    ddev composer require nextagencyio/drupalx_ai
     ```
-    (If you are not using DDEV, run `composer require openai-php/client drupal/key` directly.)
+    (If you are not using DDEV, run `composer require nextagencyio/drupalx_ai` directly.)
 
 3.  **Enable the module:**
     Enable the "DrupalX AI" module through the Drupal UI (Extend page) or by
