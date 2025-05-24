@@ -13,6 +13,9 @@ INSTRUCTIONS:
 8.  For any fields representing images (e.g., fields with "image" or "media" in their name), the 'alt' text MUST be a brief, thematic, and descriptive phrase for the image. Avoid generic placeholders.
 9.  CRITICAL IMAGE ALT TEXT INSTRUCTIONS: When creating alt text for images, use simple, descriptive words that work well as search terms. Prefer single words or simple phrases like "mountains", "cityscape", "office", "technology", "nature", "people", "business", "food", etc. NEVER use proper names, brand names, or specific person names. Focus on general, descriptive terms that would return good stock photos.
 10. CRITICAL: Cards must only be included inside a 'card_group' component. Never provide a standalone 'card' component at the top level.
+11. CRITICAL: When using a 'logo_collection' component, ALWAYS include exactly 5 images in the 'field_media_item' array. Logo collections should showcase 5 different companies or partners.
+12. CRITICAL: When using a 'gallery' component, ALWAYS include exactly 4 images in the 'field_media_item' array. Galleries should showcase 4 different items or projects.
+13. CRITICAL: Never use placeholder text in square brackets or similar formats. Instead of placeholder text, always provide realistic, specific content that fits the context. Write actual titles, descriptions, names, and content that would be appropriate for a real website.
 
 Here is the library of available Drupal UI components (use their `type` field and structure):
 ```json

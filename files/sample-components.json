@@ -92,15 +92,19 @@
     "field_media_item": [
       {
         "type": "media",
-        "alt": "Project 1 showcase"
+        "alt": "office"
       },
       {
         "type": "media",
-        "alt": "Project 2 showcase"
+        "alt": "technology"
       },
       {
         "type": "media",
-        "alt": "Project 3 showcase"
+        "alt": "teamwork"
+      },
+      {
+        "type": "media",
+        "alt": "innovation"
       }
     ]
   },
@@ -131,15 +135,23 @@
     "field_media_item": [
       {
         "type": "media",
-        "alt": "Partner company logo"
+        "alt": "technology"
       },
       {
         "type": "media",
-        "alt": "Partner company logo"
+        "alt": "business"
       },
       {
         "type": "media",
-        "alt": "Partner company logo"
+        "alt": "corporate"
+      },
+      {
+        "type": "media",
+        "alt": "services"
+      },
+      {
+        "type": "media",
+        "alt": "consulting"
       }
     ]
   },
@@ -159,7 +171,7 @@
         "field_eyebrow": "Basic",
         "field_title": "$19",
         "field_suffix": "/month",
-        "field_features_text": "<ul><li>10 users</li><li>Basic features</li><li>Email support</li></ul>",
+        "field_features_text": "10 users\nBasic features\nEmail support",
         "field_link": {
           "uri": "internal:/signup/basic",
           "title": "Get Started"
@@ -170,7 +182,7 @@
         "field_eyebrow": "Pro",
         "field_title": "$49",
         "field_suffix": "/month",
-        "field_features_text": "<ul><li>50 users</li><li>All features</li><li>Priority support</li><li>Advanced analytics</li></ul>",
+        "field_features_text": "50 users\nAll features\nPriority support\nAdvanced analytics",
         "field_link": {
           "uri": "internal:/signup/pro",
           "title": "Sign Up Now"
