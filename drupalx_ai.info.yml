@@ -1,7 +1,7 @@
 name: DrupalX AI
 type: module
 description: Provides AI-powered features including a chatbot and landing page generation.
-core_version_requirement: ^9 || ^10
+core_version_requirement: ^9 || ^10 || ^11
 package: DrupalX
 dependencies:
   - drupal:node

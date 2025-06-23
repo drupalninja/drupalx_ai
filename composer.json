@@ -10,7 +10,7 @@
   ],
   "license": "GPL-2.0-or-later",
   "require": {
-    "drupal/core": "^9 || ^10",
+    "drupal/core": "^9 || ^10 || ^11",
     "drupal/key": "^1.20",
     "openai-php/client": "^0.12"
   }
