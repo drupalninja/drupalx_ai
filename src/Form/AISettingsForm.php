@@ -137,7 +137,9 @@ class AISettingsForm extends ConfigFormBase {
       '#options' => $provider_model_options,
       '#default_value' => $config->get('ai_provider_model'),
       '#description' => $ai_module_available ? 
-        $this->t('Select which Drupal AI module provider configuration to use for DrupalX AI operations. This will use the provider\'s configuration as set up in the main AI module settings.') :
+        $this->t('Select which Drupal AI module provider configuration to use for DrupalX AI operations. This will use the provider\'s configuration as set up in the <a href="@ai_settings">main AI module settings</a>.', [
+          '@ai_settings' => \Drupal\Core\Url::fromRoute('ai.admin_providers')->toString(),
+        ]) :
         $this->t('AI module not available. Install the AI module to see available providers.'),
       '#empty_option' => $this->t('- Select AI provider configuration -'),
       '#disabled' => !$ai_module_available,
