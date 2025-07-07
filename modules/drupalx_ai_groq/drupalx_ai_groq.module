@@ -1,0 +1,107 @@
+<?php
+
+/**
+ * @file
+ * DrupalX AI Groq module.
+ */
+
+use Drupal\Core\Routing\RouteMatchInterface;
+use Drupal\Core\Url;
+
+/**
+ * Implements hook_help().
+ */
+function drupalx_ai_groq_help($route_name, RouteMatchInterface $route_match) {
+  switch ($route_name) {
+    case 'help.page.drupalx_ai_groq':
+      $output = '';
+      $output .= '<h3>' . t('About') . '</h3>';
+      $output .= '<p>' . t('DrupalX AI Groq provides pre-configured settings for using Groq AI with DrupalX AI. It automatically sets up the Groq provider with optimal defaults.') . '</p>';
+      $output .= '<h3>' . t('Configuration') . '</h3>';
+      $output .= '<p>' . t('After enabling this module:') . '</p>';
+      $output .= '<ol>';
+      $output .= '<li>' . t('The Groq API provider will be enabled and configured') . '</li>';
+      $output .= '<li>' . t('A Groq API Key will be created (you need to add your actual key)') . '</li>';
+      $output .= '<li>' . t('DrupalX AI will be configured to use Groq by default') . '</li>';
+      $output .= '<li>' . t('The default model will be set to llama-3.3-70b-versatile') . '</li>';
+      $output .= '</ol>';
+      
+      $key_url = Url::fromRoute('entity.key.collection');
+      $output .= '<p>' . t('To complete the setup, <a href="@url">configure your Groq API key</a>.', [
+        '@url' => $key_url->toString(),
+      ]) . '</p>';
+      
+      return $output;
+  }
+}
+
+/**
+ * Implements hook_modules_installed().
+ */
+function drupalx_ai_groq_modules_installed($modules) {
+  if (in_array('drupalx_ai_groq', $modules)) {
+    // Additional configuration can be done here if needed
+    // The main configuration is handled in hook_install()
+  }
+}
+
+/**
+ * Implements hook_requirements().
+ */
+function drupalx_ai_groq_requirements($phase) {
+  $requirements = [];
+
+  if ($phase == 'runtime' && _drupalx_ai_groq_needs_api_key()) {
+    $key_url = Url::fromRoute('entity.key.edit_form', ['key' => 'groq_api_key']);
+    $groq_docs_url = 'https://console.groq.com/keys';
+    
+    $requirements['drupalx_ai_groq_api_key'] = [
+      'title' => t('DrupalX AI Groq Configuration'),
+      'value' => t('API key required'),
+      'description' => t('The Groq API key is empty. <a href="@groq_url" target="_blank">Get your free API key from Groq</a> then <a href="@key_url">add it to your configuration</a> to enable the AI layout generation tool.', [
+        '@key_url' => $key_url->toString(),
+        '@groq_url' => $groq_docs_url,
+      ]),
+      'severity' => REQUIREMENT_WARNING,
+    ];
+  }
+
+  return $requirements;
+}
+
+/**
+ * Implements hook_user_login().
+ */
+function drupalx_ai_groq_user_login($account) {
+  // Check if user has admin permissions and API key is needed
+  if ($account->hasPermission('administer site configuration') && _drupalx_ai_groq_needs_api_key()) {
+    $key_url = Url::fromRoute('entity.key.edit_form', ['key' => 'groq_api_key']);
+    $groq_docs_url = 'https://console.groq.com/keys';
+    
+    \Drupal::messenger()->addWarning(t('DrupalX AI Setup Required: The Groq API key is empty. <a href="@groq_url" target="_blank">Get your free API key from Groq</a> then <a href="@key_url">add it to your configuration</a> to enable the AI layout generation tool.', [
+      '@key_url' => $key_url->toString(),
+      '@groq_url' => $groq_docs_url,
+    ]));
+  }
+}
+
+/**
+ * Helper function to check if the Groq API key needs to be set.
+ *
+ * @return bool
+ *   TRUE if the API key is empty or missing, FALSE otherwise.
+ */
+function _drupalx_ai_groq_needs_api_key() {
+  try {
+    $key = \Drupal\key\Entity\Key::load('groq_api_key');
+    if (!$key) {
+      return TRUE; // Key entity doesn't exist
+    }
+    
+    $key_value = $key->getKeyValue();
+    return empty($key_value); // Return TRUE if key is empty
+    
+  } catch (\Exception $e) {
+    return TRUE; // Assume we need the key if there's an error
+  }
+}

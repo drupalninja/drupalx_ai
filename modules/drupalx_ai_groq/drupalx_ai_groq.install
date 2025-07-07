@@ -1,0 +1,97 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the DrupalX AI Groq module.
+ */
+
+use Drupal\Core\Url;
+use Drupal\key\Entity\Key;
+
+/**
+ * Implements hook_install().
+ */
+function drupalx_ai_groq_install() {
+  try {
+    // Enable the Groq provider module if not already enabled.
+    $module_handler = \Drupal::service('module_handler');
+    if (!$module_handler->moduleExists('ai_provider_groq')) {
+      \Drupal::service('module_installer')->install(['ai_provider_groq']);
+      \Drupal::logger('drupalx_ai_groq')->info('Enabled ai_provider_groq module.');
+    }
+
+    // Create the Groq API key entity if it doesn't exist.
+    $key_id = 'groq_api_key';
+    $key = Key::load($key_id);
+    if (!$key) {
+      $key = Key::create([
+        'id' => $key_id,
+        'label' => 'Groq API Key',
+        'description' => 'API key for Groq AI provider used by DrupalX AI',
+        'key_type' => 'authentication',
+        'key_type_settings' => [],
+        'key_provider' => 'config',
+        'key_provider_settings' => ['key_value' => ''],
+        'key_input' => 'text_field',
+        'key_input_settings' => [],
+      ]);
+      $key->save();
+      
+      \Drupal::logger('drupalx_ai_groq')->info('Created Groq API Key configuration: @id', ['@id' => $key_id]);
+    }
+
+    // Configure the Groq provider settings using the correct config name.
+    $groq_config = \Drupal::configFactory()->getEditable('ai_provider_groq.settings');
+    $groq_config
+      ->set('api_key', $key_id)
+      ->set('max_tokens', 4000)
+      ->set('temperature', 0.7)
+      ->set('reasoning_format', 'hidden')
+      ->set('json_mode', false)
+      ->save();
+    
+    \Drupal::logger('drupalx_ai_groq')->info('Configured Groq provider settings with token limit: 4000 and optimal temperature');
+
+    // Set Groq as the default provider in AI settings.
+    $ai_config = \Drupal::configFactory()->getEditable('ai.settings');
+    $ai_config
+      ->set('default_provider', 'groq')
+      ->set('default_model', 'llama-3.3-70b-versatile')
+      ->set('default_providers.chat.provider_id', 'groq')
+      ->set('default_providers.chat.model_id', 'llama-3.3-70b-versatile')
+      ->save();
+    
+    \Drupal::logger('drupalx_ai_groq')->info('Set Groq as default AI provider with llama-3.3-70b-versatile model.');
+
+    // Update DrupalX AI settings to use Groq by default.
+    $drupalx_config = \Drupal::configFactory()->getEditable('drupalx_ai.settings');
+    $drupalx_config
+      ->set('ai_provider_model', 'groq:default')
+      ->save();
+    
+    \Drupal::logger('drupalx_ai_groq')->info('Updated DrupalX AI to use Groq provider.');
+
+    // Display a helpful message with link to configure the API key.
+    $key_edit_url = Url::fromRoute('entity.key.edit_form', ['key' => $key_id]);
+    $message = t('🚀 DrupalX AI Groq has been configured successfully! To complete the setup, please <a href="@url" target="_blank">add your Groq API key</a>. The module is now using the powerful llama-3.3-70b-versatile model with optimized settings.', [
+      '@url' => $key_edit_url->toString(),
+    ]);
+    
+    \Drupal::messenger()->addStatus($message);
+    \Drupal::logger('drupalx_ai_groq')->info('DrupalX AI Groq module installed and configured successfully.');
+    
+  } catch (\Exception $e) {
+    \Drupal::logger('drupalx_ai_groq')->error('Error during installation: @message', ['@message' => $e->getMessage()]);
+    \Drupal::messenger()->addError(t('There was an error configuring DrupalX AI Groq: @message', ['@message' => $e->getMessage()]));
+  }
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function drupalx_ai_groq_uninstall() {
+  // Optionally clean up configurations when uninstalling
+  // Note: We don't delete the API key as it might be used elsewhere
+  
+  \Drupal::logger('drupalx_ai_groq')->info('DrupalX AI Groq module uninstalled.');
+}

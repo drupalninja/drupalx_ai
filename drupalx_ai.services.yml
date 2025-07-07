@@ -1,7 +1,7 @@
 services:
   drupalx_ai.ai_service:
     class: Drupal\drupalx_ai\Service\AIService
-    arguments: ['@config.factory', '@key.repository', '@file_system', '@logger.factory', '@drupalx_ai.validation_service', '@entity_type.bundle.info']
+    arguments: ['@config.factory', '@file_system', '@logger.factory', '@drupalx_ai.validation_service', '@entity_type.bundle.info', '@ai.provider']
 
   drupalx_ai.paragraph_service:
     class: Drupal\drupalx_ai\Service\ParagraphService

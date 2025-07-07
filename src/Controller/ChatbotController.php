@@ -105,7 +105,10 @@ class ChatbotController extends ControllerBase {
           '@raw' => $ai_response['raw_response'] ?? 'N/A',
         ]
       );
-      return new JsonResponse(['error' => $ai_response['error']], 500);
+      return new JsonResponse([
+        'error' => $ai_response['error'],
+        'reply' => $ai_response['error'],
+      ], 500);
     }
 
     $page_title = $ai_response['title'] ?? 'Generated Page by Chatbot';

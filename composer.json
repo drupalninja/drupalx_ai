@@ -11,7 +11,9 @@
   "license": "GPL-2.0-or-later",
   "require": {
     "drupal/core": "^9 || ^10 || ^11",
-    "drupal/key": "^1.20",
-    "openai-php/client": "^0.12"
+    "drupal/ai": "^1.0@beta"
+  },
+  "suggest": {
+    "drupal/ai_provider_groq": "Groq AI provider for the AI module - or use drupalx_ai_groq submodule for automatic setup"
   }
 }
