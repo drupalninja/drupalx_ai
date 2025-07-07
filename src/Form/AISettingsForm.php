@@ -138,8 +138,8 @@ class AISettingsForm extends ConfigFormBase {
         foreach ($provider_configs as $config_name) {
           $config = $ai_config_factory->get($config_name);
           $provider_id = str_replace(['ai_provider_', '.settings'], '', $config_name);
-          
-          // Get proper provider label from plugin definition if available
+
+          // Get proper provider label from plugin definition if available.
           $provider_label = ucfirst($provider_id);
           if ($this->aiProviderManager) {
             $provider_definitions = $this->aiProviderManager->getDefinitions();
@@ -172,35 +172,35 @@ class AISettingsForm extends ConfigFormBase {
         // Fall back to the old method.
         $providers = $this->aiProviderManager->getDefinitions();
         foreach ($providers as $provider_id => $provider_definition) {
-          try {
-            // Try to get a configured instance.
-            $provider_instance = $this->aiProviderManager->createInstance($provider_id);
-
-            // Add provider with default model option.
-            $provider_model_options[$provider_id . ':default'] = $provider_definition['label'] . ' - ' . $this->t('Default Model');
-
-          }
-          catch (\Exception $e) {
-            // Provider not configured, skip.
-          }
+          // Add provider with default model option, regardless of configuration status.
+          // This ensures the option is available even if the provider needs further configuration.
+          $provider_model_options[$provider_id . ':default'] = $provider_definition['label'] . ' - ' . $this->t('Default Model');
         }
       }
     }
 
+    // Get the current value, ensure it's set to groq:default if available
+    $current_value = $config->get('ai_provider_model');
+    if (empty($current_value) && isset($provider_model_options['groq:default'])) {
+      $current_value = 'groq:default';
+    }
+    
     $form['ai_provider_settings']['ai_provider_model'] = [
       '#type' => 'select',
       '#title' => $this->t('AI Provider Configuration'),
       '#options' => $provider_model_options,
-      '#default_value' => $config->get('ai_provider_model'),
+      '#default_value' => $current_value ?: '',
       '#description' => $ai_module_available ?
       $this->t('Select which Drupal AI module provider configuration to use for DrupalX AI operations. This will use the provider\'s configuration as set up in the <a href="@ai_settings">main AI module settings</a>.', [
         '@ai_settings' => Url::fromRoute('ai.admin_providers')->toString(),
       ]) :
       $this->t('AI module not available. Install the AI module to see available providers.'),
-      '#empty_option' => $this->t('- Select AI provider configuration -'),
       '#disabled' => !$ai_module_available,
       '#required' => $ai_module_available,
     ];
+
+    // Always add empty option to allow users to see and change selection
+    $form['ai_provider_settings']['ai_provider_model']['#empty_option'] = $this->t('- Select AI provider configuration -');
 
     // Get key options for image service API keys.
     $key_options = [];
