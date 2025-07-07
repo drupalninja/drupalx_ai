@@ -186,21 +186,31 @@ class AIService {
 
     // Handle default model selection.
     if ($model_id === 'default' || $model_id === NULL) {
-      // Try to get the provider's configured default model.
+      // Try to get the default model from AI settings.
       try {
-        $provider_config = \Drupal::config('ai.provider.' . $provider_id);
-        $configured_model = $provider_config->get('model');
+        $ai_config = \Drupal::config('ai.settings');
+        $configured_model = $ai_config->get('default_model');
         if ($configured_model) {
           $model_id = $configured_model;
         }
         else {
-          // No fallback models - report error if provider has no configured model.
-          return NULL;
+          // Fallback to a reasonable default for Groq.
+          if ($provider_id === 'groq') {
+            $model_id = 'llama-3.3-70b-versatile';
+          }
+          else {
+            return NULL;
+          }
         }
       }
       catch (\Exception $e) {
-        // No fallback models - report error if config is not available.
-        return NULL;
+        // Fallback to a reasonable default for Groq.
+        if ($provider_id === 'groq') {
+          $model_id = 'llama-3.3-70b-versatile';
+        }
+        else {
+          return NULL;
+        }
       }
     }
 
