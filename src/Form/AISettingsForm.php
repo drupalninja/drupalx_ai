@@ -2,6 +2,7 @@
 
 namespace Drupal\drupalx_ai\Form;
 
+use Drupal\Core\Url;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Config\TypedConfigManagerInterface;
 use Drupal\Core\Form\ConfigFormBase;
@@ -91,12 +92,12 @@ class AISettingsForm extends ConfigFormBase {
   public function buildForm(array $form, FormStateInterface $form_state) {
     $config = $this->config('drupalx_ai.settings');
 
-    // Check if drupalx_ai_groq module is enabled and API key is empty
+    // Check if drupalx_ai_groq module is enabled and API key is empty.
     $module_handler = \Drupal::service('module_handler');
     if ($module_handler->moduleExists('drupalx_ai_groq') && function_exists('_drupalx_ai_groq_needs_api_key') && _drupalx_ai_groq_needs_api_key()) {
-      $key_url = \Drupal\Core\Url::fromRoute('entity.key.edit_form', ['key' => 'groq_api_key']);
+      $key_url = Url::fromRoute('entity.key.edit_form', ['key' => 'groq_api_key']);
       $groq_docs_url = 'https://console.groq.com/keys';
-      
+
       $form['groq_warning'] = [
         '#type' => 'container',
         '#attributes' => [
@@ -112,7 +113,7 @@ class AISettingsForm extends ConfigFormBase {
       ];
     }
 
-    // AI Provider Selection
+    // AI Provider Selection.
     $form['ai_provider_settings'] = [
       '#type' => 'details',
       '#title' => $this->t('AI Provider Settings'),
@@ -126,29 +127,55 @@ class AISettingsForm extends ConfigFormBase {
       ];
     }
 
-    // Get available AI provider/model configurations from the AI module
+    // Get available AI provider/model configurations from the AI module.
     $provider_model_options = [];
     if ($this->aiProviderManager) {
       try {
-        // Get all configured provider instances with their available models
+        // Get all available providers and their models.
+        $ai_config_factory = \Drupal::configFactory();
+        $provider_configs = $ai_config_factory->listAll('ai_provider_');
+
+        foreach ($provider_configs as $config_name) {
+          $config = $ai_config_factory->get($config_name);
+          $provider_id = str_replace(['ai_provider_', '.settings'], '', $config_name);
+          $provider_label = ucfirst($provider_id);
+
+          // For now, create a default model option for each provider.
+          // The actual model selection is handled by the provider configuration.
+          $provider_model_options[$provider_id . ':default'] = $provider_label . ' - ' . $this->t('Default Model');
+        }
+
+        // If no provider configs found, fall back to checking available provider plugins.
+        if (empty($provider_model_options)) {
+          $providers = $this->aiProviderManager->getDefinitions();
+          foreach ($providers as $provider_id => $provider_definition) {
+            try {
+              // Add provider with default model option.
+              $provider_model_options[$provider_id . ':default'] = $provider_definition['label'] . ' - ' . $this->t('Default Model');
+            }
+            catch (\Exception $e) {
+              // Provider not configured, skip.
+            }
+          }
+        }
+      }
+      catch (\Exception $e) {
+        // AI module not available or configuration issue.
+        // Fall back to the old method.
         $providers = $this->aiProviderManager->getDefinitions();
         foreach ($providers as $provider_id => $provider_definition) {
           try {
-            // Try to get a configured instance
+            // Try to get a configured instance.
             $provider_instance = $this->aiProviderManager->createInstance($provider_id);
-            
-            // Add provider with default model option
+
+            // Add provider with default model option.
             $provider_model_options[$provider_id . ':default'] = $provider_definition['label'] . ' - ' . $this->t('Default Model');
-            
-            // TODO: In future versions, could enumerate specific models if provider supports it
-            // For now, each provider gets a "default" option that uses the provider's default model
-            
-          } catch (\Exception $e) {
-            // Provider not configured, skip
+
+          }
+          catch (\Exception $e) {
+            // Provider not configured, skip.
           }
         }
-      } catch (\Exception $e) {
-        // AI module not available
       }
     }
 
@@ -157,17 +184,17 @@ class AISettingsForm extends ConfigFormBase {
       '#title' => $this->t('AI Provider Configuration'),
       '#options' => $provider_model_options,
       '#default_value' => $config->get('ai_provider_model'),
-      '#description' => $ai_module_available ? 
-        $this->t('Select which Drupal AI module provider configuration to use for DrupalX AI operations. This will use the provider\'s configuration as set up in the <a href="@ai_settings">main AI module settings</a>.', [
-          '@ai_settings' => \Drupal\Core\Url::fromRoute('ai.admin_providers')->toString(),
-        ]) :
-        $this->t('AI module not available. Install the AI module to see available providers.'),
+      '#description' => $ai_module_available ?
+      $this->t('Select which Drupal AI module provider configuration to use for DrupalX AI operations. This will use the provider\'s configuration as set up in the <a href="@ai_settings">main AI module settings</a>.', [
+        '@ai_settings' => Url::fromRoute('ai.admin_providers')->toString(),
+      ]) :
+      $this->t('AI module not available. Install the AI module to see available providers.'),
       '#empty_option' => $this->t('- Select AI provider configuration -'),
       '#disabled' => !$ai_module_available,
       '#required' => $ai_module_available,
     ];
 
-    // Get key options for image service API keys
+    // Get key options for image service API keys.
     $key_options = [];
     $keys = $this->keyRepository->getKeys();
     foreach ($keys as $key) {
