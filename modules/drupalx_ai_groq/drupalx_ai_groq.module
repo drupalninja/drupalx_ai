@@ -1,0 +1,170 @@
+<?php
+
+/**
+ * @file
+ * DrupalX AI Groq module.
+ */
+
+use Drupal\Core\Routing\RouteMatchInterface;
+use Drupal\Core\Url;
+
+/**
+ * Implements hook_help().
+ */
+function drupalx_ai_groq_help($route_name, RouteMatchInterface $route_match) {
+  switch ($route_name) {
+    case 'help.page.drupalx_ai_groq':
+      $output = '';
+      $output .= '<h3>' . t('About') . '</h3>';
+      $output .= '<p>' . t('DrupalX AI Groq provides pre-configured settings for using Groq AI with DrupalX AI. It automatically sets up the Groq provider with optimal defaults.') . '</p>';
+      $output .= '<h3>' . t('Configuration') . '</h3>';
+      $output .= '<p>' . t('After enabling this module:') . '</p>';
+      $output .= '<ol>';
+      $output .= '<li>' . t('The Groq API provider will be enabled and configured') . '</li>';
+      $output .= '<li>' . t('A Groq API Key will be created (you need to add your actual key)') . '</li>';
+      $output .= '<li>' . t('DrupalX AI will be configured to use Groq by default') . '</li>';
+      $output .= '<li>' . t('The default model will be set to llama-3.3-70b-versatile') . '</li>';
+      $output .= '</ol>';
+      
+      $key_url = Url::fromRoute('entity.key.collection');
+      $output .= '<p>' . t('To complete the setup, <a href="@url">configure your Groq API key</a>.', [
+        '@url' => $key_url->toString(),
+      ]) . '</p>';
+      
+      return $output;
+  }
+}
+
+/**
+ * Implements hook_modules_installed().
+ */
+function drupalx_ai_groq_modules_installed($modules) {
+  if (in_array('drupalx_ai_groq', $modules)) {
+    // Additional configuration can be done here if needed
+    // The main configuration is handled in hook_install()
+  }
+}
+
+/**
+ * Implements hook_page_attachments().
+ */
+function drupalx_ai_groq_page_attachments(array &$attachments) {
+  // Only show warning to users who can administer the site
+  if (!\Drupal::currentUser()->hasPermission('administer site configuration')) {
+    return;
+  }
+
+  // Add CSS for the warning bar
+  if (_drupalx_ai_groq_needs_api_key()) {
+    $attachments['#attached']['html_head'][] = [
+      [
+        '#tag' => 'style',
+        '#value' => '
+          .drupalx-ai-groq-warning {
+            background: linear-gradient(90deg, #fff3cd 0%, #ffeaa7 100%) !important;
+            border: 2px solid #f39c12 !important;
+            border-radius: 8px !important;
+            padding: 15px 20px !important;
+            margin: 10px 0 20px 0 !important;
+            font-size: 16px !important;
+            font-weight: 500 !important;
+            box-shadow: 0 4px 12px rgba(243, 156, 18, 0.3) !important;
+            position: sticky !important;
+            top: 0 !important;
+            z-index: 9999 !important;
+            animation: pulse-warning 2s ease-in-out infinite alternate !important;
+          }
+          
+          .drupalx-ai-groq-warning a {
+            color: #d68910 !important;
+            text-decoration: underline !important;
+            font-weight: bold !important;
+          }
+          
+          .drupalx-ai-groq-warning a:hover {
+            color: #bb8e04 !important;
+            text-decoration: none !important;
+          }
+          
+          @keyframes pulse-warning {
+            0% { border-color: #f39c12; }
+            100% { border-color: #e67e22; }
+          }
+          
+          .drupalx-ai-groq-warning .close-btn {
+            float: right;
+            margin-left: 15px;
+            color: #d68910;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 18px;
+          }
+          
+          .drupalx-ai-groq-warning .close-btn:hover {
+            color: #bb8e04;
+          }
+        ',
+      ],
+      'drupalx-ai-groq-warning-styles',
+    ];
+  }
+}
+
+/**
+ * Implements hook_preprocess_page().
+ */
+function drupalx_ai_groq_preprocess_page(&$variables) {
+  // Only show warning to users who can administer the site
+  if (!\Drupal::currentUser()->hasPermission('administer site configuration')) {
+    return;
+  }
+
+  // Check if the Groq API key is empty and add a persistent warning
+  if (_drupalx_ai_groq_needs_api_key()) {
+    $key_url = Url::fromRoute('entity.key.edit_form', ['key' => 'groq_api_key']);
+    $groq_docs_url = 'https://console.groq.com/keys';
+    
+    $warning_markup = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['drupalx-ai-groq-warning'],
+        'id' => 'drupalx-ai-groq-warning',
+      ],
+      '#children' => [
+        '#markup' => t('🚀 <strong>DrupalX AI Setup Required:</strong> The Groq API key is empty. <a href="@groq_url" target="_blank">Get your free API key from Groq</a> then <a href="@key_url" target="_blank">add it to your configuration</a> to enable the AI layout generation tool.', [
+          '@key_url' => $key_url->toString(),
+          '@groq_url' => $groq_docs_url,
+        ]),
+      ],
+    ];
+    
+    // Add the warning to the top of the page
+    if (!isset($variables['page']['content'])) {
+      $variables['page']['content'] = [];
+    }
+    
+    // Insert at the very beginning of the content region
+    $variables['page']['content'] = ['drupalx_ai_groq_warning' => $warning_markup] + $variables['page']['content'];
+  }
+}
+
+/**
+ * Helper function to check if the Groq API key needs to be set.
+ *
+ * @return bool
+ *   TRUE if the API key is empty or missing, FALSE otherwise.
+ */
+function _drupalx_ai_groq_needs_api_key() {
+  try {
+    $key = \Drupal\key\Entity\Key::load('groq_api_key');
+    if (!$key) {
+      return TRUE; // Key entity doesn't exist
+    }
+    
+    $key_value = $key->getKeyValue();
+    return empty($key_value); // Return TRUE if key is empty
+    
+  } catch (\Exception $e) {
+    return TRUE; // Assume we need the key if there's an error
+  }
+}

@@ -1,0 +1,10 @@
+name: DrupalX AI Groq
+type: module
+description: Pre-configures Groq AI provider for DrupalX AI with optimal settings.
+core_version_requirement: ^9 || ^10 || ^11
+package: DrupalX
+dependencies:
+  - drupalx_ai:drupalx_ai
+  - ai:ai
+  - ai_provider_groq:ai_provider_groq
+  - key:key

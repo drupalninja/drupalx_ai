@@ -14,6 +14,6 @@
     "drupal/ai": "^1.0@beta"
   },
   "suggest": {
-    "drupal/ai_provider_groq": "Groq AI provider for the AI module"
+    "drupal/ai_provider_groq": "Groq AI provider for the AI module - or use drupalx_ai_groq submodule for automatic setup"
   }
 }

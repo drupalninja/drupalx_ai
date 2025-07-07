@@ -188,13 +188,28 @@ class AIService {
     
     // Handle default model selection
     if ($model_id === 'default' || $model_id === NULL) {
-      // Provide default models for common providers
-      if ($provider_id === 'openai') {
-        $model_id = 'gpt-4o-mini'; // Use a commonly available OpenAI model
-      } elseif ($provider_id === 'groq') {
-        $model_id = 'llama-3.1-8b-instant'; // Use a commonly available Groq model
+      // Try to get the provider's configured default model
+      try {
+        $provider_config = \Drupal::config('ai.provider.' . $provider_id);
+        $configured_model = $provider_config->get('model');
+        if ($configured_model) {
+          $model_id = $configured_model;
+        } else {
+          // Fallback to commonly available models
+          if ($provider_id === 'openai') {
+            $model_id = 'gpt-4o-mini';
+          } elseif ($provider_id === 'groq') {
+            $model_id = 'llama-3.1-8b-instant';
+          }
+        }
+      } catch (\Exception $e) {
+        // Fallback to hardcoded defaults if config is not available
+        if ($provider_id === 'openai') {
+          $model_id = 'gpt-4o-mini';
+        } elseif ($provider_id === 'groq') {
+          $model_id = 'llama-3.1-8b-instant';
+        }
       }
-      // For other providers, let them use their default
     }
     
     return [
