@@ -195,20 +195,12 @@ class AIService {
         if ($configured_model) {
           $model_id = $configured_model;
         } else {
-          // Fallback to commonly available models
-          if ($provider_id === 'openai') {
-            $model_id = 'gpt-4o-mini';
-          } elseif ($provider_id === 'groq') {
-            $model_id = 'llama-3.1-8b-instant';
-          }
+          // No fallback models - report error if provider has no configured model
+          return NULL;
         }
       } catch (\Exception $e) {
-        // Fallback to hardcoded defaults if config is not available
-        if ($provider_id === 'openai') {
-          $model_id = 'gpt-4o-mini';
-        } elseif ($provider_id === 'groq') {
-          $model_id = 'llama-3.1-8b-instant';
-        }
+        // No fallback models - report error if config is not available
+        return NULL;
       }
     }
     
@@ -216,6 +208,61 @@ class AIService {
       'provider_id' => $provider_id,
       'model_id' => $model_id,
     ];
+  }
+
+  /**
+   * Checks if the API key for the configured provider is empty.
+   *
+   * @return bool
+   *   TRUE if the API key is empty, FALSE otherwise.
+   */
+  protected function isApiKeyEmpty(): bool {
+    $provider_config = $this->getAiProviderConfiguration();
+    if (!$provider_config) {
+      return TRUE;
+    }
+
+    $provider_id = $provider_config['provider_id'];
+    
+    try {
+      // Try to get the provider instance and check if it has an API key configured
+      $provider = $this->aiProviderManager->createInstance($provider_id);
+      
+      // Check different provider configurations for API key
+      if ($provider_id === 'groq') {
+        $groq_config = \Drupal::config('ai_provider_groq.settings');
+        $api_key_id = $groq_config->get('api_key');
+        if (empty($api_key_id)) {
+          return TRUE;
+        }
+        
+        // Check if the key entity exists and has a value
+        $key = \Drupal\key\Entity\Key::load($api_key_id);
+        if (!$key || empty($key->getKeyValue())) {
+          return TRUE;
+        }
+      }
+      // Add other provider checks as needed
+      elseif ($provider_id === 'openai') {
+        $openai_config = \Drupal::config('ai_provider_openai.settings');
+        $api_key_id = $openai_config->get('api_key');
+        if (empty($api_key_id)) {
+          return TRUE;
+        }
+        
+        // Check if the key entity exists and has a value
+        $key = \Drupal\key\Entity\Key::load($api_key_id);
+        if (!$key || empty($key->getKeyValue())) {
+          return TRUE;
+        }
+      }
+      
+    } catch (\Exception $e) {
+      // If we can't check, assume it's empty
+      return TRUE;
+    }
+    
+    return FALSE;
   }
 
   /**
@@ -229,6 +276,21 @@ class AIService {
    *   On error, 'error' key will be set.
    */
   public function getComponents(string $user_description): array {
+    // Check if API key is empty first
+    if ($this->isApiKeyEmpty()) {
+      $settings_url = \Drupal\Core\Url::fromRoute('drupalx_ai.settings')->toString();
+      return [
+        'title' => 'Generated Page (Error)',
+        'components' => [],
+        'validation_data' => [
+          'status' => 'error',
+          'message' => 'API key is empty. Please configure your AI provider API key.',
+        ],
+        'error' => 'API key is empty. Please <a href="' . $settings_url . '" target="_blank">configure your AI provider settings</a>.',
+        'raw_response' => '',
+      ];
+    }
+
     // Get the configured AI provider for DrupalX operations
     $provider_config = $this->getAiProviderConfiguration();
     
@@ -238,9 +300,9 @@ class AIService {
         'components' => [],
         'validation_data' => [
           'status' => 'error',
-          'message' => 'AI provider not configured for DrupalX operations.',
+          'message' => 'AI provider not configured properly. Please ensure the selected provider has a model configured in the AI module settings.',
         ],
-        'error' => 'AI provider not configured for DrupalX operations.',
+        'error' => 'AI provider not configured properly. Please ensure the selected provider has a model configured in the AI module settings.',
         'raw_response' => '',
       ];
     }
@@ -319,14 +381,32 @@ class AIService {
         'Error using AI module provider: @message',
         ['@message' => $e->getMessage()]
       );
+      
+      // Check if this looks like an API key issue
+      $error_message = $e->getMessage();
+      $settings_url = \Drupal\Core\Url::fromRoute('drupalx_ai.settings')->toString();
+      
+      if (strpos($error_message, 'Unauthorized') !== FALSE || 
+          strpos($error_message, 'Invalid API key') !== FALSE ||
+          strpos($error_message, 'authentication') !== FALSE ||
+          strpos($error_message, 'API key') !== FALSE) {
+        $user_error = 'API authentication failed. Please <a href="' . $settings_url . '" target="_blank">check your API key configuration</a>.';
+      } elseif (strpos($error_message, 'connect') !== FALSE || 
+                strpos($error_message, 'timeout') !== FALSE ||
+                strpos($error_message, 'network') !== FALSE) {
+        $user_error = 'Could not connect to the AI service. Please check your connection and try again.';
+      } else {
+        $user_error = 'Error using AI service. Please <a href="' . $settings_url . '" target="_blank">check your configuration</a>.';
+      }
+      
       return [
         'title' => 'Generated Page (Error)',
         'components' => [],
         'validation_data' => [
           'status' => 'error',
-          'message' => 'Error using AI module provider: ' . $e->getMessage(),
+          'message' => $user_error,
         ],
-        'error' => 'Error using AI module provider: ' . $e->getMessage(),
+        'error' => $user_error,
         'raw_response' => '',
       ];
     }

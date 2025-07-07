@@ -97,21 +97,40 @@
               removeTypingIndicator($typingIndicator);
 
               var errorMessage = 'Error: Could not connect to the server.';
-              if (xhr.responseJSON && xhr.responseJSON.reply) {
-                errorMessage = 'Error: ' + xhr.responseJSON.reply;
-              }
-              else if (xhr.responseText) {
+              
+              // Try to get error message from server response in order of preference
+              if (xhr.responseJSON) {
+                if (xhr.responseJSON.reply) {
+                  errorMessage = xhr.responseJSON.reply;
+                } else if (xhr.responseJSON.error) {
+                  errorMessage = xhr.responseJSON.error;
+                } else if (xhr.responseJSON.message) {
+                  errorMessage = xhr.responseJSON.message;
+                }
+              } else if (xhr.responseText) {
                 try {
                   var errorData = JSON.parse(xhr.responseText);
-                  if (errorData.message) {
-                    errorMessage = 'Error: ' + errorData.message;
+                  if (errorData.reply) {
+                    errorMessage = errorData.reply;
+                  } else if (errorData.error) {
+                    errorMessage = errorData.error;
+                  } else if (errorData.message) {
+                    errorMessage = errorData.message;
+                  }
+                } catch (e) {
+                  // The responseText was not JSON - use first 100 chars
+                  if (xhr.responseText.length > 0) {
+                    errorMessage = 'Error: ' + xhr.responseText.substring(0, 100);
                   }
                 }
-                catch (e) {
-                  // The responseText was not JSON.
-                  errorMessage = 'Error: ' + xhr.responseText.substring(0, 100);
-                }
               }
+              
+              // Don't add "Error: " prefix if the message already contains it
+              if (!errorMessage.startsWith('Error:') && !errorMessage.startsWith('API ')) {
+                errorMessage = 'Error: ' + errorMessage;
+              }
+              
+              // Add the error message with HTML support for links
               addMessage(errorMessage, 'bot');
               console.error('Chatbot AJAX error:', status, error, xhr.responseText);
             },
