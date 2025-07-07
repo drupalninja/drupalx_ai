@@ -91,6 +91,27 @@ class AISettingsForm extends ConfigFormBase {
   public function buildForm(array $form, FormStateInterface $form_state) {
     $config = $this->config('drupalx_ai.settings');
 
+    // Check if drupalx_ai_groq module is enabled and API key is empty
+    $module_handler = \Drupal::service('module_handler');
+    if ($module_handler->moduleExists('drupalx_ai_groq') && function_exists('_drupalx_ai_groq_needs_api_key') && _drupalx_ai_groq_needs_api_key()) {
+      $key_url = \Drupal\Core\Url::fromRoute('entity.key.edit_form', ['key' => 'groq_api_key']);
+      $groq_docs_url = 'https://console.groq.com/keys';
+      
+      $form['groq_warning'] = [
+        '#type' => 'container',
+        '#attributes' => [
+          'class' => ['messages', 'messages--warning'],
+        ],
+        '#weight' => -100,
+        'message' => [
+          '#markup' => $this->t('🚀 <strong>DrupalX AI Groq Setup Required:</strong> The Groq API key is empty. <a href="@groq_url" target="_blank">Get your free API key from Groq</a> then <a href="@key_url">add it to your configuration</a> to enable the AI layout generation tool.', [
+            '@key_url' => $key_url->toString(),
+            '@groq_url' => $groq_docs_url,
+          ]),
+        ],
+      ];
+    }
+
     // AI Provider Selection
     $form['ai_provider_settings'] = [
       '#type' => 'details',

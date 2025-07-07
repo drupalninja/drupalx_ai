@@ -12,7 +12,7 @@ drupalx_ai.chatbot_process:
       methods: [POST]
 
 drupalx_ai.settings:
-  path: '/admin/config/drupalx_ai/settings'
+  path: '/admin/config/ai/drupalx_ai'
   defaults:
     _form: '\Drupal\drupalx_ai\Form\AISettingsForm'
     _title: 'DrupalX AI Settings'
