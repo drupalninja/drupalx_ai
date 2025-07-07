@@ -3,10 +3,12 @@
 namespace Drupal\drupalx_ai\Form;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\Config\TypedConfigManagerInterface;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\key\KeyRepositoryInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Drupal\ai\AiProviderPluginManager;
 
 /**
  * Defines a form for configuring AI settings.
@@ -21,25 +23,51 @@ class AISettingsForm extends ConfigFormBase {
   protected KeyRepositoryInterface $keyRepository;
 
   /**
+   * The AI provider plugin manager.
+   *
+   * @var \Drupal\ai\AiProviderPluginManager|null
+   */
+  protected ?AiProviderPluginManager $aiProviderManager;
+
+  /**
+   * The typed config manager.
+   *
+   * @var \Drupal\Core\Config\TypedConfigManagerInterface
+   */
+  protected TypedConfigManagerInterface $typedConfigManager;
+
+  /**
    * Constructs an AISettingsForm object.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
    *   The factory for configuration objects.
+   * @param \Drupal\Core\Config\TypedConfigManagerInterface $typed_config_manager
+   *   The typed config manager.
    * @param \Drupal\key\KeyRepositoryInterface $key_repository
    *   The key repository service.
+   * @param \Drupal\ai\AiProviderPluginManager|null $ai_provider_manager
+   *   The AI provider plugin manager.
    */
-  public function __construct(ConfigFactoryInterface $config_factory, KeyRepositoryInterface $key_repository) {
-    parent::__construct($config_factory);
+  public function __construct(ConfigFactoryInterface $config_factory, TypedConfigManagerInterface $typed_config_manager, KeyRepositoryInterface $key_repository, ?AiProviderPluginManager $ai_provider_manager = NULL) {
+    parent::__construct($config_factory, $typed_config_manager);
+    $this->typedConfigManager = $typed_config_manager;
     $this->keyRepository = $key_repository;
+    $this->aiProviderManager = $ai_provider_manager;
   }
 
   /**
    * {@inheritdoc}
    */
   public static function create(ContainerInterface $container) {
+    $ai_provider_manager = NULL;
+    if ($container->has('ai.provider')) {
+      $ai_provider_manager = $container->get('ai.provider');
+    }
     return new static(
       $container->get('config.factory'),
-      $container->get('key.repository')
+      $container->get('config.typed'),
+      $container->get('key.repository'),
+      $ai_provider_manager
     );
   }
 
@@ -63,37 +91,65 @@ class AISettingsForm extends ConfigFormBase {
   public function buildForm(array $form, FormStateInterface $form_state) {
     $config = $this->config('drupalx_ai.settings');
 
-    $form['api_endpoint'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('API Chat Completions URL / Base URL'),
-      '#default_value' => $config->get('api_endpoint'),
-      '#description' => $this->t('Enter the full URL for the chat completions endpoint (e.g., <code>https://api.example.com/v1/chat/completions</code>) or just the base URL (e.g., <code>https://api.example.com/v1</code>). If the full path is not provided, <code>/chat/completions</code> will be assumed by the client.'),
-      '#required' => TRUE,
+    // AI Provider Selection
+    $form['ai_provider_settings'] = [
+      '#type' => 'details',
+      '#title' => $this->t('AI Provider Settings'),
+      '#open' => TRUE,
     ];
 
-    $form['model_name'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Model Name'),
-      '#default_value' => $config->get('model_name'),
-      '#description' => $this->t('The name of the AI model to use. E.g., gpt-3.5-turbo'),
-      '#required' => TRUE,
+    $ai_module_available = $this->aiProviderManager !== NULL;
+    if (!$ai_module_available) {
+      $form['ai_provider_settings']['ai_module_warning'] = [
+        '#markup' => '<div class="messages messages--error">' . $this->t('The AI module is not available. Please install and enable the AI module to configure AI providers.') . '</div>',
+      ];
+    }
+
+    // Get available AI provider/model configurations from the AI module
+    $provider_model_options = [];
+    if ($this->aiProviderManager) {
+      try {
+        // Get all configured provider instances with their available models
+        $providers = $this->aiProviderManager->getDefinitions();
+        foreach ($providers as $provider_id => $provider_definition) {
+          try {
+            // Try to get a configured instance
+            $provider_instance = $this->aiProviderManager->createInstance($provider_id);
+            
+            // Add provider with default model option
+            $provider_model_options[$provider_id . ':default'] = $provider_definition['label'] . ' - ' . $this->t('Default Model');
+            
+            // TODO: In future versions, could enumerate specific models if provider supports it
+            // For now, each provider gets a "default" option that uses the provider's default model
+            
+          } catch (\Exception $e) {
+            // Provider not configured, skip
+          }
+        }
+      } catch (\Exception $e) {
+        // AI module not available
+      }
+    }
+
+    $form['ai_provider_settings']['ai_provider_model'] = [
+      '#type' => 'select',
+      '#title' => $this->t('AI Provider Configuration'),
+      '#options' => $provider_model_options,
+      '#default_value' => $config->get('ai_provider_model'),
+      '#description' => $ai_module_available ? 
+        $this->t('Select which Drupal AI module provider configuration to use for DrupalX AI operations. This will use the provider\'s configuration as set up in the main AI module settings.') :
+        $this->t('AI module not available. Install the AI module to see available providers.'),
+      '#empty_option' => $this->t('- Select AI provider configuration -'),
+      '#disabled' => !$ai_module_available,
+      '#required' => $ai_module_available,
     ];
 
+    // Get key options for image service API keys
     $key_options = [];
     $keys = $this->keyRepository->getKeys();
     foreach ($keys as $key) {
       $key_options[$key->id()] = $key->label() . ' (' . $key->id() . ')';
     }
-
-    $form['api_key_id'] = [
-      '#type' => 'select',
-      '#title' => $this->t('API Key'),
-      '#options' => $key_options,
-      '#default_value' => $config->get('api_key_id'),
-      '#description' => $this->t('Select the API key configured in the Key module. Ensure the key type is appropriate (e.g., Authentication).'),
-      '#required' => TRUE,
-      '#empty_option' => $this->t('- Select a key -'),
-    ];
 
     // AI prompt settings.
     $form['prompt_settings'] = [
@@ -175,9 +231,7 @@ class AISettingsForm extends ConfigFormBase {
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
     $this->config('drupalx_ai.settings')
-      ->set('api_endpoint', $form_state->getValue('api_endpoint'))
-      ->set('model_name', $form_state->getValue('model_name'))
-      ->set('api_key_id', $form_state->getValue('api_key_id'))
+      ->set('ai_provider_model', $form_state->getValue('ai_provider_model'))
       ->set('system_prompt', $form_state->getValue('system_prompt'))
       ->set('image_generator', $form_state->getValue('image_generator'))
       ->set('pexels_api_key', $form_state->getValue('pexels_api_key'))

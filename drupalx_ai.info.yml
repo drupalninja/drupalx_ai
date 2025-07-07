@@ -6,3 +6,4 @@ package: DrupalX
 dependencies:
   - drupal:node
   - key:key
+  - ai:ai

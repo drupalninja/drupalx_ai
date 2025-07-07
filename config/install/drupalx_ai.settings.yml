@@ -1,6 +1,4 @@
-api_endpoint: 'https://openrouter.ai/api/v1'
-model_name: 'qwen/qwq-32b:free'
-api_key_id: '' # Machine name of the API key configured in the Key module.
+ai_provider_model: '' # AI module provider configuration to use for DrupalX operations (e.g., 'openai:default')
 image_generator: 'placeholder'
 pexels_api_key: '' # Machine name of the Pexels API key configured in the Key module.
 unsplash_api_key: '' # Machine name of the Unsplash API key configured in the Key module.
