@@ -6,7 +6,6 @@ use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\Logger\LoggerChannelInterface;
-use Drupal\drupalx_ai\Service\ValidationService;
 use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Drupal\Component\Serialization\Json;
 use Drupal\ai\AiProviderPluginManager;
@@ -82,7 +81,7 @@ class AIService {
     LoggerChannelFactoryInterface $logger_factory,
     ValidationService $validation_service,
     EntityTypeBundleInfoInterface $entity_type_bundle_info,
-    AiProviderPluginManager $ai_provider_manager
+    AiProviderPluginManager $ai_provider_manager,
   ) {
     $this->configFactory = $config_factory;
     $this->fileSystem = $file_system;
@@ -91,7 +90,6 @@ class AIService {
     $this->entityTypeBundleInfo = $entity_type_bundle_info;
     $this->aiProviderManager = $ai_provider_manager;
   }
-
 
   /**
    * Extracts JSON from a string, potentially wrapped in markdown.
@@ -179,90 +177,37 @@ class AIService {
   public function getAiProviderConfiguration(): ?array {
     $config = $this->configFactory->get('drupalx_ai.settings');
     $ai_provider_model = $config->get('ai_provider_model');
-    
+
     if (empty($ai_provider_model)) {
       return NULL;
     }
-    
+
     [$provider_id, $model_id] = explode(':', $ai_provider_model, 2);
-    
-    // Handle default model selection
+
+    // Handle default model selection.
     if ($model_id === 'default' || $model_id === NULL) {
-      // Try to get the provider's configured default model
+      // Try to get the provider's configured default model.
       try {
         $provider_config = \Drupal::config('ai.provider.' . $provider_id);
         $configured_model = $provider_config->get('model');
         if ($configured_model) {
           $model_id = $configured_model;
-        } else {
-          // No fallback models - report error if provider has no configured model
+        }
+        else {
+          // No fallback models - report error if provider has no configured model.
           return NULL;
         }
-      } catch (\Exception $e) {
-        // No fallback models - report error if config is not available
+      }
+      catch (\Exception $e) {
+        // No fallback models - report error if config is not available.
         return NULL;
       }
     }
-    
+
     return [
       'provider_id' => $provider_id,
       'model_id' => $model_id,
     ];
-  }
-
-  /**
-   * Checks if the API key for the configured provider is empty.
-   *
-   * @return bool
-   *   TRUE if the API key is empty, FALSE otherwise.
-   */
-  protected function isApiKeyEmpty(): bool {
-    $provider_config = $this->getAiProviderConfiguration();
-    if (!$provider_config) {
-      return TRUE;
-    }
-
-    $provider_id = $provider_config['provider_id'];
-    
-    try {
-      // Try to get the provider instance and check if it has an API key configured
-      $provider = $this->aiProviderManager->createInstance($provider_id);
-      
-      // Check different provider configurations for API key
-      if ($provider_id === 'groq') {
-        $groq_config = \Drupal::config('ai_provider_groq.settings');
-        $api_key_id = $groq_config->get('api_key');
-        if (empty($api_key_id)) {
-          return TRUE;
-        }
-        
-        // Check if the key entity exists and has a value
-        $key = \Drupal\key\Entity\Key::load($api_key_id);
-        if (!$key || empty($key->getKeyValue())) {
-          return TRUE;
-        }
-      }
-      // Add other provider checks as needed
-      elseif ($provider_id === 'openai') {
-        $openai_config = \Drupal::config('ai_provider_openai.settings');
-        $api_key_id = $openai_config->get('api_key');
-        if (empty($api_key_id)) {
-          return TRUE;
-        }
-        
-        // Check if the key entity exists and has a value
-        $key = \Drupal\key\Entity\Key::load($api_key_id);
-        if (!$key || empty($key->getKeyValue())) {
-          return TRUE;
-        }
-      }
-      
-    } catch (\Exception $e) {
-      // If we can't check, assume it's empty
-      return TRUE;
-    }
-    
-    return FALSE;
   }
 
   /**
@@ -276,24 +221,9 @@ class AIService {
    *   On error, 'error' key will be set.
    */
   public function getComponents(string $user_description): array {
-    // Check if API key is empty first
-    if ($this->isApiKeyEmpty()) {
-      $settings_url = \Drupal\Core\Url::fromRoute('drupalx_ai.settings')->toString();
-      return [
-        'title' => 'Generated Page (Error)',
-        'components' => [],
-        'validation_data' => [
-          'status' => 'error',
-          'message' => 'API key is empty. Please configure your AI provider API key.',
-        ],
-        'error' => 'API key is empty. Please <a href="' . $settings_url . '" target="_blank">configure your AI provider settings</a>.',
-        'raw_response' => '',
-      ];
-    }
-
-    // Get the configured AI provider for DrupalX operations
+    // Get the configured AI provider for DrupalX operations.
     $provider_config = $this->getAiProviderConfiguration();
-    
+
     if (!$provider_config) {
       return [
         'title' => 'Generated Page (Error)',
@@ -306,16 +236,16 @@ class AIService {
         'raw_response' => '',
       ];
     }
-    
+
     $provider_id = $provider_config['provider_id'];
     $model_id = $provider_config['model_id'];
-    
-    // Get config for system prompt
+
+    // Get config for system prompt.
     $config = $this->configFactory->get('drupalx_ai.settings');
-    
+
     try {
       $provider = $this->aiProviderManager->createInstance($provider_id);
-      
+
       // Load sample components using the ValidationService.
       $samples_result = $this->validationService->loadSampleComponents();
       if ($samples_result['status'] !== 'success') {
@@ -330,7 +260,7 @@ class AIService {
           'raw_response' => '',
         ];
       }
-      
+
       // Validate sample components against paragraph bundles.
       $validation_result = $this->validationService->validateAgainstParagraphBundles($samples_result['data']);
       if ($validation_result['status'] !== 'success') {
@@ -345,60 +275,47 @@ class AIService {
           'raw_response' => '',
         ];
       }
-      
+
       $valid_sample_components_for_prompt = $validation_result['valid_components'];
       $allowed_component_types = $validation_result['allowed_types'];
-      
+
       $json_data_for_prompt = Json::encode($valid_sample_components_for_prompt);
       $unique_allowed_types = array_unique($allowed_component_types);
       $allowed_types_string = '"' . implode('", "', $unique_allowed_types) . '"';
-      
+
       // Get the configurable system prompt from settings.
       $system_prompt_template = $config->get('system_prompt');
       if (empty($system_prompt_template)) {
         $system_prompt_template = $this->getDefaultSystemPrompt();
       }
-      
+
       // Replace placeholders in the prompt template.
       $system_prompt = str_replace(
         ['{allowed_types}', '{components_json}'],
         [$allowed_types_string, $json_data_for_prompt],
         $system_prompt_template
       );
-      
+
       $messages = new ChatInput([
         new ChatMessage('system', $system_prompt),
         new ChatMessage('user', "User's page goal: \"" . $user_description . "\""),
       ]);
-      
+
       $response = $provider->chat($messages, $model_id);
       $ai_content = $response->getNormalized()->getText();
-      
+
       return $this->processAiResponse($ai_content);
-      
-    } catch (\Exception $e) {
+
+    }
+    catch (\Exception $e) {
       $this->logger->error(
         'Error using AI module provider: @message',
         ['@message' => $e->getMessage()]
       );
-      
-      // Check if this looks like an API key issue
-      $error_message = $e->getMessage();
-      $settings_url = \Drupal\Core\Url::fromRoute('drupalx_ai.settings')->toString();
-      
-      if (strpos($error_message, 'Unauthorized') !== FALSE || 
-          strpos($error_message, 'Invalid API key') !== FALSE ||
-          strpos($error_message, 'authentication') !== FALSE ||
-          strpos($error_message, 'API key') !== FALSE) {
-        $user_error = 'API authentication failed. Please <a href="' . $settings_url . '" target="_blank">check your API key configuration</a>.';
-      } elseif (strpos($error_message, 'connect') !== FALSE || 
-                strpos($error_message, 'timeout') !== FALSE ||
-                strpos($error_message, 'network') !== FALSE) {
-        $user_error = 'Could not connect to the AI service. Please check your connection and try again.';
-      } else {
-        $user_error = 'Error using AI service. Please <a href="' . $settings_url . '" target="_blank">check your configuration</a>.';
-      }
-      
+
+      // Generic error message for all connection/API issues.
+      $user_error = 'Could not connect to the AI service. Please check your configuration and try again.';
+
       return [
         'title' => 'Generated Page (Error)',
         'components' => [],
@@ -412,7 +329,6 @@ class AIService {
     }
   }
 
-
   /**
    * Processes the AI response and extracts components.
    *
@@ -424,9 +340,9 @@ class AIService {
    */
   protected function processAiResponse(string $ai_content): array {
     $this->logger->debug('AIService: Full AI response content: @content', ['@content' => $ai_content]);
-    
+
     $page_title = 'Generated Page';
-    
+
     // Extract Page Title.
     $title_match = [];
     if (preg_match('/PAGE_TITLE:(.*)/i', $ai_content, $title_match)) {
@@ -434,17 +350,17 @@ class AIService {
       // Remove the title line from ai_content before JSON extraction.
       $ai_content = preg_replace('/PAGE_TITLE:.*(\\r\\n|\\r|\\n)/i', '', $ai_content, 1);
     }
-    
+
     $json_string_from_ai = $this->extractJsonFromString(trim($ai_content));
-    
+
     if ($json_string_from_ai) {
       $this->logger->debug(
         'AIService: Raw JSON string extracted from AI: @json',
         ['@json' => $json_string_from_ai]
       );
-      
+
       $decoded_json = Json::decode($json_string_from_ai);
-      
+
       if (json_last_error() !== JSON_ERROR_NONE) {
         $this->logger->error(
           'Failed to decode JSON from AI: @error. JSON: @json',
@@ -464,7 +380,7 @@ class AIService {
           'raw_response' => $ai_content,
         ];
       }
-      
+
       $extracted_ai_components = $this->normalizeAiJsonResponse($decoded_json);
     }
     else {
@@ -485,10 +401,10 @@ class AIService {
         'raw_response' => $ai_content,
       ];
     }
-    
+
     // Perform validation using the injected ValidationService.
     $validation_data = $this->validationService->performFullValidation($extracted_ai_components);
-    
+
     // Log validation results.
     if (($validation_data['status'] ?? 'error') !== 'success') {
       $this->logger->error(
@@ -500,7 +416,7 @@ class AIService {
         ]
       );
     }
-    
+
     return [
       'title' => $page_title,
       'components' => $extracted_ai_components,
