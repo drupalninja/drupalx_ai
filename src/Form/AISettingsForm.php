@@ -138,7 +138,15 @@ class AISettingsForm extends ConfigFormBase {
         foreach ($provider_configs as $config_name) {
           $config = $ai_config_factory->get($config_name);
           $provider_id = str_replace(['ai_provider_', '.settings'], '', $config_name);
+          
+          // Get proper provider label from plugin definition if available
           $provider_label = ucfirst($provider_id);
+          if ($this->aiProviderManager) {
+            $provider_definitions = $this->aiProviderManager->getDefinitions();
+            if (isset($provider_definitions[$provider_id])) {
+              $provider_label = $provider_definitions[$provider_id]['label'];
+            }
+          }
 
           // For now, create a default model option for each provider.
           // The actual model selection is handled by the provider configuration.
