@@ -136,7 +136,7 @@ class AISettingsForm extends ConfigFormBase {
         $provider_configs = $ai_config_factory->listAll('ai_provider_');
 
         foreach ($provider_configs as $config_name) {
-          $config = $ai_config_factory->get($config_name);
+          $config_data = $ai_config_factory->get($config_name);
           $provider_id = str_replace(['ai_provider_', '.settings'], '', $config_name);
 
           // Get proper provider label from plugin definition if available.
@@ -184,7 +184,7 @@ class AISettingsForm extends ConfigFormBase {
     if (empty($current_value) && isset($provider_model_options['groq:default'])) {
       $current_value = 'groq:default';
     }
-    
+
     $form['ai_provider_settings']['ai_provider_model'] = [
       '#type' => 'select',
       '#title' => $this->t('AI Provider Configuration'),
@@ -287,8 +287,28 @@ class AISettingsForm extends ConfigFormBase {
   /**
    * {@inheritdoc}
    */
+  public function validateForm(array &$form, FormStateInterface $form_state) {
+    parent::validateForm($form, $form_state);
+
+    // Validate that required fields are present based on image service selection.
+    $image_generator = $form_state->getValue('image_generator');
+
+    if ($image_generator === 'pexels' && empty($form_state->getValue('pexels_api_key'))) {
+      $form_state->setErrorByName('pexels_api_key', $this->t('Pexels API key is required when using Pexels as the image service.'));
+    }
+
+    if ($image_generator === 'unsplash' && empty($form_state->getValue('unsplash_api_key'))) {
+      $form_state->setErrorByName('unsplash_api_key', $this->t('Unsplash API key is required when using Unsplash as the image service.'));
+    }
+  }
+
+  /**
+   * {@inheritdoc}
+   */
   public function submitForm(array &$form, FormStateInterface $form_state) {
-    $this->config('drupalx_ai.settings')
+    $config = $this->config('drupalx_ai.settings');
+
+    $config
       ->set('ai_provider_model', $form_state->getValue('ai_provider_model'))
       ->set('system_prompt', $form_state->getValue('system_prompt'))
       ->set('image_generator', $form_state->getValue('image_generator'))
