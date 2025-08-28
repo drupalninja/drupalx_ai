@@ -5,22 +5,26 @@ INSTRUCTIONS:
 1.  First, on a line by itself, suggest a clear and compelling title for this landing page. Format it exactly as: "PAGE_TITLE: Your Suggested Page Title Here".
 2.  Then, on subsequent lines, provide the JSON data for the recommended UI components. This JSON should be enclosed in a standard markdown code block (```json ... ```).
 3.  The JSON must be an array of component objects.
-4.  CRITICAL: Always start with a hero component and a text component. Only add card groups if specifically requested.
-5.  Aim to provide between 5 and 6 components in total to construct a rich, engaging page.
-5.  Each component object in your response MUST include a `type` field.
-6.  IMPORTANT: The value of the `type` field for each component MUST be one of the following allowed Drupal Paragraph bundle machine names: {allowed_types}.
+4.  CRITICAL: Always start with a hero component and a text component. Then add diverse components to create engaging pages.
+5.  MANDATORY: You MUST provide exactly 5 to 6 components in total to construct a rich, engaging page. Use a variety of component types to make the page interesting and comprehensive. COUNT YOUR COMPONENTS - if you provide fewer than 5 components, the response will be rejected.
+5a. COMPONENT VARIETY: After the required hero and text components, choose from card_group, sidebyside, gallery, logo_collection, quote, pricing, accordion, newsletter, or other components to create diverse, engaging layouts. ADD 3-4 MORE COMPONENTS after hero and text.
+5b. EXAMPLE COMPONENT SEQUENCE: A typical page should have: 1) hero, 2) text, 3) card_group, 4) sidebyside, 5) gallery, 6) quote (6 components total). This creates a comprehensive, engaging page.
+6.  Each component object in your response MUST include a `type` field.
+7.  IMPORTANT: The value of the `type` field for each component MUST be one of the following allowed Drupal Paragraph bundle machine names: {allowed_types}.
     Do not invent new `type` values. Only use types from this list.
-7.  Each component in your response must match the structure and fields shown in the example components provided below (respecting the `type`). Do not change other field names (keys).
-8.  For any fields representing images (e.g., fields with "image" or "media" in their name), the 'alt' text MUST be a brief, thematic, and descriptive phrase for the image. Avoid generic placeholders.
-9.  CRITICAL IMAGE ALT TEXT INSTRUCTIONS: When creating alt text for images, use simple, descriptive words that work well as search terms. Prefer single words or simple phrases like "mountains", "cityscape", "office", "technology", "nature", "people", "business", "food", etc. NEVER use proper names, brand names, or specific person names. Focus on general, descriptive terms that would return good stock photos.
-10. CRITICAL: Cards must only be included inside a 'card_group' component. Never provide a standalone 'card' component at the top level.
-10a. CRITICAL: Every single card MUST have a "media" field with @ reference to a media entity. Cards without media are not allowed.
-11. CRITICAL: When using a 'logo_collection' component, ALWAYS include exactly 5 images in the 'field_media_item' array. Logo collections should showcase 5 different companies or partners.
-12. CRITICAL: When using a 'gallery' component, ALWAYS include exactly 4 images in the 'field_media_item' array. Galleries should showcase 4 different items or projects.
-13. CRITICAL: Never use placeholder text in square brackets or similar formats. Instead of placeholder text, always provide realistic, specific content that fits the context. Write actual titles, descriptions, names, and content that would be appropriate for a real website.
-14. CRITICAL JSON FORMATTING: Ensure all JSON objects are properly formatted with matching opening and closing braces. Each object must have its "values" object properly closed with a closing brace } before the object itself is closed. Pay special attention to embedded objects like cards within card groups.
+8.  Each component in your response must match the structure and fields shown in the example components provided below (respecting the `type`). Do not change other field names (keys).
+9.  For any fields representing images (e.g., fields with "image" or "media" in their name), the 'alt' text MUST be a brief, thematic, and descriptive phrase for the image. Avoid generic placeholders.
+10. CRITICAL IMAGE ALT TEXT INSTRUCTIONS: When creating alt text for images, use simple, descriptive words that work well as search terms. Prefer single words or simple phrases like "mountains", "cityscape", "office", "technology", "nature", "people", "business", "food", etc. NEVER use proper names, brand names, or specific person names. Focus on general, descriptive terms that would return good stock photos.
+11. CRITICAL: Cards must only be included inside a 'card_group' component. Never provide a standalone 'card' component at the top level.
+11a. CRITICAL: Every single card MUST have a "media" field with @ reference to a media entity. Cards without media are not allowed.
+12. CRITICAL: When using a 'logo_collection' component, ALWAYS include exactly 5 images in the 'field_media_item' array. Logo collections should showcase 5 different companies or partners.
+13. CRITICAL: When using a 'gallery' component, ALWAYS include exactly 4 images in the 'field_media_item' array. Galleries should showcase 4 different items or projects.
+14. CRITICAL: Never use placeholder text in square brackets or similar formats. Instead of placeholder text, always provide realistic, specific content that fits the context. Write actual titles, descriptions, names, and content that would be appropriate for a real website.
+15. CRITICAL JSON FORMATTING: Ensure all JSON objects are properly formatted with matching opening and closing braces. Each object must have its "values" object properly closed with a closing brace } before the object itself is closed. Pay special attention to embedded objects like cards within card groups.
+15a. JSON VALIDATION: Your JSON must be 100% valid and parseable. Never include any PHP objects, class names, or invalid syntax like "BuilderFactory" or similar. All values must be proper JSON strings, objects, arrays, numbers, or booleans.
+15b. CRITICAL: field_image must ALWAYS be a plain JSON object like {"uri": "public://ai-generated/hero.png", "alt": "description"} - never include class references or invalid syntax.
 
-15. ABSOLUTE CRITICAL MEDIA REQUIREMENTS:
+16. ABSOLUTE CRITICAL MEDIA REQUIREMENTS:
 
 **STEP 1**: Create media entities FIRST, then reference with @ syntax:
 ```json
@@ -175,3 +179,5 @@ Here is the library of available Drupal UI components (use their `type` field an
 ```json
 {components_json}
 ```
+
+**FINAL REMINDER: Your JSON array MUST contain exactly 5-6 paragraph components. Count them before responding: hero + text + 3-4 additional diverse components = 5-6 total. Responses with fewer components will be rejected.**

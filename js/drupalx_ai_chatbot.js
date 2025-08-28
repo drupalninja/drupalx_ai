@@ -3,33 +3,51 @@
 
   Drupal.behaviors.drupalxAiChatbot = {
     attach: function (context, settings) {
-      // Find all chatbot containers on the page (though typically one per page).
-      // Use data attribute to track initialization status
-      $(once('drupalx-ai-chatbot', '.drupalx-ai-chatbot-container', context)).each(function () {
-        var $container = $(this);
-        var $toggle = $container.find('.drupalx-ai-chatbot-toggle');
-        var $closeBtn = $container.find('.drupalx-ai-chatbot-close');
-        var $widget = $container.find('.drupalx-ai-chatbot-widget');
-        var $messagesContainer = $container.find('.drupalx-ai-chatbot-messages');
-        var $inputField = $container.find('.drupalx-ai-chatbot-input input[type="text"]');
-        var $sendButton = $container.find('.drupalx-ai-chatbot-input button');
+      // Initialize the off-canvas chatbot
+      $(once('drupalx-ai-chatbot-toggle', '.drupalx-ai-chatbot-toggle', context)).each(function () {
+        var $toggle = $(this);
+        var $overlay = $('.drupalx-ai-chatbot-overlay');
+        var $closeBtn = $overlay.find('.drupalx-ai-chatbot-close');
+        var $messagesContainer = $overlay.find('.drupalx-ai-chatbot-messages');
+        var $inputField = $overlay.find('.drupalx-ai-chatbot-input input[type="text"]');
+        var $sendButton = $overlay.find('.drupalx-ai-chatbot-input button');
         var chatbotUrl = drupalSettings.drupalx_ai.chatbot_url;
 
         // Toggle chatbot visibility
         $toggle.on('click', function () {
-          $widget.toggleClass('active');
+          $overlay.addClass('active');
           // Focus the input field when opening
-          if ($widget.hasClass('active')) {
+          setTimeout(function() {
             $inputField.focus();
-          }
+          }, 300); // Delay to allow animation to complete
         });
 
         // Close button functionality
         $closeBtn.on('click', function () {
-          $widget.removeClass('active');
+          $overlay.removeClass('active');
+        });
+
+        // Close when clicking overlay backdrop
+        $overlay.on('click', function (e) {
+          if (e.target === this) {
+            $overlay.removeClass('active');
+          }
+        });
+
+        // Close on Escape key
+        $(document).on('keydown', function(e) {
+          if (e.key === 'Escape' && $overlay.hasClass('active')) {
+            $overlay.removeClass('active');
+          }
         });
 
         function addMessage(text, type) {
+          // Hide intro section when first message is added
+          var $intro = $overlay.find('.drupalx-ai-chatbot-intro');
+          if ($intro.is(':visible')) {
+            $intro.slideUp(300);
+          }
+
           // Process message text (handle basic markdown-like formatting)
           var processedText = text;
 
