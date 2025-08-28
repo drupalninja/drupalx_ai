@@ -56,25 +56,25 @@ class ValidationService {
   }
 
   /**
-   * Gets the types of components that appear at the top level of sample-components.json.
+   * Gets the types of components that appear at the top level of json-import-schema.json.
    *
    * @return array
-   *   An array of unique top-level component types found in the samples.
-   *   Returns an empty array if samples cannot be loaded or are empty.
+   *   An array of unique top-level component types found in the schema.
+   *   Returns an empty array if schema cannot be loaded or is empty.
    */
   public function getTopLevelSampleTypes(): array {
-    $samples_result = $this->loadSampleComponents();
+    $schema_result = $this->loadJsonImportSchema();
 
-    if ($samples_result['status'] !== 'success' || empty($samples_result['data'])) {
-      $this->logger->warning('Could not load sample components to determine top-level types.');
+    if ($schema_result['status'] !== 'success' || empty($schema_result['data'])) {
+      $this->logger->warning('Could not load JSON import schema to determine top-level types.');
       return [];
     }
 
     $top_level_types = [];
-    // $samples_result['data'] is expected to be an array of component definitions.
-    foreach ($samples_result['data'] as $component_definition) {
-      if (isset($component_definition['type']) && is_string($component_definition['type'])) {
-        $top_level_types[] = $component_definition['type'];
+    // $schema_result['data'] is expected to be an array of content definitions.
+    foreach ($schema_result['data'] as $content_definition) {
+      if (isset($content_definition['type']) && is_string($content_definition['type'])) {
+        $top_level_types[] = $content_definition['type'];
       }
     }
     return array_unique($top_level_types);
@@ -279,7 +279,7 @@ class ValidationService {
    */
   protected function getComponentTypeMapping(): array {
     return [
-      // Direct component type mappings based on sample-components.json.
+      // Direct component type mappings based on json-import-schema.json.
       'hero' => 'hero',
       'card_group' => 'card_group',
       'quote' => 'quote',
@@ -332,12 +332,22 @@ class ValidationService {
    *   Status can be 'success' or an error code.
    *   Data contains the loaded components if successful.
    */
-  public function loadSampleComponents(string $sample_path = NULL): array {
+  /**
+   * Loads JSON import schema components instead of legacy sample components.
+   *
+   * @param string $sample_path
+   *   Optional path to schema file.
+   *
+   * @return array
+   *   Array with 'status', 'message', and 'data' keys.
+   */
+  public function loadJsonImportSchema(string $sample_path = NULL): array {
     $result = [
       'status' => 'success',
-      'message' => $this->t('Sample components loaded successfully.'),
+      'message' => $this->t('JSON import schema loaded successfully.'),
       'data' => [],
     ];
+
     if ($sample_path === NULL) {
       $module_extension = $this->moduleHandler->getModule('drupalx_ai');
       if (!$module_extension) {
@@ -345,30 +355,35 @@ class ValidationService {
         $result['message'] = $this->t('Could not load drupalx_ai module extension.');
         return $result;
       }
-      $module_path = $module_extension->getPath();
-      $sample_path = DRUPAL_ROOT . DIRECTORY_SEPARATOR . $module_path . '/files/sample-components.json';
+      $sample_path = $module_extension->getPath() . '/files/json-import-schema.json';
     }
-    if (!file_exists($sample_path)) {
-      $result['status'] = 'error_loading_samples';
-      $result['message'] = $this->t('Sample components JSON file not found at @path', ['@path' => $sample_path]);
+
+    if (!is_file($sample_path) || !is_readable($sample_path)) {
+      $result['status'] = 'error_file_not_readable';
+      $result['message'] = $this->t('JSON import schema file at @path is not readable.', ['@path' => $sample_path]);
       return $result;
     }
-    $sample_json_content = @file_get_contents($sample_path);
-    if ($sample_json_content === FALSE) {
-      $result['status'] = 'error_loading_samples';
-      $result['message'] = $this->t('Failed to read sample components JSON file from @path', ['@path' => $sample_path]);
+
+    $json_content = file_get_contents($sample_path);
+    if ($json_content === FALSE) {
+      $result['status'] = 'error_file_read';
+      $result['message'] = $this->t('Could not read JSON import schema file at @path.', ['@path' => $sample_path]);
       return $result;
     }
-    $all_sample_components = json_decode($sample_json_content, TRUE);
+
+    $json_data = json_decode($json_content, TRUE);
     if (json_last_error() !== JSON_ERROR_NONE) {
-      $result['status'] = 'error_decoding_samples';
-      $result['message'] = $this->t('Failed to decode sample components JSON: @error (Path: @path)',
-        ['@error' => json_last_error_msg(), '@path' => $sample_path]);
+      $result['status'] = 'error_json_decode';
+      $result['message'] = $this->t('JSON import schema file contains invalid JSON: @error', ['@error' => json_last_error_msg()]);
       return $result;
     }
-    $result['data'] = $all_sample_components;
+
+    // The JSON import schema is now just an array of content items
+    $result['data'] = $json_data;
+
     return $result;
   }
+
 
   /**
    * Validates sample components against existing paragraph bundles.
@@ -418,11 +433,28 @@ class ValidationService {
         $component_type = $key;
       }
 
-      // Check if we need to map this component type to a valid paragraph
-      // bundle.
-      $mapped_type = $component_type;
-      if (isset($component_type_mapping[$component_type])) {
-        $mapped_type = $component_type_mapping[$component_type];
+      // Handle entity.bundle syntax (e.g., "paragraph.hero", "media.image")
+      $entity_type = 'paragraph'; // default
+      $bundle_type = $component_type;
+      
+      if (str_contains($component_type, '.')) {
+        $parts = explode('.', $component_type, 2);
+        $entity_type = $parts[0];
+        $bundle_type = $parts[1];
+      }
+      
+      // Only validate paragraph bundles - skip media entities
+      if ($entity_type !== 'paragraph') {
+        // For media entities, just pass them through without bundle validation
+        $result['valid_components'][$key] = $component_data;
+        $result['allowed_types'][] = $component_type; // Keep full entity.bundle format
+        continue;
+      }
+
+      // Check if we need to map this bundle type to a valid paragraph bundle.
+      $mapped_type = $bundle_type;
+      if (isset($component_type_mapping[$bundle_type])) {
+        $mapped_type = $component_type_mapping[$bundle_type];
       }
 
       // Check if the mapped type exists as a paragraph bundle.
@@ -436,12 +468,14 @@ class ValidationService {
 
       // Store with the original key to maintain the same structure.
       $result['valid_components'][$key] = $component_data;
-      // If component data has a type field, update it to the mapped type.
+      // Keep the full entity.bundle format for paragraphs
+      $full_type = 'paragraph.' . $mapped_type;
+      // If component data has a type field, keep the original full format
       if (is_array($component_data) && isset($component_data['type'])) {
-        $result['valid_components'][$key]['type'] = $mapped_type;
+        $result['valid_components'][$key]['type'] = $component_data['type']; // Keep original format
       }
-      // Store the mapped type in allowed_types for further processing.
-      $result['allowed_types'][] = $mapped_type;
+      // Store the full entity.bundle format in allowed_types for further processing.
+      $result['allowed_types'][] = $full_type;
     }
 
     if (empty($result['valid_components'])) {
@@ -465,8 +499,8 @@ class ValidationService {
       'results' => ['errors' => [], 'warnings' => []],
     ];
 
-    // Use the loadSampleComponents method instead of duplicating the logic.
-    $samples_result = $this->loadSampleComponents();
+    // Use the loadJsonImportSchema method instead of duplicating the logic.
+    $samples_result = $this->loadJsonImportSchema();
     if ($samples_result['status'] !== 'success') {
       $default_return['status'] = $samples_result['status'];
       $default_return['message'] = $samples_result['message'];

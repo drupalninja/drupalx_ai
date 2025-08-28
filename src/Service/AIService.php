@@ -11,6 +11,8 @@ use Drupal\Component\Serialization\Json;
 use Drupal\ai\AiProviderPluginManager;
 use Drupal\ai\OperationType\Chat\ChatInput;
 use Drupal\ai\OperationType\Chat\ChatMessage;
+use Drupal\json_import\Service\DrupalContentImporter;
+use Drupal\json_import\Service\JsonSchemaValidator;
 
 /**
  * Service for interacting with AI providers through the Drupal AI module.
@@ -60,6 +62,20 @@ class AIService {
   protected AiProviderPluginManager $aiProviderManager;
 
   /**
+   * The JSON import importer service.
+   *
+   * @var \Drupal\json_import\Service\DrupalContentImporter
+   */
+  protected DrupalContentImporter $jsonImporter;
+
+  /**
+   * The JSON schema validator service.
+   *
+   * @var \Drupal\json_import\Service\JsonSchemaValidator
+   */
+  protected JsonSchemaValidator $jsonSchemaValidator;
+
+  /**
    * Constructs a new AIService object.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
@@ -74,6 +90,10 @@ class AIService {
    *   The entity type bundle info service.
    * @param \Drupal\ai\AiProviderPluginManager $ai_provider_manager
    *   The AI provider plugin manager.
+   * @param \Drupal\json_import\Service\DrupalContentImporter $json_importer
+   *   The JSON import importer service.
+   * @param \Drupal\json_import\Service\JsonSchemaValidator $json_schema_validator
+   *   The JSON schema validator service.
    */
   public function __construct(
     ConfigFactoryInterface $config_factory,
@@ -82,6 +102,8 @@ class AIService {
     ValidationService $validation_service,
     EntityTypeBundleInfoInterface $entity_type_bundle_info,
     AiProviderPluginManager $ai_provider_manager,
+    DrupalContentImporter $json_importer,
+    JsonSchemaValidator $json_schema_validator,
   ) {
     $this->configFactory = $config_factory;
     $this->fileSystem = $file_system;
@@ -89,6 +111,120 @@ class AIService {
     $this->validationService = $validation_service;
     $this->entityTypeBundleInfo = $entity_type_bundle_info;
     $this->aiProviderManager = $ai_provider_manager;
+    $this->jsonImporter = $json_importer;
+    $this->jsonSchemaValidator = $json_schema_validator;
+  }
+
+  /**
+   * Processes AI-generated components and imports them using json_import.
+   *
+   * @param array $components
+   *   Array of AI-generated components.
+   * @param bool $preview_mode
+   *   Whether to run in preview mode.
+   *
+   * @return array
+   *   Import result array.
+   */
+  public function createNodeWithComponents(string $page_title, array $components, int $uid): array {
+    // Create paragraph references from the component IDs (only top-level paragraphs, not embedded ones)
+    $paragraph_refs = [];
+
+    // Define sub-component types that should never be top-level (same as json_import filtering)
+    $sub_component_types = [
+      'paragraph.card',
+      'paragraph.accordion_item',
+      'paragraph.carousel_item',
+      'paragraph.bullet',
+      'paragraph.pricing_card',
+    ];
+
+    foreach ($components as $component) {
+      if (isset($component['id']) && isset($component['type']) && str_starts_with($component['type'], 'paragraph.')) {
+        // Only include top-level paragraphs, not sub-components
+        if (!in_array($component['type'], $sub_component_types)) {
+          $paragraph_refs[] = '@' . $component['id'];
+        }
+      }
+    }
+
+    // Create the node structure
+    $node_structure = [
+      'id' => 'main_page_node',
+      'type' => 'node.landing',
+      'values' => [
+        'title' => $page_title,
+        'uid' => $uid,
+        'status' => 1,
+        'field_hide_page_title' => TRUE,
+        'field_content' => $paragraph_refs,
+      ]
+    ];
+
+    // Debug logging
+    $this->logger->debug('AIService: Node structure field_content references: @refs', [
+      '@refs' => json_encode($paragraph_refs)
+    ]);
+
+    // Debug: Log which components are being filtered out (disabled for performance)
+    // $filtered_out = [];
+    // error_log("AIService Debug: Total components received: " . count($components));
+    // foreach ($components as $component) {
+    //   error_log("AIService Debug: Component: " . json_encode(['id' => $component['id'] ?? 'NO_ID', 'type' => $component['type'] ?? 'NO_TYPE']));
+    //   if (isset($component['id']) && isset($component['type']) && str_starts_with($component['type'], 'paragraph.')) {
+    //     if (in_array($component['type'], $sub_component_types)) {
+    //       $filtered_out[] = $component['id'] . ' (' . $component['type'] . ')';
+    //     }
+    //   }
+    // }
+    // error_log("AIService Debug: Filtered out sub-components: " . implode(', ', $filtered_out));
+    // error_log("AIService Debug: Including in field_content: " . implode(', ', $paragraph_refs));
+
+    // Log field_content structure for debugging if needed
+    // error_log("AIService Debug: Creating node with field_content references: " . json_encode($paragraph_refs));
+
+    // Combine components first, then node last (following json_import sample.json pattern)
+    $full_structure = array_merge($components, [$node_structure]);
+
+    return $full_structure;
+  }
+
+    public function importComponentsAsJsonImport(array $components, bool $preview_mode = FALSE): array {
+    // Create the proper json_import structure following the schema exactly
+    $json_import_data = [
+      'content' => $components
+    ];
+
+    // Debug: Log the full JSON structure being passed to json_import.
+    $this->logger->debug('AIService: Full JSON structure being passed to json_import: @json', [
+      '@json' => json_encode($json_import_data, JSON_PRETTY_PRINT)
+    ]);
+
+    // Debug logging (disabled for performance)
+    // error_log("=== DRUPALX_AI JSON STRUCTURE FOR INLINE MEDIA DEBUG ===");
+    // error_log(json_encode($json_import_data, JSON_PRETTY_PRINT));
+    // error_log("=== END JSON STRUCTURE ===");
+
+    // Use json_import service to process the data
+    try {
+      $result = $this->jsonImporter->import($json_import_data, $preview_mode);
+
+      // Debug: Log the import result.
+      $this->logger->debug('AIService: JSON import result: @result', [
+        '@result' => json_encode($result, JSON_PRETTY_PRINT)
+      ]);
+
+      return $result;
+    } catch (\Exception $e) {
+      $this->logger->error('AIService: JSON import failed with exception: @error', [
+        '@error' => $e->getMessage()
+      ]);
+      return [
+        'summary' => [],
+        'warnings' => ['Failed to import components: ' . $e->getMessage()],
+        'error' => $e->getMessage()
+      ];
+    }
   }
 
   /**
@@ -102,14 +238,41 @@ class AIService {
    */
   private function extractJsonFromString(string $string): ?string {
     if (preg_match('/```json\n(.*?)\n```/s', $string, $matches)) {
-      return $matches[1];
+      $json_string = $matches[1];
     }
-    // Check if the string itself is likely JSON (starts with [ or {).
-    $trimmed_string = trim($string);
-    if (str_starts_with($trimmed_string, '[') || str_starts_with($trimmed_string, '{')) {
-      return $trimmed_string;
+    else {
+      // Check if the string itself is likely JSON (starts with [ or {).
+      $trimmed_string = trim($string);
+      if (str_starts_with($trimmed_string, '[') || str_starts_with($trimmed_string, '{')) {
+        $json_string = $trimmed_string;
+      }
+      else {
+        return NULL;
+      }
     }
-    return NULL;
+
+    // Attempt to fix common JSON formatting issues.
+    $json_string = $this->attemptJsonFix($json_string);
+
+    return $json_string;
+  }
+
+  /**
+   * Attempts to fix common JSON formatting issues.
+   *
+   * @param string $json_string
+   *   The potentially malformed JSON string.
+   *
+   * @return string
+   *   The potentially fixed JSON string.
+   */
+  private function attemptJsonFix(string $json_string): string {
+    // Log the original JSON for debugging.
+    $this->logger->debug('AIService: Original JSON from AI: @json', ['@json' => $json_string]);
+
+    // Don't attempt automatic fixes as they can make things worse.
+    // Focus on improving the AI prompt instead.
+    return $json_string;
   }
 
   /**
@@ -256,8 +419,8 @@ class AIService {
     try {
       $provider = $this->aiProviderManager->createInstance($provider_id);
 
-      // Load sample components using the ValidationService.
-      $samples_result = $this->validationService->loadSampleComponents();
+      // Load JSON import schema components using the ValidationService.
+      $samples_result = $this->validationService->loadJsonImportSchema();
       if ($samples_result['status'] !== 'success') {
         return [
           'title' => 'Generated Page (Error)',
@@ -299,10 +462,13 @@ class AIService {
         $system_prompt_template = $this->getDefaultSystemPrompt();
       }
 
+      // Load Lucide icon names for the AI to use
+      $lucide_icons = $this->getLucideIconNames();
+
       // Replace placeholders in the prompt template.
       $system_prompt = str_replace(
-        ['{allowed_types}', '{components_json}'],
-        [$allowed_types_string, $json_data_for_prompt],
+        ['{allowed_types}', '{components_json}', '{lucide_icons}'],
+        [$allowed_types_string, $json_data_for_prompt, $lucide_icons],
         $system_prompt_template
       );
 
@@ -485,6 +651,50 @@ Here is the library of available Drupal UI components (use their `type` field an
 {components_json}
 ```
 EOT;
+  }
+
+  /**
+   * Loads Lucide icon names from the file.
+   *
+   * @return string
+   *   A comma-separated list of available Lucide icon names.
+   */
+  protected function getLucideIconNames(): string {
+    $module_path = \Drupal::service('extension.list.module')->getPath('drupalx_ai');
+    $icons_file_path = DRUPAL_ROOT . '/' . $module_path . '/files/lucide-icon-names.txt';
+
+    if (file_exists($icons_file_path)) {
+      $icons_content = file_get_contents($icons_file_path);
+      if ($icons_content !== FALSE) {
+        // Parse the file and extract icon names (skip the header line)
+        $lines = explode("\n", trim($icons_content));
+        $icon_names = [];
+
+        foreach ($lines as $line) {
+          $line = trim($line);
+          // Skip empty lines and the header line
+          if (!empty($line) && !str_contains($line, 'Here are the Lucide icons')) {
+            $icon_names[] = $line;
+          }
+        }
+
+        // Return as a readable list for the AI
+        return implode(', ', $icon_names);
+      }
+      else {
+        $this->logger->error('Failed to read Lucide icons file: @path', [
+          '@path' => $icons_file_path,
+        ]);
+      }
+    }
+    else {
+      $this->logger->error('Lucide icons file not found: @path', [
+        '@path' => $icons_file_path,
+      ]);
+    }
+
+    // Fallback to common icons if file can't be read
+    return 'heart, star, home, user, search, menu, settings, arrow-right, check, plus, minus, edit, trash, download, upload';
   }
 
 }

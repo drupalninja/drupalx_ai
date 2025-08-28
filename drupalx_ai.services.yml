@@ -1,32 +1,12 @@
 services:
   drupalx_ai.ai_service:
     class: Drupal\drupalx_ai\Service\AIService
-    arguments: ['@config.factory', '@file_system', '@logger.factory', '@drupalx_ai.validation_service', '@entity_type.bundle.info', '@ai.provider']
-
-  drupalx_ai.paragraph_service:
-    class: Drupal\drupalx_ai\Service\ParagraphService
-    arguments: ['@entity_type.manager', '@logger.factory', '@current_user', '@entity_type.bundle.info', '@entity_field.manager', '@drupalx_ai.media_service', '@drupalx_ai.taxonomy_service', '@drupalx_ai.validation_service']
-
-  drupalx_ai.media_service:
-    class: Drupal\drupalx_ai\Service\MediaService
-    arguments: ['@entity_type.manager', '@logger.factory', '@file_system', '@current_user', '@entity_type.bundle.info', '@drupalx_ai.file_service', '@config.factory', '@drupalx_ai.pexels_api_service', '@drupalx_ai.unsplash_api_service']
-
-  drupalx_ai.taxonomy_service:
-    class: Drupal\drupalx_ai\Service\TaxonomyService
-    arguments: ['@entity_type.manager', '@logger.factory', '@current_user']
-
-  drupalx_ai.file_service:
-    class: Drupal\drupalx_ai\Service\FileService
-    arguments: ['@entity_type.manager', '@logger.factory', '@file_system', '@current_user']
+    arguments: ['@config.factory', '@file_system', '@logger.factory', '@drupalx_ai.validation_service', '@entity_type.bundle.info', '@ai.provider', '@json_import.importer', '@json_import.schema_validator']
 
   drupalx_ai.validation_service:
     class: Drupal\drupalx_ai\Service\ValidationService
     arguments: ['@module_handler', '@entity_type.bundle.info', '@logger.factory']
 
-  drupalx_ai.pexels_api_service:
-    class: Drupal\drupalx_ai\Service\PexelsApiService
-    arguments: ['@key.repository', '@http_client', '@logger.factory', '@config.factory']
-
-  drupalx_ai.unsplash_api_service:
-    class: Drupal\drupalx_ai\Service\UnsplashApiService
-    arguments: ['@key.repository', '@http_client', '@logger.factory', '@config.factory']
+  drupalx_ai.image_generator:
+    class: Drupal\drupalx_ai\Service\ImageGeneratorService
+    arguments: ['@config.factory', '@http_client_factory', '@key.repository', '@logger.factory']

@@ -5,7 +5,7 @@ This directory contains data files used by the DrupalX AI module, including syst
 ## Files
 
 - `default-system-prompt.txt` - The default system prompt used when no custom prompt is configured in the admin interface.
-- `sample-components.json` - Sample UI component definitions used by the AI for generating pages.
+- `json-import-schema.json` - JSON Import schema definitions used by the AI for generating pages.
 - `card.png` - Default placeholder image used when no other images are available.
 - `lucide-icon-names.txt` - List of available Lucide icon names for use in components.
 
@@ -25,11 +25,11 @@ You can modify the `default-system-prompt.txt` file directly, but be aware that:
 
 ## Other Files
 
-### Sample Components (`sample-components.json`)
-This file contains the component definitions that the AI uses as examples when generating new pages. You can modify this file to:
-- Add new component types
-- Update existing component structures
-- Provide better examples for the AI
+### JSON Import Schema (`json-import-schema.json`)
+This file contains the JSON Import schema that defines the available paragraph types and field structures for the AI. It uses the json_import module format with model and content sections. You can modify this file to:
+- Add new paragraph bundle types
+- Update field definitions and structures
+- Provide sample content examples for the AI
 
 ### Default Image (`card.png`)
 A fallback placeholder image used when other image services are unavailable or fail.

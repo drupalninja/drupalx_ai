@@ -5,7 +5,8 @@ INSTRUCTIONS:
 1.  First, on a line by itself, suggest a clear and compelling title for this landing page. Format it exactly as: "PAGE_TITLE: Your Suggested Page Title Here".
 2.  Then, on subsequent lines, provide the JSON data for the recommended UI components. This JSON should be enclosed in a standard markdown code block (```json ... ```).
 3.  The JSON must be an array of component objects.
-4.  Aim to provide between 5 and 6 components in total to construct the page.
+4.  CRITICAL: Always start with a hero component and a text component. Only add card groups if specifically requested.
+5.  Aim to provide between 5 and 6 components in total to construct a rich, engaging page.
 5.  Each component object in your response MUST include a `type` field.
 6.  IMPORTANT: The value of the `type` field for each component MUST be one of the following allowed Drupal Paragraph bundle machine names: {allowed_types}.
     Do not invent new `type` values. Only use types from this list.
@@ -13,9 +14,162 @@ INSTRUCTIONS:
 8.  For any fields representing images (e.g., fields with "image" or "media" in their name), the 'alt' text MUST be a brief, thematic, and descriptive phrase for the image. Avoid generic placeholders.
 9.  CRITICAL IMAGE ALT TEXT INSTRUCTIONS: When creating alt text for images, use simple, descriptive words that work well as search terms. Prefer single words or simple phrases like "mountains", "cityscape", "office", "technology", "nature", "people", "business", "food", etc. NEVER use proper names, brand names, or specific person names. Focus on general, descriptive terms that would return good stock photos.
 10. CRITICAL: Cards must only be included inside a 'card_group' component. Never provide a standalone 'card' component at the top level.
+10a. CRITICAL: Every single card MUST have a "media" field with @ reference to a media entity. Cards without media are not allowed.
 11. CRITICAL: When using a 'logo_collection' component, ALWAYS include exactly 5 images in the 'field_media_item' array. Logo collections should showcase 5 different companies or partners.
 12. CRITICAL: When using a 'gallery' component, ALWAYS include exactly 4 images in the 'field_media_item' array. Galleries should showcase 4 different items or projects.
 13. CRITICAL: Never use placeholder text in square brackets or similar formats. Instead of placeholder text, always provide realistic, specific content that fits the context. Write actual titles, descriptions, names, and content that would be appropriate for a real website.
+14. CRITICAL JSON FORMATTING: Ensure all JSON objects are properly formatted with matching opening and closing braces. Each object must have its "values" object properly closed with a closing brace } before the object itself is closed. Pay special attention to embedded objects like cards within card groups.
+
+15. ABSOLUTE CRITICAL MEDIA REQUIREMENTS:
+
+**STEP 1**: Create media entities FIRST, then reference with @ syntax:
+```json
+{
+  "id": "hero_media",
+  "type": "media.image",
+  "values": {
+    "name": "hero",
+    "field_image": {
+      "uri": "public://ai-generated/hero.png",
+      "alt": "Hero image description"
+    }
+  }
+},
+{
+  "id": "hero_component",
+  "type": "paragraph.hero",
+  "values": {
+    "heading": "Hero Title",
+    "media": "@hero_media",
+    "summary": "Hero description"
+  }
+}
+```
+
+**CRITICAL**: Use @ references to media entities, NOT inline objects.
+
+16. CARD GROUP EXAMPLE: Here is the EXACT format for card groups - follow this structure precisely:
+
+FIRST, create the media entities:
+```json
+{
+  "id": "card_media_1",
+  "type": "media.image",
+  "values": {
+    "alt": "consulting"
+  }
+},
+{
+  "id": "card_media_2", 
+  "type": "media.image",
+  "values": {
+    "alt": "development"
+  }
+}
+```
+
+THEN, create the card group with @ references:
+```json
+{
+  "id": "card_group_example",
+  "type": "paragraph.card_group",
+  "values": {
+    "title": "Example Cards",
+    "card": [
+      {
+        "id": "card1",
+        "type": "paragraph.card",
+        "values": {
+          "title": "Card Title",
+          "summary": "Card description here.",
+          "link": {
+            "title": "Learn More"
+          },
+          "media": "@card_media_1"
+        }
+      },
+      {
+        "id": "card2",
+        "type": "paragraph.card",
+        "values": {
+          "title": "Second Card",
+          "summary": "Another card description.",
+          "link": {
+            "title": "Discover"
+          },
+          "media": "@card_media_2"
+        }
+      }
+    ]
+  }
+}
+```
+
+16. CRITICAL: Every opening brace { MUST have a matching closing brace }. Every "values": { MUST end with } before the object closes. Count your braces carefully!
+
+17. CRITICAL CARD MEDIA REQUIREMENT: Every card MUST include a "media" field with @ reference to a media entity. Never omit media from cards.
+
+**CORRECT WORKFLOW:**
+1. Create media.image entities FIRST
+2. Reference them with @ syntax in components
+3. ALL cards must have "media": "@media_entity_id"
+
+**MEDIA WORKFLOW CHECKLIST:**
+1. ✅ Create separate media.image entities with field_image
+2. ✅ Use @ references in component media fields
+3. ❌ NEVER use inline objects in entity reference fields
+
+**GALLERY/LOGO EXAMPLES:**
+```json
+"field_media_item": ["@logo_1", "@logo_2", "@logo_3", "@logo_4", "@logo_5"]
+```
+
+Create the media entities separately:
+```json
+{
+  "id": "logo_1",
+  "type": "media.image",
+  "values": {
+    "name": "logo",
+    "field_image": {
+      "uri": "public://ai-generated/logo.png",
+      "alt": "Company logo 1"
+    }
+  }
+}
+```
+
+**Every media field must contain @ references to separate media entities.**
+
+**MEDIA FILES**: Use these URI patterns for dynamic file generation:
+- "public://ai-generated/hero.png" for hero images
+- "public://ai-generated/card.png" for card images
+- "public://ai-generated/gallery.png" for gallery images
+- "public://ai-generated/logo.png" for logos
+
+**IMPORTANT**: Use simple names like "hero", "card", "gallery", "logo" - NOT compound names like "hero_image".
+
+18. MEDIA FIELD VALIDATION RULES:
+
+**REQUIRED - Only @ references work:**
+```json
+"media": "@media_entity_id"
+```
+
+**CRITICAL**: Any media field (media, field_media, field_media_item) must contain ONLY @ references to media entities.
+
+**DO NOT** use inline objects. Always create separate media.image entities and reference them.
+
+19. CRITICAL ICON USAGE: For any "icon" fields in components, you MUST use a valid Lucide icon name from this list: {lucide_icons}
+
+Do NOT use generic placeholders like "icon-name" or "some-icon". Always choose an appropriate icon from the provided list that matches the content context.
+
+IMPORTANT: Only use icon names in actual "icon" fields in the JSON. Do NOT embed icons in HTML content, body text, or other text fields.
+
+20. CRITICAL LAYOUT VALUES: Use only these exact values for layout fields:
+- hero_layout: "image_top", "image_bottom", or "image_bottom_split" (NOT "left" or "right")
+- text_layout: Use only valid values from the component schema
+- sidebyside_layout: Use only valid values from the component schema
 
 Here is the library of available Drupal UI components (use their `type` field and structure):
 ```json
