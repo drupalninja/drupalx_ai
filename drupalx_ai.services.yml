@@ -1,7 +1,7 @@
 services:
   drupalx_ai.ai_service:
     class: Drupal\drupalx_ai\Service\AIService
-    arguments: ['@config.factory', '@file_system', '@logger.factory', '@drupalx_ai.validation_service', '@entity_type.bundle.info', '@ai.provider', '@json_import.importer', '@json_import.schema_validator']
+    arguments: ['@config.factory', '@file_system', '@logger.factory', '@drupalx_ai.validation_service', '@entity_type.bundle.info', '@ai.provider', '@json_import.importer', '@json_import.schema_validator', '@drupalx_ai.image_generator']
 
   drupalx_ai.validation_service:
     class: Drupal\drupalx_ai\Service\ValidationService

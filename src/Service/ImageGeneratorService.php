@@ -123,31 +123,40 @@ class ImageGeneratorService {
     $client = $this->httpClientFactory->fromOptions();
 
     try {
-      // Search for photos
+      // Search for photos with randomized page and multiple results to vary images.
       $response = $client->request('GET', 'https://api.pexels.com/v1/search', [
         'headers' => [
           'Authorization' => $api_key,
         ],
         'query' => [
           'query' => $query,
-          'per_page' => 1,
+          'per_page' => 10,
+          'page' => random_int(1, 10),
           'orientation' => 'landscape',
         ],
       ]);
 
       $data = json_decode($response->getBody()->getContents(), TRUE);
 
-      if (empty($data['photos'][0]['src']['medium'])) {
+      if (empty($data['photos'])) {
         $this->logger->warning('No Pexels images found for query: @query', ['@query' => $query]);
         return NULL;
       }
 
+      // Pick a random photo from the result set.
+      $index = array_rand($data['photos']);
+      $photo = $data['photos'][$index];
+      $image_url = $photo['src']['medium'] ?? ($photo['src']['large'] ?? ($photo['src']['original'] ?? NULL));
+      if (!$image_url) {
+        $this->logger->warning('Pexels image lacked expected src sizes for query: @query', ['@query' => $query]);
+        return NULL;
+      }
+
       // Download the actual image
-      $image_url = $data['photos'][0]['src']['medium'];
       $image_response = $client->request('GET', $image_url);
       $image_data = $image_response->getBody()->getContents();
 
-      $this->logger->info('Successfully fetched image from Pexels for query: @query', ['@query' => $query]);
+      $this->logger->info('Successfully fetched random Pexels image (index @i) for query: @query', ['@query' => $query, '@i' => (string) $index]);
 
       return [
         'data' => $image_data,
@@ -193,31 +202,42 @@ class ImageGeneratorService {
     $client = $this->httpClientFactory->fromOptions();
 
     try {
-      // Search for photos
+      // Search for photos with randomized page and multiple results to vary images.
       $response = $client->request('GET', 'https://api.unsplash.com/search/photos', [
         'headers' => [
           'Authorization' => 'Client-ID ' . $api_key,
         ],
         'query' => [
           'query' => $query,
-          'per_page' => 1,
+          'per_page' => 10,
+          'page' => random_int(1, 10),
           'orientation' => 'landscape',
+          // Randomize ordering between relevant and latest to vary results.
+          'order_by' => (random_int(0, 1) === 1) ? 'latest' : 'relevant',
         ],
       ]);
 
       $data = json_decode($response->getBody()->getContents(), TRUE);
 
-      if (empty($data['results'][0]['urls']['regular'])) {
+      if (empty($data['results'])) {
         $this->logger->warning('No Unsplash images found for query: @query', ['@query' => $query]);
         return NULL;
       }
 
+      // Pick a random photo from the result set.
+      $index = array_rand($data['results']);
+      $photo = $data['results'][$index];
+      $image_url = $photo['urls']['regular'] ?? ($photo['urls']['full'] ?? NULL);
+      if (!$image_url) {
+        $this->logger->warning('Unsplash image lacked expected url sizes for query: @query', ['@query' => $query]);
+        return NULL;
+      }
+
       // Download the actual image
-      $image_url = $data['results'][0]['urls']['regular'];
       $image_response = $client->request('GET', $image_url);
       $image_data = $image_response->getBody()->getContents();
 
-      $this->logger->info('Successfully fetched image from Unsplash for query: @query', ['@query' => $query]);
+      $this->logger->info('Successfully fetched random Unsplash image (index @i) for query: @query', ['@query' => $query, '@i' => (string) $index]);
 
       return [
         'data' => $image_data,

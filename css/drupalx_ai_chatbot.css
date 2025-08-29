@@ -253,7 +253,8 @@
     opacity: 0.4;
   }
   30% {
-    transform: translateY(-10px);
+    /* Reduced vertical travel so dots don't touch the bubble edge */
+    transform: translateY(-6px);
     opacity: 1;
   }
 }
