@@ -135,7 +135,7 @@ class DrupalxAiCommands extends DrushCommands {
     try {
       // Create JSON structure that includes the node with paragraph references
       $node_with_content = $this->aiService->createNodeWithComponents($page_title, $components, $uid);
-      
+
       // Import everything using json_import - node, paragraphs, media, etc.
       $import_result = $this->aiService->importComponentsAsJsonImport($node_with_content, FALSE);
 
@@ -169,16 +169,16 @@ class DrupalxAiCommands extends DrushCommands {
         // Find the created node to get its ID for the success message
         $created_node = $this->getCreatedNode($import_result);
         $node_id = $created_node ? $created_node->id() : 'unknown';
-        
+
         // Define color and icon for this log message.
         $color_green = "\033[0;32m";
         $icon_success = "✅";
         $color_reset = "\033[0m";
 
-        $edit_url = $created_node ? 
+        $edit_url = $created_node ?
           Url::fromRoute('entity.node.edit_form', ['node' => $created_node->id()], ['absolute' => TRUE])->toString() :
           'Node creation status unknown';
-          
+
         $this->output()->writeln(dt($color_green . $icon_success . ' Successfully created page "@title" (NID: @nid).' . $color_reset, [
           '@title' => $page_title,
           '@nid' => $node_id,
@@ -218,14 +218,14 @@ class DrupalxAiCommands extends DrushCommands {
       ->sort('created', 'DESC')
       ->range(0, 1)
       ->accessCheck(TRUE);
-    
+
     $node_ids = $query->execute();
-    
+
     if (!empty($node_ids)) {
       $node_id = reset($node_ids);
       return $node_storage->load($node_id);
     }
-    
+
     return NULL;
   }
 
