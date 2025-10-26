@@ -7,3 +7,4 @@ dependencies:
   - drupal:node
   - key:key
   - ai:ai
+  - json_import:json_import

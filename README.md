@@ -21,6 +21,7 @@ The DrupalX AI module provides comprehensive AI-powered content generation featu
 *   PHP 8.1 or higher
 *   Composer
 *   The `drupal/key` module (for secure API key storage)
+*   The `nextagencyio/json_import` module (for structured content import)
 *   The `openai-php/client` Composer package (installed automatically)
 *   A content type configured for landing pages (typically 'landing')
 *   Paragraph types configured for the content structure you want to generate

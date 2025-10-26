@@ -1,0 +1,369 @@
+[
+  {
+    "id": "sample_accordion",
+    "type": "paragraph.accordion",
+    "values": {
+      "title": "Frequently Asked Questions",
+      "accordion_item": [
+        {
+          "id": "faq_item_1",
+          "type": "paragraph.accordion_item",
+          "values": {
+            "title": "How do I get started?",
+            "body": "<p>Getting started is easy. Simply create an account and follow the step-by-step instructions.</p>",
+            "link": {
+              "uri": "internal:/get-started",
+              "title": "Start here"
+            }
+          }
+        },
+        {
+          "id": "faq_item_2",
+          "type": "paragraph.accordion_item",
+          "values": {
+            "title": "What features are included?",
+            "body": "<p>Our platform includes numerous features such as analytics, reporting, and team collaboration tools.</p>",
+            "link": {
+              "uri": "internal:/features",
+              "title": "View all features"
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "sample_hero",
+    "type": "paragraph.hero",
+    "values": {
+      "heading": "Transform Your Digital Experience",
+      "hero_layout": "image_bottom",
+      "link": {
+        "uri": "internal:/get-started",
+        "title": "Get Started"
+      },
+      "link2": {
+        "uri": "internal:/contact",
+        "title": "Contact Us"
+      },
+      "media": "@hero_media",
+      "summary": "Empower your business with our cutting-edge solutions and expert team."
+    }
+  },
+  {
+    "id": "hero_media",
+    "type": "media.image",
+    "values": {
+      "field_image": {
+        "uri": "/modules/contrib/json_import/resources/placeholder.png",
+        "alt": "Digital transformation illustration"
+      }
+    }
+  },
+  {
+    "id": "sample_text",
+    "type": "paragraph.text",
+    "values": {
+      "title": "Rich Text Content",
+      "eyebrow": "Discover More",
+      "text_layout": "left",
+      "body": "<p>This is a sample text component that can be used for general content. It supports <strong>rich text formatting</strong>, lists, and other HTML elements.</p><ul><li>Explain the value in plain language</li><li>Highlight two or three key benefits</li><li>End with a clear next step</li></ul><p>It's perfect for blocks of formatted content that don't require additional components.</p>",
+      "link": {
+        "uri": "internal:/about-us",
+        "title": "Learn More About Our Approach"
+      }
+    }
+  },
+  {
+    "id": "sample_quote",
+    "type": "paragraph.quote",
+    "values": {
+      "quote": "The platform has completely transformed how we approach our digital strategy. The results have exceeded our expectations!",
+      "author": "Jane Smith",
+      "job_title": "CEO, Example Company",
+      "logo": "@quote_logo",
+      "thumb": "@quote_thumb"
+    }
+  },
+  {
+    "id": "quote_logo",
+    "type": "media.image",
+    "values": {
+      "alt": "Example Company logo"
+    }
+  },
+  {
+    "id": "quote_thumb",
+    "type": "media.image",
+    "values": {
+      "alt": "Portrait of Jane Smith"
+    }
+  },
+  {
+    "id": "sample_newsletter",
+    "type": "paragraph.newsletter",
+    "values": {
+      "title": "Subscribe to Our Newsletter",
+      "summary": "Stay updated with our latest news, features, and special offers delivered directly to your inbox."
+    }
+  },
+  {
+    "id": "sample_pricing",
+    "type": "paragraph.pricing",
+    "values": {
+      "eyebrow": "Flexible Plans",
+      "title": "Choose the Right Plan for Your Business",
+      "summary": "We offer a range of pricing options to suit businesses of all sizes.",
+      "pricing_cards": [
+        {
+          "id": "pricing_basic",
+          "type": "paragraph.pricing_card",
+          "values": {
+            "eyebrow": "Basic",
+            "title": "$19",
+            "suffix": "/month",
+            "features_text": "10 users\nBasic features\nEmail support",
+            "link": {
+              "uri": "internal:/signup/basic",
+              "title": "Get Started"
+            }
+          }
+        },
+        {
+          "id": "pricing_pro",
+          "type": "paragraph.pricing_card",
+          "values": {
+            "eyebrow": "Pro",
+            "title": "$49",
+            "suffix": "/month",
+            "features_text": "50 users\nAll features\nPriority support\nAdvanced analytics",
+            "link": {
+              "uri": "internal:/signup/pro",
+              "title": "Sign Up Now"
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "sample_sidebyside",
+    "type": "paragraph.sidebyside",
+    "values": {
+      "title": "Engaging Side-by-Side Content",
+      "eyebrow": "Discover More",
+      "summary": "<p>This section highlights key information with a compelling visual and textual presentation, optimized for clarity and engagement.</p>",
+      "features": [
+        {
+          "id": "bullet_1",
+          "type": "paragraph.bullet",
+          "values": {
+            "icon": "star",
+            "summary": "Dynamic content layout."
+          }
+        },
+        {
+          "id": "bullet_2",
+          "type": "paragraph.bullet",
+          "values": {
+            "icon": "settings",
+            "summary": "Highly customizable features."
+          }
+        }
+      ],
+      "sidebyside_layout": "left",
+      "link": {
+        "uri": "internal:/about-us",
+        "title": "Learn More About Our Approach"
+      },
+      "media": "@sidebyside_media"
+    }
+  },
+  {
+    "id": "sidebyside_media",
+    "type": "media.image",
+    "values": {
+      "media_url": "public://sample_images/side_by_side_placeholder.jpg",
+      "alt": "Informative image complementing the text content",
+      "caption": "Optional caption for the media"
+    }
+  },
+  {
+    "id": "sample_card_group",
+    "type": "paragraph.card_group",
+    "values": {
+      "title": "Our Services",
+      "card": [
+        {
+          "id": "card_consulting",
+          "type": "paragraph.card",
+          "values": {
+            "title": "Consulting",
+            "summary": "Expert consulting services for your business needs.",
+            "link": {
+              "title": "Learn more"
+            },
+            "media": "@card_consulting_media"
+          }
+        },
+        {
+          "id": "card_development",
+          "type": "paragraph.card",
+          "values": {
+            "title": "Development",
+            "summary": "Custom development solutions for web and mobile.",
+            "link": {
+              "title": "Explore"
+            },
+            "media": "@card_development_media"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "card_consulting_media",
+    "type": "media.image",
+    "values": {
+      "alt": "Consulting services illustration"
+    }
+  },
+  {
+    "id": "card_development_media",
+    "type": "media.image",
+    "values": {
+      "alt": "Development services illustration"
+    }
+  },
+  {
+    "id": "sample_carousel",
+    "type": "paragraph.carousel",
+    "values": {
+      "carousel_item": [
+        {
+          "id": "carousel_item_1",
+          "type": "paragraph.carousel_item",
+          "values": {
+            "title": "Welcome to Our Platform",
+            "summary": "Discover how our solutions can transform your business.",
+            "media": "@carousel_media_1"
+          }
+        },
+        {
+          "id": "carousel_item_2",
+          "type": "paragraph.carousel_item",
+          "values": {
+            "title": "New Features Available",
+            "summary": "Explore our latest platform updates and enhancements.",
+            "media": "@carousel_media_2"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "carousel_media_1",
+    "type": "media.image",
+    "values": {
+      "alt": "Platform overview"
+    }
+  },
+  {
+    "id": "carousel_media_2",
+    "type": "media.image",
+    "values": {
+      "alt": "New features showcase"
+    }
+  },
+  {
+    "id": "sample_gallery",
+    "type": "paragraph.gallery",
+    "values": {
+      "title": "Project Gallery",
+      "body": "<p>Explore our recent project highlights and achievements.</p>",
+      "media_item": [
+        "@gallery_media_1",
+        "@gallery_media_2",
+        "@gallery_media_3",
+        "@gallery_media_4"
+      ]
+    }
+  },
+  {
+    "id": "gallery_media_1",
+    "type": "media.image",
+    "values": {
+      "alt": "office"
+    }
+  },
+  {
+    "id": "gallery_media_2",
+    "type": "media.image",
+    "values": {
+      "alt": "technology"
+    }
+  },
+  {
+    "id": "gallery_media_3",
+    "type": "media.image",
+    "values": {
+      "alt": "teamwork"
+    }
+  },
+  {
+    "id": "gallery_media_4",
+    "type": "media.image",
+    "values": {
+      "alt": "innovation"
+    }
+  },
+  {
+    "id": "sample_logo_collection",
+    "type": "paragraph.logo_collection",
+    "values": {
+      "title": "Our Trusted Partners",
+      "media_item": [
+        "@logo_media_1",
+        "@logo_media_2",
+        "@logo_media_3",
+        "@logo_media_4",
+        "@logo_media_5"
+      ]
+    }
+  },
+  {
+    "id": "logo_media_1",
+    "type": "media.image",
+    "values": {
+      "alt": "technology"
+    }
+  },
+  {
+    "id": "logo_media_2",
+    "type": "media.image",
+    "values": {
+      "alt": "business"
+    }
+  },
+  {
+    "id": "logo_media_3",
+    "type": "media.image",
+    "values": {
+      "alt": "corporate"
+    }
+  },
+  {
+    "id": "logo_media_4",
+    "type": "media.image",
+    "values": {
+      "alt": "services"
+    }
+  },
+  {
+    "id": "logo_media_5",
+    "type": "media.image",
+    "values": {
+      "alt": "consulting"
+    }
+  }
+]

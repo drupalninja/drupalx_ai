@@ -105,8 +105,11 @@ class UnsplashApiService implements ImageApiServiceInterface {
       return NULL;
     }
 
-    // Fetch multiple images (10) to introduce randomness.
-    $url = "https://api.unsplash.com/search/photos?query=" . urlencode($searchTerm) . "&per_page=10&orientation=landscape";
+    // Fetch multiple images (10) and randomize the page/order to reduce repetition.
+    $page = random_int(1, 10);
+    $order = (random_int(0, 1) === 1) ? 'latest' : 'relevant';
+    $url = "https://api.unsplash.com/search/photos?query=" . urlencode($searchTerm) .
+      "&per_page=10&orientation=landscape&page=" . $page . "&order_by=" . $order;
 
     try {
       $response = $this->httpClient->request('GET', $url, [

@@ -105,8 +105,10 @@ class PexelsApiService implements ImageApiServiceInterface {
       return NULL;
     }
 
-    // Fetch multiple images (10) to introduce randomness.
-    $url = "https://api.pexels.com/v1/search?query=" . urlencode($searchTerm) . "&per_page=10&orientation=landscape";
+    // Fetch multiple images (10) and randomize the page to reduce repetition.
+    $page = random_int(1, 10);
+    $url = "https://api.pexels.com/v1/search?query=" . urlencode($searchTerm) .
+      "&per_page=10&orientation=landscape&page=" . $page;
 
     try {
       $response = $this->httpClient->request('GET', $url, [

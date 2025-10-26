@@ -4,16 +4,12 @@ namespace Drupal\drupalx_ai\Controller;
 
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
-use Drupal\Core\Logger\LoggerChannelInterface;
-use Drupal\Core\Url;
 use Drupal\drupalx_ai\Service\AIService;
-use Drupal\drupalx_ai\Service\ParagraphService;
 use Drupal\node\Entity\Node;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
-use Drupal\Core\Session\AccountInterface;
 use Psr\Log\LoggerInterface;
 use Drupal\Component\Serialization\Json;
 
@@ -29,12 +25,6 @@ class ChatbotController extends ControllerBase {
    */
   protected AIService $aiService;
 
-  /**
-   * The paragraph service.
-   *
-   * @var \Drupal\drupalx_ai\Service\ParagraphService
-   */
-  protected ParagraphService $paragraphService;
 
   /**
    * A logger instance.
@@ -50,19 +40,15 @@ class ChatbotController extends ControllerBase {
    *   The entity type manager.
    * @param \Drupal\drupalx_ai\Service\AIService $ai_service
    *   The AI service.
-   * @param \Drupal\drupalx_ai\Service\ParagraphService $paragraph_service
-   *   The paragraph service.
    * @param \Drupal\Core\Logger\LoggerChannelFactoryInterface $logger_factory
    *   The logger factory.
    */
   public function __construct(
     EntityTypeManagerInterface $entity_type_manager,
     AIService $ai_service,
-    ParagraphService $paragraph_service,
     LoggerChannelFactoryInterface $logger_factory
   ) {
     $this->aiService = $ai_service;
-    $this->paragraphService = $paragraph_service;
     $this->logger = $logger_factory->get('drupalx_ai');
   }
 
@@ -73,7 +59,6 @@ class ChatbotController extends ControllerBase {
     return new static(
       $container->get('entity_type.manager'),
       $container->get('drupalx_ai.ai_service'),
-      $container->get('drupalx_ai.paragraph_service'),
       $container->get('logger.factory')
     );
   }
@@ -125,45 +110,63 @@ class ChatbotController extends ControllerBase {
       ], 200);
     }
 
-    // Create a new node.
     // Use the current user or a default user if needed.
     $current_user = $this->currentUser();
     $uid = $current_user->id() ?: 1;
 
     try {
-      $node = Node::create([
-        'type' => 'landing',
-        // Your landing page content type.
-        'title' => $page_title,
-        'uid' => $uid,
-        'status' => 1,
-        // Published.
-        'field_hide_page_title' => TRUE,
-      ]);
-      $node->save();
+      // Use the same workflow as drush command - create node with proper filtering
+      $full_structure = $this->aiService->createNodeWithComponents($page_title, $components, $uid);
+      $import_result = $this->aiService->importComponentsAsJsonImport($full_structure, FALSE);
+
+      if (isset($import_result['error'])) {
+        $this->logger->error(
+          'Error importing components: @error',
+          ['@error' => $import_result['error']]
+        );
+        throw new \Exception($import_result['error']);
+      }
+
+      // Log the import results
+      if (!empty($import_result['summary'])) {
+        foreach ($import_result['summary'] as $message) {
+          $this->logger->info('JSON Import: @message', ['@message' => $message]);
+        }
+      }
+      if (!empty($import_result['warnings'])) {
+        foreach ($import_result['warnings'] as $warning) {
+          $this->logger->warning('JSON Import Warning: @warning', ['@warning' => $warning]);
+        }
+      }
+
+      // Get the created node - it should be the most recently created landing page
+      $node_storage = $this->entityTypeManager()->getStorage('node');
+      $query = $node_storage->getQuery()
+        ->condition('type', 'landing')
+        ->condition('created', time() - 60, '>=') // Created in the last minute
+        ->sort('created', 'DESC')
+        ->range(0, 1)
+        ->accessCheck(TRUE);
+
+      $node_ids = $query->execute();
+
+      if (empty($node_ids)) {
+        throw new \Exception('Failed to create or locate the page node');
+      }
+
+      $node = Node::load(reset($node_ids));
+
+      if (!$node) {
+        throw new \Exception('Failed to load the created page node');
+      }
+
       $this->logger->info(
-        'Created new landing page node @nid with title "@title".',
+        'Created new landing page node @nid with title "@title" using proper workflow.',
         [
           '@nid' => $node->id(),
           '@title' => $page_title,
         ]
       );
-
-      // Save entities to the node.
-      $paragraph_ids = $this->paragraphService->saveEntitiesToNode($node->id(), $components);
-
-      // The saveEntitiesToNode in ParagraphService returns an array of paragraph IDs.
-      // It doesn't return ['error' => ...], it logs errors internally and returns empty array on major failure.
-      // We might need to adjust error handling/success confirmation based on its actual return.
-      if (empty($paragraph_ids) && !empty($components)) {
-        // This implies components were provided but no paragraphs were created/attached.
-        // This could be a partial failure or due to filtering.
-        // ParagraphService logs specifics, so we provide a general message.
-        $this->logger->warning('No paragraph entities were saved to node @nid, though components were provided.', ['@nid' => $node->id()]);
-        // It's not necessarily a 500 error if the node was created.
-        // The user gets a page, but maybe not with all expected content.
-        // For now, let's consider it a partial success but log a warning.
-      }
 
       $page_link = $node->toUrl('edit-form', ['absolute' => TRUE])->toString();
       // Render the translatable string to plain text for the JSON response.

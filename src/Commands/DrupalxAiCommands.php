@@ -4,7 +4,6 @@ namespace Drupal\drupalx_ai\Commands;
 
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\drupalx_ai\Service\AIService;
-use Drupal\drupalx_ai\Service\ParagraphService;
 use Drupal\node\Entity\Node;
 use Drupal\Core\Url;
 use Drush\Commands\DrushCommands;
@@ -25,12 +24,6 @@ class DrupalxAiCommands extends DrushCommands {
    */
   protected AIService $aiService;
 
-  /**
-   * The paragraph service.
-   *
-   * @var \Drupal\drupalx_ai\Service\ParagraphService
-   */
-  protected ParagraphService $paragraphService;
 
   /**
    * The entity type manager.
@@ -64,22 +57,18 @@ class DrupalxAiCommands extends DrushCommands {
    *   The current user.
    * @param \Drupal\Core\Logger\LoggerChannelFactoryInterface $logger_factory
    *   The logger factory.
-   * @param \Drupal\drupalx_ai\Service\ParagraphService $paragraph_service
-   *   The paragraph service.
    */
   public function __construct(
     AIService $ai_service,
     EntityTypeManagerInterface $entity_type_manager,
     AccountProxyInterface $current_user,
-    LoggerChannelFactoryInterface $logger_factory,
-    ParagraphService $paragraph_service
+    LoggerChannelFactoryInterface $logger_factory
   ) {
     parent::__construct();
     $this->aiService = $ai_service;
     $this->entityTypeManager = $entity_type_manager;
     $this->currentUser = $current_user;
     $this->drupalxAiLogger = $logger_factory->get('drupalx_ai');
-    $this->paragraphService = $paragraph_service;
   }
 
   /**
@@ -144,46 +133,55 @@ class DrupalxAiCommands extends DrushCommands {
     }
 
     try {
-      $node = Node::create([
-        'type' => 'landing',
-        'title' => $page_title,
-        'uid' => $uid,
-        'status' => Node::PUBLISHED,
-      ]);
-      // Set field_hide_page_title to TRUE for 'landing' nodes.
-      if ($node->bundle() === 'landing' && $node->hasField('field_hide_page_title')) {
-        $node->set('field_hide_page_title', TRUE);
-      }
-      $node->save();
+      // Create JSON structure that includes the node with paragraph references
+      $node_with_content = $this->aiService->createNodeWithComponents($page_title, $components, $uid);
 
-      $result = $this->paragraphService->saveEntitiesToNode($node->id(), $components);
+      // Import everything using json_import - node, paragraphs, media, etc.
+      $import_result = $this->aiService->importComponentsAsJsonImport($node_with_content, FALSE);
 
-      if (isset($result['error'])) {
+      if (isset($import_result['error'])) {
         $this->logger()->error(
-          'Error saving entities to node @nid: @error',
+          'Error importing page via json_import: @error',
           [
-            '@nid' => $node->id(),
-            '@error' => $result['error'],
+            '@error' => $import_result['error'],
           ]
         );
         $this->drupalxAiLogger->error(
-          'Error saving paragraphs to node @nid: @error',
+          'Error importing page via json_import: @error',
           [
-            '@nid' => $node->id(),
-            '@error' => $result['error'],
+            '@error' => $import_result['error'],
           ]
         );
       }
       else {
+        // Log the import results
+        if (!empty($import_result['summary'])) {
+          foreach ($import_result['summary'] as $message) {
+            $this->drupalxAiLogger->info('JSON Import: @message', ['@message' => $message]);
+          }
+        }
+        if (!empty($import_result['warnings'])) {
+          foreach ($import_result['warnings'] as $warning) {
+            $this->drupalxAiLogger->warning('JSON Import Warning: @warning', ['@warning' => $warning]);
+          }
+        }
+
+        // Find the created node to get its ID for the success message
+        $created_node = $this->getCreatedNode($import_result);
+        $node_id = $created_node ? $created_node->id() : 'unknown';
+
         // Define color and icon for this log message.
         $color_green = "\033[0;32m";
         $icon_success = "✅";
         $color_reset = "\033[0m";
 
-        $edit_url = Url::fromRoute('entity.node.edit_form', ['node' => $node->id()], ['absolute' => TRUE])->toString();
+        $edit_url = $created_node ?
+          Url::fromRoute('entity.node.edit_form', ['node' => $created_node->id()], ['absolute' => TRUE])->toString() :
+          'Node creation status unknown';
+
         $this->output()->writeln(dt($color_green . $icon_success . ' Successfully created page "@title" (NID: @nid).' . $color_reset, [
           '@title' => $page_title,
-          '@nid' => $node->id(),
+          '@nid' => $node_id,
         ]));
         // It might be best to leave the "Edit at:" URL without color/icon to keep it clean for copying.
         $this->output()->writeln(dt('Edit at: @url', [
@@ -207,5 +205,37 @@ class DrupalxAiCommands extends DrushCommands {
       );
     }
   }
+
+  /**
+   * Find the created node from json_import results.
+   */
+  protected function getCreatedNode(array $import_result) {
+    // Look for recently created landing nodes
+    $node_storage = $this->entityTypeManager->getStorage('node');
+    $query = $node_storage->getQuery()
+      ->condition('type', 'landing')
+      ->condition('created', time() - 60, '>=') // Created in the last minute
+      ->sort('created', 'DESC')
+      ->range(0, 1)
+      ->accessCheck(TRUE);
+
+    $node_ids = $query->execute();
+
+    if (!empty($node_ids)) {
+      $node_id = reset($node_ids);
+      return $node_storage->load($node_id);
+    }
+
+    return NULL;
+  }
+
+  /**
+   * Attaches imported paragraphs to a node's content field.
+   *
+   * @param \Drupal\node\Entity\Node $node
+   *   The node to attach paragraphs to.
+   * @param array $import_result
+   *   The result from json_import service.
+   */
 
 }
